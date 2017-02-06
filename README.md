@@ -9,4 +9,4 @@ wifisCalObs.py
 
 These main scripts will call the secondary scripts or opencl codes.
 
-Currently, only wifisCalDetLin.py and wifisCalDark.py are fully functional. 
+Currently, only wifisCalDetLin.py and wifisCalDark.py are fully functional. wifisCalWave.py is mostly complete and is functional.
