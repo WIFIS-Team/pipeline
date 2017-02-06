@@ -118,7 +118,20 @@ atlasname = 'external_data/best_lines2.dat'
 #read in dispersion solution corresponding to template
 prevSol = wifisIO.readTable(templatename+'_waveSol.dat')
 
+#check if solution already exists.
+if(os.path.exists(savename+'_waveSol.dat')):
+    cont = wifisIO.userInput('Dispersion solution already exists for ' +foldername+', do you want to continue and replace (y/n)?')
+    if (cont.lower() == ''):
+        exit()
+
 #data image, template, atlas file, max fitting order, list of prev. solutions, dispersion axis direction, window range fro line fitting, maximum allowable cross-correlation pixel offset
 result = waveSol.getWaveSol(fluxImg, template, atlasname, 1, prevSol, dispAxis=0, winRng=7, mxCcor=30)
 
-#*** NEED TO SAVE RESULTS OF FITTING ***
+#Save dispersion solution
+dispSol = []
+for sol in result:
+    dispSol.append(sol[0])
+
+wifisIO.writeTable(savename+'_waveSol.dat', dispSol)
+
+
