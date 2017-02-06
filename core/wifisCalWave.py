@@ -125,7 +125,7 @@ if(os.path.exists(savename+'_waveSol.dat')):
         exit()
 
 #data image, template, atlas file, max fitting order, list of prev. solutions, dispersion axis direction, window range fro line fitting, maximum allowable cross-correlation pixel offset
-result = waveSol.getWaveSol(fluxImg, template, atlasname, 1, prevSol, dispAxis=0, winRng=7, mxCcor=30)
+result = waveSol.getWaveSol(fluxImg, template, atlasname, 1, prevSol, dispAxis=1, winRng=7, mxCcor=30)
 
 #Save dispersion solution
 dispSol = []
