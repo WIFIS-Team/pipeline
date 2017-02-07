@@ -97,7 +97,7 @@ if (contProc):
     #Identify appropriate dark image for subtraction
     darkName = 'processed/master_dark_I'+str(inttime[-1])+'.fits'
     if (os.path.exists(darkName)):
-        darkImg = wifisIO.readImgFromFile(darkName)
+        darkImg = wifisIO.readImgFromFile(darkName)[:,:,0] #only use the first HDU, the second contains saturation information
         flxImg = flxImg - darkImg
     else:
         cont = wifisIO.userInput('No corresponding master dark image could be found, do you want to proceed without dark subtraction (y/n)?')
@@ -120,8 +120,13 @@ if (contProc):
 
     if (contWrite):
         #add or modify fits header here
-        wifisIO.writeFits(fluxImg, savename+'_waveCal.fits', hdr=hdr,'Total integration time'])
-   
+
+        out = np.zeros((ny,nx,2))
+        out[:,:,0] = fluxImg
+        out[:,:,1] = satFrame
+        wifisIO.writeFits(out, savename+'_waveCal.fits', hdr=hdr,'Total integration time'])
+        out = 0
+        
     #******************************************************************************
     #Determine dispersion solution
 

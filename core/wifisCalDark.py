@@ -106,11 +106,16 @@ for folder in lst:
         data = 0
         
         #write image to a file
-        # *** STILL TO DO - SAVE SATURATION INFO AS ANOTHER HDU OR DIFFERENT FILE ***
+        # Save saturation info as additional extension
+        out = np.zeros((ny,nx,2))
+        out[:,:,0] = fluxImg
+        out[:,:,1] = satFrame        
         
         #add additional header information here
-            
-        wifisIO.writeFits(fluxImg, savename+'_dark.fits', hdr=hdr)
+        
+        wifisIO.writeFits(out, savename+'_dark.fits', hdr=hdr)
+
+        out = 0
         
     procFiles.append(fluxImg)
 
