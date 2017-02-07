@@ -35,8 +35,11 @@ def readImgFromFile(file):
         outImg = np.zeros((ny,nx), dtype='float32')
         np.copyto(outImg, tmp[0].data)
 
+    #get header
+    hdr = tmp[-1].header
+    
     tmp.close()
-    return outImg
+    return outImg, hdr
 
 def readImgsFromList(list):
     """
@@ -67,7 +70,10 @@ def readImgsFromList(list):
         
     print('Done reading')
 
-    return outImg, outTime
+    #get header of last image only
+    hdr = tmp[-1].header
+
+    return outImg, outTime, hdr
 
 
 def readImgsFromAsciiList(filename):
@@ -79,9 +85,9 @@ def readImgsFromAsciiList(filename):
     """
     
     list = np.loadtxt(filename, dtype=np.str_)
-    output = readImgsFromList(list)
+    output, outime, hdr = readImgsFromList(list)
 
-    return output
+    return output, outtime, hdr
 
 def writeFits(data, filename, hdr=None):
     """
@@ -95,10 +101,10 @@ def writeFits(data, filename, hdr=None):
     if (hdr != None):
         #add additional FITS keywords
         prihdr = fits.Header()
-        prihdr[hdr[0]] = (hdr[1], hdr[2])
+        prihdr = hdr
     else:
         prihdr = None
-        
+
     #find out if the image requires multiple HDUs
     if (data.ndim > 2):
         nFrames = data.shape[2]
@@ -125,9 +131,9 @@ def readImgsFromFolder(folderName):
     list = glob.glob(folderName+'/H2*fits')
     list = sorted_nicely(list)
     
-    output = readImgsFromList(list)    
+    output,outtime,hdr = readImgsFromList(list)    
     
-    return output
+    return output,outtime,hdr
 
 def readTable (filename):
     """
@@ -187,4 +193,14 @@ def userInput(strng):
 
     return cont
 
-    
+def writeTable (filename, data):
+    """
+    Write a data array into a tabular format to an ASCII file
+    Usage: writeTable(filename, data)
+    filename is the name of the file to write the table
+    data is the array to be written
+    """
+
+    np.savetxt(filename, data)
+
+    return 
