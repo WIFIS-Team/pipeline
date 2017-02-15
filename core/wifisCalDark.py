@@ -62,9 +62,9 @@ for folder in lst:
         
     if (contProc):
         #Read in data
-        t1 = time.time()
+        ta = time.time()
         data, inttime, hdr = wifisIO.readImgsFromFolder(folder)
-        print("time to read all files took", time.time()-t1, " seconds")
+        print("time to read all files took", time.time()-ta, " seconds")
         
         nFrames = inttime.shape[0]
         nx = data.shape[1]
