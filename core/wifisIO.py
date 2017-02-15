@@ -13,7 +13,7 @@ import sys
 
 def readImgFromFile(file):
     """
-    Reads a FITS image from the specified file
+    Reads an FITS image cube from the specified file
     Usage: outImg = readImgFromFile(file)
     file is a text input corresponding to the file name
     outImg is the returned image array
@@ -28,12 +28,39 @@ def readImgFromFile(file):
     nz = len(tmp)
     
     if (nz > 1):
-        outImg = np.zeros((ny,nx, nz), dtype='float32')
+        outImg = np.zeros((nx,ny, nz), dtype='float32')
         for i in range(nz):
             np.copyto(outImg[:,:,i], tmp[i].data)
     else:
-        outImg = np.zeros((ny,nx), dtype='float32')
+        outImg = np.zeros((nx,ny), dtype='float32')
         np.copyto(outImg, tmp[0].data)
+
+    #get header
+    hdr = tmp[-1].header
+    
+    tmp.close()
+    return outImg, hdr
+
+def readImgExtFromFile(file):
+    """
+    Reads a FITS image with multiple extensions of possibly different dimensions from the specified file
+    Usage: outImg = readImgExtFromFile(file)
+    file is a text input corresponding to the file name
+    outImg is the returned image array
+    """
+
+    #get FITS file information
+    tmp = fits.open(file)
+    nx = tmp[0].header['NAXIS2']
+    ny = tmp[0].header['NAXIS1']
+
+    #check if there are multiple HDUs
+    nz = len(tmp)
+
+    outImg = []
+    if (nz > 1):
+        for i in range(nz):
+            outImg.append(tmp[i].data)
 
     #get header
     hdr = tmp[-1].header
@@ -56,7 +83,7 @@ def readImgsFromList(list):
     ny = tmp[0].header['NAXIS1']
     listLen = len(list)
     
-    outImg = np.zeros((ny,nx,listLen), dtype='float32')
+    outImg = np.zeros((nx,ny,listLen), dtype='float32')
     outTime = np.zeros((listLen), dtype='float32')
 
     #now populate the array
@@ -85,7 +112,7 @@ def readImgsFromAsciiList(filename):
     """
     
     list = np.loadtxt(filename, dtype=np.str_)
-    output, outime, hdr = readImgsFromList(list)
+    output, outtime, hdr = readImgsFromList(list)
 
     return output, outtime, hdr
 
@@ -117,7 +144,6 @@ def writeFits(data, filename, hdr=None):
         hdu = fits.HDUList(list)
     else:
         hdu = fits.PrimaryHDU(data, header=prihdr)
-
 
     hdu.writeto(filename,clobber=True)
 
@@ -204,3 +230,32 @@ def writeTable (filename, data):
     np.savetxt(filename, data)
 
     return 
+
+def writeImgSlices(data, extSlices,filename, hdr=None):
+    """
+    Write a data file to a FITS image including the extracted slices    
+    Usage writeFits(data, extSlices, filename)
+    data is the input data (can contain multiple HDUs, i.e. more than 2 dimensions)
+    filename is the name of the file to write the FITS file to.
+
+    """
+
+    if (hdr != None):
+        #add additional FITS keywords
+        prihdr = fits.Header()
+        prihdr = hdr
+    else:
+        prihdr = None
+
+    list = [fits.PrimaryHDU(data, header=prihdr)]
+    
+    nSlices = len(extSlices)
+        
+    for s in extSlices:
+        list.append(fits.ImageHDU(s))
+
+    hdu = fits.HDUList(list)
+    
+    hdu.writeto(filename,clobber=True)
+
+    return
