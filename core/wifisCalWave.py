@@ -106,7 +106,6 @@ if (contProc):
 
     #******************************************************************************    
     #write image to a file
-    # *** STILL TO DO - SAVE SATURATION INFO AS ANOTHER HDU OR DIFFERENT FILE ***
 
     if(os.path.exists(savename+'_waveCal.fits')):
         cont = wifisIO.userInput('Processed waveCal file already exists for ' +foldername+', do you want to replace (y/n)?')
