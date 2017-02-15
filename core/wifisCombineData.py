@@ -11,11 +11,11 @@ import pyopencl as cl
 def upTheRampCL(intTime, data, satFrame, nSplit):
     """Routine to process a sequence of up-the-ramp exposures using OpenCL code
     Usage: output = upTheRampCL(intTime,data, satFram, nSplit)
-    intTime is input array indicating the integration times of each frame the data cube in increasing order
+    intTime is input array indicating the integration times of each frame in the data cube in increasing order
     data is the input data cube
     satFrame is an input image indicating the frame number of the first saturated frame in the sequence per pixel
     nSplit is input variable to allow for splitting up the processing of the workload, which is needed to reduce memory to reduce memory errors/consumption for large datasets
-    output is a 2D image, where each pixel represents the flux (slope/time) per pixel
+    output is a 2D image, where each pixel represents the flux (slope/time)
     *** NOTE: Currently openCL code outputs both offset and slope of the fit. Can remove offset as not needed ***
     """
 
@@ -95,36 +95,102 @@ def createMaster(data):
     return out
 
 def fowlerSampling(intTime, data, satFrame):
-    
-    # Routine to process a sequence of Fowler exposures
-    # intTime is input array indicating the integration times of each frame in the data cube
-    # data is the input data cube
-    # satFrame is an input image providing the first saturated frame in the sequence per pixel
-    # only use pairs without saturated partner -- still do implement
+    """
+    Routine to process a sequence of Fowler sampled exposures
+    Usage: outImg = fowlerSampling(intTime, data, satFrame)
+    intTime is input array indicating the integration times of each frame in the data cube in increasing order
+    data is the input data cube
+    satFrame is an input image indicating the frame number of the first saturated frame in the sequence per pixel
+    output is a 2D image, where each pixel represents the flux (slope/time)
+    """
     
     nx = data.shape[1]
     ny = data.shape[0]
     nFrames = data.shape[2]
 
-    #go through each pixel and only include non-saturated pairs in averaging
-
-    #for i in range(ny):
-    #    for j in range(nx):
-            #do nothing for the moment
-            
+    outImg = np.zeros((ny,nx), dtype='float32')
     nFowler = nFrames/2
-    pairs = np.zeros((ny,nx, nFowler), dtype='float32')
-    pairInts = np.zeros(nFowler)
-    
-    #carry out pairwise subtraction
-    #and determine pairwise integration time
-    for i in range(nFowler):
-        np.copyto(pairs[:,:,i],data[:,:,i+nFowler]-data[:,:,i])
-        pairInts[i] = intTime[i+nFowler] - intTime[i]
-        
-    #now get median of this array
-    outImg = np.median(pairs, axis=2)/np.mean(pairInts)
 
+    #go through each pixel and only include non-saturated pairs in averaging
+    for i in range(ny):
+        for j in range(nx):
+            sat2 = satFrame[i,j]
+
+            if (sat2 >nFowler):
+                sat1 = sat2 - nFowler
+                tmp1 = data[i,j,0:sat1]
+                tmp2 = data[i,j,nFowler:sat2]
+                intTmp = intTime[nFowler:sat2]-intTime[0:sat1]
+                outImg[i,j] = np.mean(tmp2-tmp1)/np.mean(intTmp)
+            
     return outImg
     
     
+def fowlerSamplingCL(intTime, data, satFrame, nSplit):
+    """
+    Routine to process a sequence of Fowler sampled exposures
+    Usage: outImg = fowlerSampling(intTime, data, satFrame)
+    intTime is input array indicating the integration times of each frame in the data cube in increasing order
+    data is the input data cube
+    satFrame is an input image indicating the frame number of the first saturated frame in the sequence per pixel
+    nSplit is input variable to allow for splitting up the processing of the workload, which is needed to reduce memory to reduce memory errors/consumption for large datasets
+    output is a 2D image, where each pixel represents the flux (slope/time)
+    """
+
+    #get dimenions of input images
+    ny = data.shape[0]
+    nx = data.shape[1]/nSplit
+    ntime = data.shape[2]
+
+    #create tempory array to hold the output image
+    outImg = np.zeros((ny,data.shape[1]), dtype='float32')
+
+    #start OpenCL portion
+
+    #get OpenCL context object, can set to fixed value if wanted
+    ctx = cl.create_some_context(interactive=True)
+    queue = cl.CommandQueue(ctx)
+    
+    filename = 'opencl_code/getfowler.cl'
+    f = open(filename, 'r')
+    fstr = "".join(f.readlines())
+    program = cl.Program(ctx, fstr).build()
+    mf = cl.mem_flags   
+
+    #create OpenCL buffers
+    time_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=intTime)
+
+    #only create temporary arrays if needed to avoid excess RAM usage
+    if (nSplit > 1):
+        for n in range(0, nSplit):
+            #create temporary arrays to hold portions of data cube
+            dTmp = np.array(data[:,n*nx:(n+1)*nx,:])
+            sTmp = np.array(satFrame[:,n*nx:(n+1)*nx])
+            oTmp = np.zeros((ny,nx),dtype='float32')
+           
+            #create OpenCL buffers
+            data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=dTmp)
+            sat_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=sTmp)
+            flux_buf = cl.Buffer(ctx, mf.WRITE_ONLY, oTmp.nbytes)
+
+            #set openCL arguments and run openCL code
+            program.fowler.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None,None,None])
+            program.fowler(queue,(ny,nx),None,np.uint32(nx), np.uint32(ntime),time_buf, data_buf,sat_buf,flux_buf)
+            
+            cl.enqueue_read_buffer(queue, flux_buf, oTmp).wait()
+
+            #copy to output array
+            np.copyto(outImg[:,n*nx:(n+1)*nx],oTmp)
+    else:
+        
+        #create OpenCL buffers
+        data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=data)
+        sat_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=satFrame)
+        flux_buf = cl.Buffer(ctx, mf.WRITE_ONLY, outImg.nbytes)
+        
+        program.fowler.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None,None,None])
+        program.fowler(queue,(ny,nx),None,np.uint32(nx), np.uint32(ntime),time_buf, data_buf,sat_buf,flux_buf)
+        
+        cl.enqueue_read_buffer(queue, flux_buf, outImg).wait()
+    return outImg
+
