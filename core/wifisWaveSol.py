@@ -52,10 +52,7 @@ def gaussFit(x, y, guessWidth, plot=False):
     plot is a keyword to allow for plotting of the fit (for debug purposes)
     params is a list containing in the fitted parameters in the following order: amplitude, centre, width
     """
-
-    #first subtract any potential offset such that the base is 0; works best when the S/N is higher
-    #ytmp = y - np.min(y)
-
+ 
     #use scipy to do fitting
     popt, pcov = curve_fit(gaussian, x, y, p0=[1., np.mean(x),guessWidth])
 
@@ -297,22 +294,22 @@ def getWaveSol (data, template,atlas, mxorder, prevSolution, dispAxis=1, winRng=
 
     #set up input data for running with multiprocessing
     lst = []
-            
+
+    #rotate image if dispersion axis not aligned along the x-axis
+    if (dispAxis==0):
+        dTmp = data.T
+        tempTmp = template.T
+    else:
+        dTmp = data
+        tempTmp = template
+        
     if (template.ndim == 2):
-        if (dispAxis == 0):
-            for i in range(data.shape[dispAxis]):
-                lst.append([data[i,:],template[i,:], bestLines, mxorder,prevSolution,winRng, mxCcor,weights, False])
-        else:
-            for i in range(data.shape[dispAxis]):
-                lst.append([data[:,i],template[:,i], bestLines, mxorder,prevSolution,winRng, mxCcor,weights, False])
+        for i in range(dTmp.shape[dispAxis]):
+            lst.append([dTmp[:,i],tempTmp[:,i], bestLines, mxorder,prevSolution,winRng, mxCcor,weights, False])
     else:
         lst = []
-        if (dispAxis == 0):
-            for i in range(data.shape[dispAxis]):
-                lst.append([data[i,:],template, bestLines, mxorder,prevSolution,winRng, mxCcor,weights, False])
-        else:
-            for i in range(data.shape[dispAxis]):
-                lst.append([data[:,i],template, bestLines, mxorder,prevSolution,winRng, mxCcor,weights, False])
+        for i in range(dTmp.shape[dispAxis]):
+            lst.append([dTmp[:,i],tempTmp, bestLines, mxorder,prevSolution,winRng, mxCcor,weights, False])
 
 
     #setup multiprocessing routines
