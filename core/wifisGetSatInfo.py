@@ -135,7 +135,7 @@ def getSatCountsCL(data, thresh, nSplit):
             #mxCounts = np.zeros((ny,nx),dtype='float32')
             mxCounts = np.array(data[:,n*nx:(n+1)*nx,-1]) # assume max counts occurs at last frame
             
-            dTmp = np.array(data[:, n*nx:(n+1)*nx,:])
+            dTmp = np.array(data[:, n*nx:(n+1)*nx,:].astype('float32'))
             sTmp = np.zeros((ny,nx),dtype='float32')
             
             #create OpenCL buffers
@@ -155,13 +155,12 @@ def getSatCountsCL(data, thresh, nSplit):
             cl.enqueue_read_buffer(queue, satCounts_buf, sTmp).wait()
 
             np.copyto(satCounts[:,n*nx:(n+1)*nx],sTmp)
-        
     else:
         #create OpenCL buffers
         #mxCounts = np.zeros((ny,nx),dtype='float32')
         mxCounts = np.array(data[:,:,-1])
         
-        data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=data)
+        data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=data.astype('float32'))
         #mxCounts_buf = cl.Buffer(ctx, mf.WRITE_ONLY, mxCounts.nbytes)
             
         #Run OpenCL code to and put data back into variables
@@ -177,6 +176,11 @@ def getSatCountsCL(data, thresh, nSplit):
         cl.enqueue_read_buffer(queue, satCounts_buf, satCounts).wait()
 
     satCounts *= 0.97 #set useful range as 97% of the saturation value
+
+    #modify variables to reduce memory consumption
+    dTmp = 0
+    data_buf = 0
+    
     return satCounts
 
 def getSatFrameCL(data,satCounts, nSplit):
@@ -217,8 +221,8 @@ def getSatFrameCL(data,satCounts, nSplit):
     if (nSplit > 1):
         for n in range(0, nSplit):
             #create temporary arrays to hold information
-            dTmp = np.array(data[:, n*nx:(n+1)*nx,:])
-            sCountsTmp = np.array(satCounts[:,n*nx:(n+1)*nx])
+            dTmp = np.array(data[:, n*nx:(n+1)*nx,:].astype('float32'))
+            sCountsTmp = np.array(satCounts[:,n*nx:(n+1)*nx].astype('float32'))
             sFrameTmp = np.zeros((ny, nx), dtype='int32')
         
             #create OpenCL buffers
@@ -234,12 +238,18 @@ def getSatFrameCL(data,satCounts, nSplit):
             np.copyto(satFrame[:,n*nx:(n+1)*nx],sFrameTmp)
     else:
         sTmp = np.array(satCounts)
-        data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=data)
+        data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=data.astype('float32'))
         satFrame_buf = cl.Buffer(ctx, mf.WRITE_ONLY, satFrame.nbytes)
-        satCounts_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=sTmp)
+        satCounts_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=sTmp.astype('float32'))
                     
         #run code
         program.getsatframe.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None, None])
         program.getsatframe(queue,(ny,nx),None,np.uint32(nx), np.uint32(nt),data_buf, satCounts_buf, satFrame_buf)
         cl.enqueue_read_buffer(queue, satFrame_buf, satFrame).wait()
+
+
+    #modify variables to reduce memory consumption
+    dTmp = 0
+    data_buf = 0  
+
     return satFrame
