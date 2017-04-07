@@ -11,6 +11,41 @@ import re
 import os
 import sys
 
+def readImgsFromFile(filename):
+    """
+    Read a set of images contained as multi extensions from the FITS file provided
+    Usage: outImg, outTime, hdr = readImgsFromFile(filename)
+    filename is name of the FITS file from which to read
+    outImg is the returned data cube
+    outTime is the returned array containing the integration times for each image in the list
+    hdr is the header of the last FITS file
+    """
+
+    #open first file to get image dimensions
+    tmp = fits.open(filename)
+    nx = tmp[0].header['NAXIS2']
+    ny = tmp[0].header['NAXIS1']
+    listLen = len(tmp)
+    
+    outImg = np.zeros((nx,ny,listLen), dtype='float32')
+    outTime = np.zeros((listLen), dtype='float32')
+
+    #now populate the array
+    print('Reading FITS images into data cube')
+
+    for i in range(0,listLen):
+        outTime[i] = tmp[i].header['ACTEXP']
+        np.copyto(outImg[:,:,i], tmp[i].data)
+        
+    print('Done reading')
+
+    #get header of last image only
+    hdr = tmp[-1].header
+    tmp.close()
+    del tmp
+    
+    return outImg, outTime, hdr
+
 def readImgFromFile(file):
     """
     Reads an FITS image cube from the specified file
@@ -51,8 +86,6 @@ def readImgExtFromFile(file):
 
     #get FITS file information
     tmp = fits.open(file)
-    nx = tmp[0].header['NAXIS2']
-    ny = tmp[0].header['NAXIS1']
 
     #check if there are multiple HDUs
     nz = len(tmp)
@@ -71,10 +104,11 @@ def readImgExtFromFile(file):
 def readImgsFromList(list):
     """
     Read a set of images from the list provided
-    Usage: outImg, outTime = readImgsFromList(list)
+    Usage: outImg, outTime, hdr = readImgsFromList(list)
     list is an array or python list containing the names of each file from which to read
     outImg is the returned data cube
     outTime is the returned array containing the integration times for each image in the list
+    hdr is the header of the last FITS file
     """
 
     #open first file to get image dimensions
@@ -213,13 +247,13 @@ def userInput(strng):
 
     #check python version first
     if sys.version_info >= (3,0):
-        cont = input(strng)
+        cont = input(strng+' ')
     else:
-        cont = raw_input(strng)
+        cont = raw_input(strng+' ')
 
     return cont
 
-def writeTable (filename, data):
+def writeTable (data,filename):
     """
     Write a data array into a tabular format to an ASCII file
     Usage: writeTable(filename, data)
@@ -237,7 +271,6 @@ def writeImgSlices(data, extSlices,filename, hdr=None):
     Usage writeFits(data, extSlices, filename)
     data is the input data (can contain multiple HDUs, i.e. more than 2 dimensions)
     filename is the name of the file to write the FITS file to.
-
     """
 
     if (hdr != None):
