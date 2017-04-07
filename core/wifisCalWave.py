@@ -139,13 +139,13 @@ if (contProc):
     prevSol = wifisIO.readTable(templatename+'_waveSol.dat')
 
     #check if solution already exists.
-    if(os.path.exists(savename+'_waveSol.dat')):
+    if(os.path.exists(savename+'_waveSol.dat') and (os.path.exists(savename+'_waveMap.fits'))):
         cont = wifisIO.userInput('Dispersion solution already exists for ' +foldername+', do you want to continue and replace (y/n)?')
         if (cont.lower() == 'n'):
             exit()
 
     #data image, template, atlas file, max fitting order, list of prev. solutions, dispersion axis direction, window range fro line fitting, maximum allowable cross-correlation pixel offset
-    result = waveSol.getWaveSol(fluxImg, template, atlasname, 1, prevSol, dispAxis=1, winRng=7, mxCcor=30)
+    result = waveSol.getWaveSol(fluxImg, template, atlasname, 1, prevSol, dispAxis=1, winRng=7, mxCcor=30, weights=False, buildSol=False)
 
     #Save dispersion solution
     dispSol = []
@@ -153,6 +153,12 @@ if (contProc):
         dispSol.append(sol[0])
 
     wifisIO.writeTable(savename+'_waveSol.dat', dispSol)
+
+    #Create wavemap
+    waveMap = waveSol.buildWaveMap(fluxImg, dispSol, dispAxis=1)
+
+    #save wavemap solution
+    wifisIO.writeFits(waveMap, savename+'_waveMap.fits')
 
 t1 = time.time()
 print ("Total time to run entire script: ",t1-t0)
