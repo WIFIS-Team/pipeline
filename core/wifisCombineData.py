@@ -8,6 +8,79 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pyopencl as cl
 
+def upTheRampCRRejectCL(intTime, data, satFrame, nSplit):
+    """Routine to process a sequence of up-the-ramp exposures using OpenCL code with the ability to reject influence of non-saturated cosmic ray hits
+    Usage: output = upTheRampCRRejectCL(intTime,data, satFrame, nSplit)
+    intTime is input array indicating the integration times of each frame in the data cube in increasing order
+    data is the input data cube
+    satFrame is an input image indicating the frame number of the first saturated frame in the sequence per pixel
+    nSplit is input variable to allow for splitting up the processing of the workload, which is needed to reduce memory to reduce memory errors/consumption for large datasets
+    output is a 2D image, where each pixel represents the flux (slope/time)
+    *** NOTE: Currently openCL code is hard-coded to handle a maximum of 1000 frames. Adjust code if needed. ***
+    """
+
+    #get dimenions of input images
+    ny = data.shape[0]
+    nx = data.shape[1]/nSplit
+    ntime = data.shape[2]
+
+    #create tempory array to hold the output image
+    outImg = np.zeros((ny,data.shape[1]), dtype='float32')
+
+    #start OpenCL portion
+
+    #get OpenCL context object, can set to fixed value if wanted
+    ctx = cl.create_some_context(interactive=True)
+    queue = cl.CommandQueue(ctx)
+    
+    filename = 'opencl_code/compgradient.cl'
+    f = open(filename, 'r')
+    fstr = "".join(f.readlines())
+    program = cl.Program(ctx, fstr).build()
+    mf = cl.mem_flags   
+
+    #only create temporary arrays if needed to avoid excess RAM usage
+    if (nSplit > 1):
+        for n in range(0, nSplit):
+            #create temporary arrays to hold portions of data cube
+            dTmp = np.array(data[:,n*nx:(n+1)*nx,:].astype('float32'))
+            sTmp = np.array(satFrame[:,n*nx:(n+1)*nx].astype('int32'))
+            oTmp = np.zeros((ny,nx),dtype='float32')
+        
+            #create OpenCL buffers
+            data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=dTmp)
+            sat_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=sTmp)
+            oTmp_buf = cl.Buffer(ctx, mf.WRITE_ONLY, oTmp.nbytes)
+
+            #set openCL arguments and run openCL code
+            program.compmeangrad.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None,None])
+            program.compmeangrad(queue,(ny,nx),None,np.uint32(nx), np.uint32(ntime),data_buf,sat_buf,oTmp_buf)
+            
+            cl.enqueue_read_buffer(queue, oTmp_buf, oTmp).wait()
+
+            #copy to output array
+            np.copyto(outImg[:,n*nx:(n+1)*nx],oTmp)
+    else:
+        
+        #create OpenCL buffers
+        data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=data.astype('float32'))
+        sat_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=satFrame.astype('int32'))
+        out_buf = cl.Buffer(ctx, mf.WRITE_ONLY, outImg.nbytes)
+        
+        program.compmeangrad.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None,None])
+        program.compmeangrad(queue,(ny,nx),None,np.uint32(nx), np.uint32(ntime), data_buf,sat_buf,out_buf)
+        
+        cl.enqueue_read_buffer(queue, out_buf, outImg).wait()
+
+    outImg/=(np.mean(np.gradient(intTime)))
+
+    #modify variables to reduce memory consumption
+    dTmp = 0
+    data_buf = 0
+    
+    return outImg
+
+
 def upTheRampCL(intTime, data, satFrame, nSplit):
     """Routine to process a sequence of up-the-ramp exposures using OpenCL code
     Usage: output = upTheRampCL(intTime,data, satFram, nSplit)
@@ -46,8 +119,8 @@ def upTheRampCL(intTime, data, satFrame, nSplit):
     if (nSplit > 1):
         for n in range(0, nSplit):
             #create temporary arrays to hold portions of data cube
-            dTmp = np.array(data[:,n*nx:(n+1)*nx,:])
-            sTmp = np.array(satFrame[:,n*nx:(n+1)*nx])
+            dTmp = np.array(data[:,n*nx:(n+1)*nx,:].astype('float32'))
+            sTmp = np.array(satFrame[:,n*nx:(n+1)*nx].astype('int32'))
             oTmp = np.zeros((ny,nx),dtype='float32')
             a0_array = np.zeros((ny,nx), dtype='float32')
         
@@ -71,8 +144,8 @@ def upTheRampCL(intTime, data, satFrame, nSplit):
         a0_array = np.zeros((ny,nx), dtype='float32')
 
         #create OpenCL buffers
-        data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=data)
-        sat_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=satFrame)
+        data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=data.astype('float32'))
+        sat_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=satFrame.astype('int32'))
         a0_buf = cl.Buffer(ctx, mf.WRITE_ONLY, a0_array.nbytes)
         a1_buf = cl.Buffer(ctx, mf.WRITE_ONLY, outImg.nbytes)
         
@@ -81,6 +154,11 @@ def upTheRampCL(intTime, data, satFrame, nSplit):
         
         cl.enqueue_read_buffer(queue, a0_buf, a0_array).wait()
         cl.enqueue_read_buffer(queue, a1_buf, outImg).wait()
+
+    #modify variables to reduce memory consumption
+    dTmp = 0
+    data_buf = 0
+    
     return outImg
 
 def createMaster(data):
@@ -122,7 +200,7 @@ def fowlerSampling(intTime, data, satFrame):
                 tmp2 = data[i,j,nFowler:sat2]
                 intTmp = intTime[nFowler:sat2]-intTime[0:sat1]
                 outImg[i,j] = np.mean(tmp2-tmp1)/np.mean(intTmp)
-            
+                                
     return outImg
     
     
@@ -158,14 +236,14 @@ def fowlerSamplingCL(intTime, data, satFrame, nSplit):
     mf = cl.mem_flags   
 
     #create OpenCL buffers
-    time_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=intTime)
+    time_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=intTime.astype('float32'))
 
     #only create temporary arrays if needed to avoid excess RAM usage
     if (nSplit > 1):
         for n in range(0, nSplit):
             #create temporary arrays to hold portions of data cube
-            dTmp = np.array(data[:,n*nx:(n+1)*nx,:])
-            sTmp = np.array(satFrame[:,n*nx:(n+1)*nx])
+            dTmp = np.array(data[:,n*nx:(n+1)*nx,:].astype('float32'))
+            sTmp = np.array(satFrame[:,n*nx:(n+1)*nx].astype('int32'))
             oTmp = np.zeros((ny,nx),dtype='float32')
            
             #create OpenCL buffers
@@ -184,13 +262,18 @@ def fowlerSamplingCL(intTime, data, satFrame, nSplit):
     else:
         
         #create OpenCL buffers
-        data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=data)
-        sat_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=satFrame)
+        data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=data.astype('float32'))
+        sat_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=satFrame.astype('int32'))
         flux_buf = cl.Buffer(ctx, mf.WRITE_ONLY, outImg.nbytes)
         
         program.fowler.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None,None,None])
         program.fowler(queue,(ny,nx),None,np.uint32(nx), np.uint32(ntime),time_buf, data_buf,sat_buf,flux_buf)
         
         cl.enqueue_read_buffer(queue, flux_buf, outImg).wait()
+
+    #modify variables to reduce memory consumption
+    dTmp = 0
+    data_buf = 0
+    
     return outImg
 
