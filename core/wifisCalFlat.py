@@ -138,13 +138,13 @@ else:
     contWrite = True
 if (contWrite):
     #add/modify header information here
-    wifisIO.writeImgSlices(fluxImg, response,'processed/'+'master_flat.fits')
+    wifisIO.writeFits(limits,'processed/'+'master_flat_limits.fits')
 
 #now extract the individual slices
-extSlices = slices.extSlices(data, limits, dispAxis=0)
+extSlices = slices.extSlices(master, limits, dispAxis=1)
 
 #now get smoothed and normalized response function
-response = slices.getResponseAll(extSlices, 5, 0.01)
+response = slices.getResponseAll(extSlices, 0, 0.01)
 
 #write master image to file
 if(os.path.exists('processed/'+'master_flat.fits')):
