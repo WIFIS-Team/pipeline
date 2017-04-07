@@ -18,7 +18,6 @@ __kernel void getmaxval(const unsigned int nx, const unsigned int nt, __global f
   unsigned long pos2d = i*nx+j;
   
   float mxval = 0;
-  unsigned int mxframe = 0;
   
   for (k=0; k < nt; k++) {
     pos3d = i*(nx*nt) + j*nt + k;
