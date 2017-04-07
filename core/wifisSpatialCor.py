@@ -530,8 +530,8 @@ def extendTraceAll(traceLst, extSlices, zeroTraces,space=5.,method='linear', ncp
         if (ncpus == None):
             ncpus =mp.cpu_count()
             pool = mp.Pool(ncpus)
-            interpLst = pool.map(extendTraceSlice, lst)
-            pool.close()
+        interpLst = pool.map(extendTraceSlice, lst)
+        pool.close()
 
     return interpLst
 
