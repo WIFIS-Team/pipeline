@@ -52,14 +52,15 @@ def gaussFit(x, y, guessWidth, plot=False):
     plot is a keyword to allow for plotting of the fit (for debug purposes)
     params is a list containing in the fitted parameters in the following order: amplitude, centre, width
     """
- 
-    #use scipy to do fitting
-    popt, pcov = curve_fit(gaussian, x, y, p0=[1., np.mean(x),guessWidth])
 
-    if (plot == True):
+    ytmp = y - np.min(y)
+    #use scipy to do fitting
+    popt, pcov = curve_fit(gaussian, x, ytmp, p0=[np.max(ytmp), np.mean(x),guessWidth])
+
+    if (plot):
         plt.close('all')
-        plt.plot(x,y)
-        plt.plot(x, y, 'ro')
+        plt.plot(x,ytmp)
+        plt.plot(x, ytmp, 'ro')
         plt.plot(x, gaussian(x, popt[0], popt[1], popt[2]))
         plt.show()
         
@@ -89,9 +90,9 @@ def getSolQuick(input):
     mxCcor = input[6]
     useWeights = input[7]
     plot = input[8]
-
+    buildSol = input[9]
     totPix = len(yRow)
-   
+
     #get cross-correlation correction to correct any offsets to within 1 pixel
     #to improve search window and line identification
     if (mxCcor > 0):
@@ -112,7 +113,7 @@ def getSolQuick(input):
 
     #measure the noise level - may be uneccessary if we can provide this from other routines
     nse = np.std(tmp)
-    nse = nse/(np.max(yRow-flr)) 
+    nse = nse/(np.max(yRow-flr))
     
     #normalize the spectra so that the predicted line strengths are on the same scale as the observed spectrum
     yRow = (yRow-flr)/np.max((yRow-flr))
@@ -136,7 +137,7 @@ def getSolQuick(input):
     atlas = atlas[whr[0],:]
     atlasPix = atlasPix[whr[0]]
 
-    if (plot == True):
+    if (plot):
         plt.ioff()
         plt.figure()
         plt.plot(yRow)
@@ -172,26 +173,25 @@ def getSolQuick(input):
 
                     #find location of maximum signal
                     mx = np.argmax(yRng)
+                    mxPos = pixRng[mx]
+                    prevMx = -1
                     
-                    #update the search range to centre on peak
-                    pixRng = (np.arange(winRng)-winRng/2 + pixRng[mx]).astype('int')
-                    yRng = yRow[pixRng]
-                        
-                    mx = np.argmax(yRng)
+                    while (mxPos != prevMx):
+                        #update the search range to centre on peak
+                        prevMx = mxPos
+                        pixRng = (np.arange(winRng)-winRng/2 + pixRng[mx]).astype('int')
+                        yRng = yRow[pixRng]
+                        mx = np.argmax(yRng)
+                        mxPos = pixRng[mx]
 
                     #check if S/N of range is sufficient for fitting
-                    #requires at least two consecutive pixels > noise level
-                    if (yRng[mx] >= 2.*nse):
-                        if (yRng[mx-1] >= 2.*nse or yRng[mx+1] >= 2.*nse):
+                    #requires at least two consecutive pixels > noise criteria
+                    if (yRng[mx] >= 3.*nse):
+                        if (yRng[mx-1] >= 3.*nse or yRng[mx+1] >= 3.*nse):
                         #fit guassian to region to determine central location
                         #print('Trying to fit line', bestPix[i])
                             try:
-                                if (plot == True):
-                                    #plt.plot([pixRng[0],pixRng[-1]], [3.*nse,3.*nse])
-                                    amp, cent,wid = gaussFit(pixRng,yRng, winRng/3.,plot=True)
-                                    print(amp/nse)
-                                else:
-                                    amp,cent,wid = gaussFit(pixRng,yRng, winRng/3.,plot=False)
+                                amp,cent,wid = gaussFit(pixRng,yRng, winRng/3.,plot=plot)
                                 
                                 #only keep line if amplitude of fit >3*noise level
                                 if (amp/nse >= 3.):
@@ -199,17 +199,22 @@ def getSolQuick(input):
                                     widthFit.append(wid)
                                     ampFit.append(amp)
                                     atlasFit.append(atlas[i,0])
+
+                                if (len(centFit)>3):
+                                    #update "guessed" dispersion solution to get better line centres
+                                        tmpCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit)
+                                        atlasPix = (atlas[:,0]-tmpCoef[1])/tmpCoef[0]
                                     
                             except (RuntimeError):
                                 pass
             except (IndexError, ValueError):
                 pass
 
-        #exclude poorly fit lines
+        #exclude poorly fit lines based on width of line
         widthFit = np.abs(widthFit)
         whr = np.where(widthFit <= winRng/3.) 
         ln = len(whr[0])
-                                    
+
         if ln > mxorder:
             #if (plot == True):
             #plt.plot(centFit,atlasFit, 'bo')
@@ -224,56 +229,59 @@ def getSolQuick(input):
             widthFit = widthFit[whr[0]]
             ampFit = ampFit[whr[0]]
 
-            plt.plot(centFit, atlasFit, 'bo')
+            if (plot):
+                plt.subplot(211)
+                plt.plot(centFit, atlasFit, 'bo')
 
-            if (useWeights == True):
+            if (useWeights):
                 fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
-
-                #exclude poorly fit lines
-                poly = np.poly1d(fitCoef)
-                dev = np.abs(atlasFit-poly(centFit))
-                whr = np.where(dev < 3.*np.std(dev))
-
-                centFit = centFit[whr[0]]
-                atlasFit = atlasFit[whr[0]]
-                widthFit = widthFit[whr[0]]
-                ampFit = ampFit[whr[0]]
-
-                if (len(centFit) > mxorder):
-                    fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
-                    goodFit = True
             else:
                 fitCoef = np.polyfit(centFit, atlasFit,mxorder) # returns polynomial coefficients in reverse order
 
-                #exclude poorly fit lines
-                poly = np.poly1d(fitCoef)
-                dev = atlasFit-poly(centFit)
-                whr = np.where(np.abs(dev) < 3.*np.std(dev))
-
-                centFit = centFit[whr[0]]
-                atlasFit = atlasFit[whr[0]]
-                widthFit = widthFit[whr[0]]
-                ampFit = ampFit[whr[0]]
+                #exclude poorly fit lines based on deviation from best fit
+                for i in range(1):
+                    poly = np.poly1d(fitCoef)
+                    dev = atlasFit-poly(centFit)
+                    whr = np.where(np.abs(dev) < 1.*np.std(dev))
+                    if (plot):
+                        print('std dev for round',i, 'is',np.std(dev))
+                
+                    centFit = centFit[whr[0]]
+                    atlasFit = atlasFit[whr[0]]
+                    widthFit = widthFit[whr[0]]
+                    ampFit = ampFit[whr[0]]
 
                 if (len(centFit) > mxorder):
-                    fitCoef = np.polyfit(centFit, atlasFit,mxorder) # returns polynomial coefficients in reverse order
+                    if (useWeights):
+                        fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
+                    else:
+                        fitCoef = np.polyfit(centFit, atlasFit,mxorder) # returns polynomial coefficients in reverse order
                     goodFit = True
-                
-            #for testing purposes only
-            if (plot == True):
-                poly = np.poly1d(fitCoef)
-                plt.plot(centFit, atlasFit, 'ro')
-                plt.plot(np.arange(len(yRow)), poly(np.arange(len(yRow))))
-                plt.show()
+            
+                    #compute RMS
+                    poly = np.poly1d(fitCoef)
+                    diff = atlasFit - poly(centFit)
+                    rms = np.sqrt((1./centFit.shape[0])*(np.sum(diff**2.)))
+                    rms /= fitCoef[0]
+                    
+                    #for testing purposes only
+                    if (plot):
+                        plt.plot(centFit, atlasFit, 'ro')
+                        plt.plot(np.arange(len(yRow)), poly(np.arange(len(yRow))))
+                        plt.subplot(212)
+                        plt.plot(centFit, atlasFit - poly(centFit), 'ro')
+                        plt.plot([0, len(atlasFit)],[0,0],'--')
+                        print('final std dev:',np.std(atlasFit - poly(centFit)))
+                        plt.show()
         
     
     if (goodFit):
-        return(fitCoef[::-1],widthFit, atlasFit)
+        return(fitCoef[::-1],widthFit*2.*np.sqrt(2.*np.log(2.)), centFit, atlasFit, np.abs(rms))
     else:
-        return np.repeat(float('nan'),mxorder+1), [],[]
+        return np.repeat(np.nan,mxorder+1), [],[]
     
 
-def getWaveSol (data, template,atlas, mxorder, prevSolution, dispAxis=1, winRng=7, mxCcor=30, weights=False):
+def getWaveSol (data, template,atlas, mxorder, prevSolution, dispAxis=1, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None):
     """
     Computes dispersion solution for each set of pixels along the dispersion axis in the provided image.
     Usage: output = getWaveSol(data, template, mxorder, prevSolution, dispAxis, winRng, mxCcor, weights)
@@ -298,22 +306,22 @@ def getWaveSol (data, template,atlas, mxorder, prevSolution, dispAxis=1, winRng=
     #rotate image if dispersion axis not aligned along the x-axis
     if (dispAxis==0):
         dTmp = data.T
-        tempTmp = template.T
+        tempTemp = template.T
     else:
         dTmp = data
-        tempTmp = template
-        
+        tempTemp = template
+
     if (template.ndim == 2):
-        for i in range(dTmp.shape[dispAxis]):
-            lst.append([dTmp[:,i],tempTmp[:,i], bestLines, mxorder,prevSolution,winRng, mxCcor,weights, False])
+        for i in range(dTmp.shape[1]):
+            lst.append([dTmp[i,:],template[i,:], bestLines, mxorder,prevSolution,winRng, mxCcor,weights, False, buildSol])
     else:
         lst = []
-        for i in range(dTmp.shape[dispAxis]):
-            lst.append([dTmp[:,i],tempTmp, bestLines, mxorder,prevSolution,winRng, mxCcor,weights, False])
-
-
+        for i in range(dTmp.shape[1]):
+            lst.append([dTmp[i,:],template, bestLines, mxorder,prevSolution,winRng, mxCcor,weights, False, buildSol])
+   
     #setup multiprocessing routines
-    ncpus =mp.cpu_count()
+    if (ncpus == None):
+        ncpus =mp.cpu_count()
     pool = mp.Pool(ncpus)
 
     #run code
@@ -325,3 +333,93 @@ def getWaveSol (data, template,atlas, mxorder, prevSolution, dispAxis=1, winRng=
     
     return result
     
+def buildWaveMap(img, dispSol, dispAxis=1):
+    """
+    Routine to build a wavelength mapping for each pixel on the provided image
+    Usage: waveMap = buildWaveMap(img, dispSol, dispAxis=1)
+    img is the input image onto which the mapping should be done
+    dispSol is an array providing the measured dispersion solution for each pixel in the image
+    dispAxis is a keyword that specifies which axis is the dispersion axis (0 - along the y-axis, 1 - along the x-axis)
+    waveMap is the output image providing the wavelength at each pixel
+    """
+
+    #initialize wave map array
+    waveMap = np.zeros(img.shape)
+
+    if (dispAxis==0):
+        x = np.arange(img.shape[0])
+    else:
+        x = np.arange(img.shape[1])
+        
+        #populate map with solution
+    for i in range(dispSol.shape[0]):
+        waveMap[i,:] = dispSol[i,0] + dispSol[i,1]*x
+
+    if (dispAxis==0):
+        waveMap = waveMap.T
+
+    return waveMap
+
+def trimWaveSliceAll(waveSlices, flatSlices, threshold, MP=True, ncpus=None):
+    """
+    Routine used to identify useful limits of wavelenth mapping 
+    Usage: out = trimWaveSlice(waveSlices, flatSlices, threshold, MP=True, ncpus=None)
+    waveSlices is a list of the wavelength mapping slices
+    flatSlices is a list of the flatfield image slices
+    threshold is a value indicating the cutoff value relative to the maximum flatfield flux in a given slice to be used to determine the limits
+    MP is a boolean used to indicate whether multiprocessing should be used
+    ncpus is an integer to set the maximum number of simultaneously run processes during MP mode
+    out is a list containing the trimmed wavelength mapped slices. All values outside of the trim limits are set to NaN
+    """
+
+    
+    if (MP):
+        lst = []
+        for i in range(len(waveSlices)):
+            lst.append([waveSlices[i],flatSlices[i],threshold])
+
+        if (ncpus == None):
+            ncpus =mp.cpu_count()
+        pool = mp.Pool(ncpus)
+        out = pool.map(trimWaveSlice, lst)
+        pool.close()
+        
+    else:
+    
+        out = []
+        for i in range(len(waveSlices)):
+            out.append(trimWaveSlice([waveSlices[i],flatSlices[i],threshold]))
+            
+    return out
+
+    
+def trimWaveSlice(input):
+    """
+    Routine used to identify useful limits of wavelenth mapping slice
+    Usage: slc = trimWaveSlice(input), where input is a list containing:
+    waveSlc - the wavelength mapping slice
+    flatSlc - the flatfield slice image
+    threshold - the cutoff value relative to the maximum flatfield flux to determine the limits
+    slc is the trimmed wavelength mapped slice. All values outside of the trim limits are set to NaN
+    """
+
+    slc = np.empty((input[0].shape))
+    np.copyto(slc, input[0])
+    flatSlc = input[1]
+    threshold = input[2]
+
+    mx = np.max(flatSlc)
+    
+    #work on axis 0 first
+    for i in range(slc.shape[0]):
+        y = flatSlc[i,:]
+        whr = np.where(y < threshold*mx)[0]
+        slc[i,whr] = np.nan
+        
+    #work on axis 1 now
+    for i in range(slc.shape[1]):
+        y = flatSlc[:,i]
+        whr = np.where(y < threshold*mx)[0]
+        slc[whr,i] = np.nan
+
+    return slc
