@@ -5,7 +5,7 @@ Astropy
 NumPy
 SciPy
 pyopencl - for OpenCL accelerated tasks
-
+matplotlib - for plotting
 
 Main scripts to edit and run:
 wifisCalDetLin.py
