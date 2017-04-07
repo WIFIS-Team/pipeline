@@ -1,5 +1,12 @@
 WIFIS pipeline
 
+The following python packages must be installed:
+Astropy
+NumPy
+SciPy
+pyopencl - for OpenCL accelerated tasks
+
+
 Main scripts to edit and run:
 wifisCalDetLin.py
 wifisCalDark.py
