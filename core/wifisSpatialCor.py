@@ -74,7 +74,7 @@ def getFit2(x, y, mxWidth=1,plot=False):
         if (c < x[0] or c > x[-1]) or (np.abs(gfit[2]) > mxWidth):
             mid = len(y)/2
             mx = np.argmax(y[mid-1:mid+2])+mid-1
-            cc = np.sum(x[mx-1:mx+2]*y[mx-1:mx+2])/np.sum(y[mx-1:mx+2])
+            cc = np.nansum(x[mx-1:mx+2]*y[mx-1:mx+2])/np.nansum(y[mx-1:mx+2])
 
             if (plot):
                 plt.plot(x,y)
@@ -82,10 +82,10 @@ def getFit2(x, y, mxWidth=1,plot=False):
                 plt.plot([c,c], [np.min(y),np.max(y)],'--')
                 plt.show()
             c = cc
-    except (RuntimeError):
+    except (RuntimeError, ValueError):
         mid = len(y)/2
         mx = np.argmax(y[mid-1:mid+2])+mid-1
-        c = np.sum(x[mx-1:mx+2]*y[mx-1:mx+2])/np.sum(y[mx-1:mx+2])
+        c = np.nansum(x[mx-1:mx+2]*y[mx-1:mx+2])/np.nansum(y[mx-1:mx+2])
     return c
 
 def fitColumn(pos,slce,allTrace, winRng, reverse=False, plot=False, prnt=False, mxWidth=1,bright=False):
@@ -136,51 +136,63 @@ def fitColumn(pos,slce,allTrace, winRng, reverse=False, plot=False, prnt=False, 
         ytmp = d2[xtmp]
 
         if (bright):
-            dipPos = xtmp[np.argmin(ytmp[winRng/2-1:winRng/2+2])+winRng/2-1]
+            try:
+                dipPos = xtmp[np.nanargmin(ytmp[winRng/2-1:winRng/2+2])+winRng/2-1]
+            except(ValueError):
+                dipPos=np.nan
         else:
-            dipPos = xtmp[np.argmax(ytmp[winRng/2-1:winRng/2+2])+winRng/2-1]
+            try:
+                dipPos = xtmp[np.nanargmax(ytmp[winRng/2-1:winRng/2+2])+winRng/2-1]
+            except(ValueError):
+                dipPos = np.nan
 
-        xtmp = np.arange(winRng)+dipPos - winRng/2 #can remove once know quality
-        xtmp = xtmp[np.where(xtmp < len(y))]
-       
-        #fit Gaussian or parabola to region to determine line centre
-        if (bright):
-            yfit = np.min(d2[xtmp])-d2[xtmp]
-            yfit -= np.min(yfit)
-        else:
-            yfit = d2[xtmp] - np.min(d2[xtmp])
+        if (dipPos != np.nan):
+            xtmp = np.arange(winRng)+dipPos - winRng/2 #can remove once know quality
+            xtmp = xtmp[np.where(xtmp < len(y))]
 
-        if (len(xtmp)>2):
-            trace[j] =  getFit2(xtmp, yfit, plot=plot, mxWidth=mxWidth)
+            if (len(xtmp)>2):
+                #fit Gaussian or parabola to region to determine line centre
+                if (bright):
+                    yfit = np.nanmin(d2[xtmp])-d2[xtmp]
+                    yfit -= np.nanmin(yfit)
+                else:
+                    yfit = d2[xtmp] - np.nanmin(d2[xtmp])
+
+                if (len(xtmp)>2):
+                    trace[j] =  getFit2(xtmp, yfit, plot=plot, mxWidth=mxWidth)
+                else:
+                    trace[j] = np.nan
+
+                if (prnt):
+                    print(trace[j], prevFit-trace[j])
+            else:
+                trace[j] = np.nan
         else:
             trace[j] = np.nan
-
-        if (prnt):
-            print(trace[j], prevFit-trace[j])
             
         #avoid bad fits
         if ((np.abs(trace[j]-prevFit) > mxWidth/2.) or np.isnan(trace[j])):
             
             #compute centre as weighted average instead
-            mxPos = np.argmax(yfit[winRng/2-1:winRng/2+2])
-                
-            xtmp = xtmp[winRng/2-1 + mxPos]
-            ytmp = np.abs(d2[xtmp])
-            c = np.nansum(xtmp*ytmp)/np.nansum(ytmp)
-
+            try:
+                if (len(xtmp)>2 and len(yfit)>2):
+                    mxPos = np.nanargmax(yfit[winRng/2-1:winRng/2+2])
+                    xtmp = xtmp[winRng/2-1 + mxPos]
+                    ytmp = np.abs(d2[xtmp])
+                    c = np.nansum(xtmp*ytmp)/np.nansum(ytmp)
+                else:
+                    c = np.nan
+            except(ValueError):
+                c = np.nan
+           
             if (prnt):
                 print(pos, j, trace[j], prevFit, prevFit-trace[j], c, prevFit-c)
-                #       
-                #    if (np.abs(c-prevFit) > 1):
-                #        trace[j] = np.float('nan')
-                #    else:
 
             if (np.abs(c-prevFit) > mxWidth) or np.isnan(c):
                 trace[j] = np.nan
             else:
                 trace[j] = c
-        
-                        
+                                
         if (plot):
             plt.figure()
             plt.plot(d2)
@@ -269,7 +281,7 @@ def traceRonchiSlice(input):
         tmp  = img
 
     #find column with the maximum signal to identify position and number of Ronchi dips
-    m1, m2 = np.unravel_index(np.argmax(tmp), tmp.shape)
+    m1, m2 = np.unravel_index(np.nanargmax(tmp), tmp.shape)
 
     #extract signal from this column
     y=tmp[:,m2]
@@ -277,7 +289,7 @@ def traceRonchiSlice(input):
     d2 = np.gradient(np.gradient(y))
 
     #only use regions where signal > 50% of the max
-    mx = np.max(y)
+    mx = np.nanmax(y)
     whr = np.where(y > 0.5*mx)[0]
     strt = whr[0]-1
     mxPix = whr[-1]+2
@@ -290,9 +302,9 @@ def traceRonchiSlice(input):
     ytmp = y[xtmp]
     
     if (bright):
-        dipPos = xtmp[np.argmin(d2[xtmp])] #position of first dip
+        dipPos = xtmp[np.nanargmin(d2[xtmp])] #position of first dip
     else:
-        dipPos = xtmp[np.argmax(d2[xtmp])] #position of first dip
+        dipPos = xtmp[np.nanargmax(d2[xtmp])] #position of first dip
 
     #stop when dip position
     while (dipPos < mxPix):
@@ -301,12 +313,11 @@ def traceRonchiSlice(input):
 
         #fit function to region to determine line centre
         if (bright):
-            yfit = np.min(d2[xtmp])-d2[xtmp]
-            yfit -= np.min(yfit)
+            yfit = np.nanmin(d2[xtmp])-d2[xtmp]
+            yfit -= np.nanmin(yfit)
         else:
-            yfit = d2[xtmp] - np.min(d2[xtmp])
+            yfit = d2[xtmp] - np.nanmin(d2[xtmp])
 
-        
         trace.append(getFit2(xtmp, yfit, plot=plot, mxWidth=mxWidth))
 
         if (plot):
@@ -323,9 +334,9 @@ def traceRonchiSlice(input):
         xtmp = xtmp[np.where(xtmp < len(y))]
 
         if (bright):
-            dipPos = xtmp[np.argmin(d2[xtmp])]
+            dipPos = xtmp[np.nanargmin(d2[xtmp])]
         else:
-            dipPos = xtmp[np.argmax(d2[xtmp])]
+            dipPos = xtmp[np.nanargmax(d2[xtmp])]
                     
     #count the number of dips
     nDips = len(trace)
@@ -384,7 +395,7 @@ def traceRonchiSlice(input):
 
     return outTrace
 
-def traceRonchiAll(extSlices, nbin=2, winRng=5, mxWidth=1,smth=5,bright=False, ncpus=None):
+def traceRonchiAll(extSlices, nbin=2, winRng=5, mxWidth=1,smth=5,bright=False, MP=True,ncpus=None):
     """
     Routine used to trace all bands for a all Ronchi slices
     Usage: result = traceRonchiAll(extSlices, nbin=2, winRng=5, mxWidth=1, smth=5, bright=False, ncpus=None)
@@ -396,19 +407,24 @@ def traceRonchiAll(extSlices, nbin=2, winRng=5, mxWidth=1,smth=5,bright=False, n
     bright is a boolean value indicating whether the bright bands (True) or dark bands (False) should be fit
     result is a list of 2D arrays providing the position of each band along the individual slice
     """
-    
-    #set up input list
-    lst = []
 
-    for slc in extSlices:
-        lst.append([slc, nbin, winRng, slc.shape[1], False, mxWidth,smth,bright])
+    if (MP):
+        #set up input list
+        lst = []
 
-    if (ncpus == None):
-        ncpus = mp.cpu_count()
-    pool = mp.Pool(ncpus)
-    result = pool.map(traceRonchiSlice,lst)
-    pool.close()
+        for slc in extSlices:
+            lst.append([slc, nbin, winRng, slc.shape[1], False, mxWidth,smth,bright])
 
+        if (ncpus == None):
+            ncpus = mp.cpu_count()
+        pool = mp.Pool(ncpus)
+        result = pool.map(traceRonchiSlice,lst)
+        pool.close()
+    else:
+        result = []
+        for slc in extSlices:
+            result.append(traceRonchiSlice([slc, nbin, winRng, slc.shape[1],False, mxWidth, smth, bright]))
+                        
     return result
 
 def extendTraceSlice(input):
