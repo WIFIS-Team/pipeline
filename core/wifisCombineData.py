@@ -21,7 +21,7 @@ def upTheRampCRRejectCL(intTime, data, satFrame, nSplit):
 
     #get dimenions of input images
     ny = data.shape[0]
-    nx = data.shape[1]/nSplit
+    nx = int(data.shape[1]/nSplit)
     ntime = data.shape[2]
 
     #create tempory array to hold the output image
@@ -94,7 +94,7 @@ def upTheRampCL(intTime, data, satFrame, nSplit):
 
     #get dimenions of input images
     ny = data.shape[0]
-    nx = data.shape[1]/nSplit
+    nx = int(data.shape[1]/nSplit)
     ntime = data.shape[2]
 
     #create tempory array to hold the output image
@@ -217,7 +217,7 @@ def fowlerSamplingCL(intTime, data, satFrame, nSplit):
 
     #get dimenions of input images
     ny = data.shape[0]
-    nx = data.shape[1]/nSplit
+    nx = int(data.shape[1]/nSplit)
     ntime = data.shape[2]
 
     #create tempory array to hold the output image
