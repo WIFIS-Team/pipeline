@@ -29,7 +29,7 @@ def channel(data,nChannel):
     else:
         nFrames = 1
         
-    csize = nx/nChannel
+    csize = int(nx/nChannel)
 
     for n in range(nFrames):
         if (nFrames > 1):
