@@ -72,7 +72,7 @@ def getFit2(x, y, mxWidth=1,plot=False):
         c = gfit[1]
         
         if (c < x[0] or c > x[-1]) or (np.abs(gfit[2]) > mxWidth):
-            mid = len(y)/2
+            mid = int(len(y)/2)
             mx = np.argmax(y[mid-1:mid+2])+mid-1
             cc = np.nansum(x[mx-1:mx+2]*y[mx-1:mx+2])/np.nansum(y[mx-1:mx+2])
 
@@ -84,8 +84,8 @@ def getFit2(x, y, mxWidth=1,plot=False):
             c = cc
     except (RuntimeError, ValueError):
         mid = len(y)/2
-        mx = np.argmax(y[mid-1:mid+2])+mid-1
-        c = np.nansum(x[mx-1:mx+2]*y[mx-1:mx+2])/np.nansum(y[mx-1:mx+2])
+        mx = np.nanargmax(y[int(mid-1):int(mid+2)])+mid-1
+        c = np.nansum(x[int(mx-1):int(mx+2)]*y[int(mx-1):int(mx+2)])/np.nansum(y[int(mx-1):int(mx+2)])
     return c
 
 def fitColumn(pos,slce,allTrace, winRng, reverse=False, plot=False, prnt=False, mxWidth=1,bright=False):
@@ -129,7 +129,7 @@ def fitColumn(pos,slce,allTrace, winRng, reverse=False, plot=False, prnt=False, 
        
         #find dip
         oldDip = np.round(prevFit).astype('int')
-        xtmp = np.arange(winRng)+ oldDip - winRng/2
+        xtmp = (np.arange(winRng)+ oldDip - winRng/2).astype('int')
         xtmp = xtmp[np.where(xtmp < len(y))]
       
         #update centre position for better fitting, but only allow for 1-pixel shift
@@ -142,12 +142,12 @@ def fitColumn(pos,slce,allTrace, winRng, reverse=False, plot=False, prnt=False, 
                 dipPos=np.nan
         else:
             try:
-                dipPos = xtmp[np.nanargmax(ytmp[winRng/2-1:winRng/2+2])+winRng/2-1]
+                dipPos = xtmp[(np.nanargmax(ytmp[int(winRng/2-1):int(winRng/2+2)])+winRng/2-1).astype('int')]
             except(ValueError):
                 dipPos = np.nan
 
         if (dipPos != np.nan):
-            xtmp = np.arange(winRng)+dipPos - winRng/2 #can remove once know quality
+            xtmp = (np.arange(winRng)+dipPos - winRng/2).astype('int') #can remove once know quality
             xtmp = xtmp[np.where(xtmp < len(y))]
 
             if (len(xtmp)>2):
@@ -176,8 +176,9 @@ def fitColumn(pos,slce,allTrace, winRng, reverse=False, plot=False, prnt=False, 
             #compute centre as weighted average instead
             try:
                 if (len(xtmp)>2 and len(yfit)>2):
-                    mxPos = np.nanargmax(yfit[winRng/2-1:winRng/2+2])
-                    xtmp = xtmp[winRng/2-1 + mxPos]
+                    mxPos = np.nanargmax(yfit[int(winRng/2-1):int(winRng/2+2)])
+                    #xtmp = xtmp[int(np.arange(int(winRng/2))-1+mxPos)]
+                    xtmp = xtmp[int(mxPos-winRng/2):int(mxPos+winRng/2+1)]
                     ytmp = np.abs(d2[xtmp])
                     c = np.nansum(xtmp*ytmp)/np.nansum(ytmp)
                 else:
@@ -298,7 +299,7 @@ def traceRonchiSlice(input):
     #and get their positions
 
     trace =[]
-    xtmp = np.arange(winRng)+strt
+    xtmp = (np.arange(winRng)+strt).astype('int')
     ytmp = y[xtmp]
     
     if (bright):
@@ -309,7 +310,7 @@ def traceRonchiSlice(input):
     #stop when dip position
     while (dipPos < mxPix):
 
-        xtmp = np.arange(winRng)+dipPos - winRng/2
+        xtmp = (np.arange(winRng)+dipPos - winRng/2).astype('int')
 
         #fit function to region to determine line centre
         if (bright):
@@ -343,7 +344,7 @@ def traceRonchiSlice(input):
     
     #initialize array to hold positions of each dip across detector
     #allTrace = np.zeros((tmp.shape[1],nDips))
-    allTrace = np.empty((nDips, maxPix/nbin))
+    allTrace = np.empty((nDips, int(maxPix/nbin)))
     allTrace[:] = np.nan
     
     #fill in first set of measurements
@@ -355,7 +356,7 @@ def traceRonchiSlice(input):
         allTrace[:,i] = fitColumn(i,tmp,allTrace,winRng=winRng, reverse=True,mxWidth=mxWidth, bright=bright)
     
     #now work forwards
-    for i in range(m2+1,maxPix/nbin):
+    for i in range(int(m2+1),int(maxPix/nbin)):
         allTrace[:,i] = fitColumn(i,tmp,allTrace, winRng=winRng, mxWidth=mxWidth,bright=bright)
 
     #now smooth all traces and fill in missing values due to binning
@@ -545,7 +546,7 @@ def extendTraceAll(traceLst, extSlices, zeroTraces,space=5.,method='linear', ncp
 
         if (ncpus == None):
             ncpus =mp.cpu_count()
-            pool = mp.Pool(ncpus)
+        pool = mp.Pool(ncpus)
         interpLst = pool.map(extendTraceSlice, lst)
         pool.close()
 
@@ -636,7 +637,7 @@ def traceZeroPointSlice(input):
     y = tmp[:,m2]
     xrng = np.arange(winRng) - winRng/2 + mid
     xrng = xrng[np.where(xrng>0)[0]]
-    xrng = xrng[np.where(xrng<len(y))[0]]
+    xrng = xrng[np.where(xrng<len(y))[0]].astype('int')
 
     cent = np.empty(tmp.shape[1])
     cent[:] = np.nan
@@ -652,7 +653,7 @@ def traceZeroPointSlice(input):
         #now fit Gaussian to feature to identify centre
         xrng = np.arange(winRng) - winRng/2 + mid
         xrng = xrng[np.where(xrng>0)[0]]
-        xrng = xrng[np.where(xrng<len(y))[0]]
+        xrng = xrng[np.where(xrng<len(y))[0]].astype('int')
 
         if (xrng.shape[0] > 0):
             yrng = y[xrng]
@@ -670,7 +671,7 @@ def traceZeroPointSlice(input):
         y = tmp[:,i]
         xrng = np.arange(winRng) - winRng/2 + mid
         xrng = xrng[np.where(xrng>0)[0]]
-        xrng = xrng[np.where(xrng<len(y))[0]]
+        xrng = xrng[np.where(xrng<len(y))[0]].astype('int')
 
         if (xrng.shape[0] > 0):
             yrng = y[xrng]
@@ -687,7 +688,7 @@ def traceZeroPointSlice(input):
             #now fit Gaussian to feature to identify centre
             xrng = np.arange(winRng) - winRng/2 + mid
             xrng = xrng[np.where(xrng>0)[0]]
-            xrng = xrng[np.where(xrng<len(y))[0]]
+            xrng = xrng[np.where(xrng<len(y))[0]].astype('int')
         
             if (xrng.shape[0] > 0):
                 yrng = y[xrng]
@@ -708,7 +709,7 @@ def traceZeroPointSlice(input):
         y = tmp[:,i]
         xrng = np.arange(winRng) - winRng/2 + mid
         xrng = xrng[np.where(xrng>0)[0]]
-        xrng = xrng[np.where(xrng<len(y))[0]]
+        xrng = xrng[np.where(xrng<len(y))[0]].astype('int')
 
         if (xrng.shape[0] > 0):
             yrng = y[xrng]
@@ -725,7 +726,7 @@ def traceZeroPointSlice(input):
             #now fit Gaussian to feature to identify centre
             xrng = np.arange(winRng) - winRng/2 + mid
             xrng = xrng[np.where(xrng>0)[0]]
-            xrng = xrng[np.where(xrng<len(y))[0]]
+            xrng = xrng[np.where(xrng<len(y))[0]].astype('int')
         
             if (xrng.shape[0] > 0):
                 yrng = y[xrng]
