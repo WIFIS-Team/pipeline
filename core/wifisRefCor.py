@@ -108,7 +108,7 @@ def channelCL(data,nChannel):
 
     #get input array dimensions
     ny = data.shape[0]
-    nx = data.shape[1]/nChannel
+    nx = int(data.shape[1]/nChannel)
 
     #get number of dimensions
     nDims = len(data.shape)
