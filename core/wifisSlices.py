@@ -35,7 +35,7 @@ def limFit1(input):
 
     #get the edges of the middle slices
     for cent in centGuess:
-        xtmp = winRng+cent
+        xtmp = (winRng+cent).astype('int')
         xtmp = xtmp[np.where(xtmp >=0)[0]]
         xtmp = xtmp[np.where(xtmp < len(y))[0]]
         ytmp = y[xtmp]
