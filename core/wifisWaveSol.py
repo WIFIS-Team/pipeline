@@ -16,16 +16,20 @@ def crossCor (spectrum, template,mx):
     Usage: shift = crossCor(spectrum, template, mx)
     spectrum is a 1D numpy array
     template is a 1D numpy array
+    template AND spectrum must have the same dimensions
     mx sets the maximum window size from which the pixel-shift is determined
     Returns the shift in pixels
     """
-    
+
+    if (len(spectrum) != len(template)):
+        raise InputError('spectrum and template MUST have same length')
+
     rng = np.arange(spectrum.shape[0]*2-1)-spectrum.shape[0]
     lag = np.correlate(spectrum, template, mode="full")
     whr = np.where(np.abs(rng) < mx)
     rng = rng[whr[0]]
     lag = lag[whr[0]]
-    mx = np.argmax(lag)
+    mx = np.nanargmax(lag)
     return rng[mx]
 
 def gaussian(x,amp,cen,wid):
@@ -200,10 +204,10 @@ def getSolQuick(input):
                                     ampFit.append(amp)
                                     atlasFit.append(atlas[i,0])
 
-                                if (len(centFit)>3):
+                                if (len(centFit)>3 and buildSol):
                                     #update "guessed" dispersion solution to get better line centres
-                                        tmpCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit)
-                                        atlasPix = (atlas[:,0]-tmpCoef[1])/tmpCoef[0]
+                                    tmpCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit)
+                                    atlasPix = (atlas[:,0]-tmpCoef[1])/tmpCoef[0]
                                     
                             except (RuntimeError):
                                 pass
@@ -304,13 +308,22 @@ def getWaveSol (data, template,atlas, mxorder, prevSolution, dispAxis=1, winRng=
     lst = []
 
     #rotate image if dispersion axis not aligned along the x-axis
+    dTmp = np.zeros(data.shape, dtype=data.dtype)
+    tempTemp = np.zeros(template.shape, dtype=template.dtype)
+    np.copyto(dTmp, data)
+    np.copyto(tempTemp, template)
+    
     if (dispAxis==0):
-        dTmp = data.T
-        tempTemp = template.T
-    else:
-        dTmp = data
-        tempTemp = template
+        dTmp = dTmp.T
+        tempTemp = tempTemp.T
 
+    
+    #remove all NaNs to avoid computation issues
+    whr = np.where(np.isnan(dTmp))
+    dTmp[whr] = 0.
+    whr = np.where(np.isnan(tempTemp))
+    tempTemp[whr] = 0.
+    
     if (template.ndim == 2):
         for i in range(dTmp.shape[1]):
             lst.append([dTmp[i,:],template[i,:], bestLines, mxorder,prevSolution,winRng, mxCcor,weights, False, buildSol])
@@ -408,7 +421,7 @@ def trimWaveSlice(input):
     flatSlc = input[1]
     threshold = input[2]
 
-    mx = np.max(flatSlc)
+    mx = np.nanmax(flatSlc)
     
     #work on axis 0 first
     for i in range(slc.shape[0]):
