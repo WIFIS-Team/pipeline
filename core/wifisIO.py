@@ -10,6 +10,7 @@ import glob
 import re 
 import os
 import sys
+import astropy
 
 def readImgsFromFile(filename):
     """
@@ -179,7 +180,10 @@ def writeFits(data, filename, hdr=None):
     else:
         hdu = fits.PrimaryHDU(data, header=prihdr)
 
-    hdu.writeto(filename,clobber=True)
+    if (astropy.version.major >=1 and astropy.version.minor >=3):
+        hdu.writeto(filename,overwrite=True)
+    else:
+        hdu.writeto(filename,clobber=True)
 
 def readImgsFromFolder(folderName):
     """
@@ -288,7 +292,10 @@ def writeImgSlices(data, extSlices,filename, hdr=None):
         list.append(fits.ImageHDU(s))
 
     hdu = fits.HDUList(list)
-    
-    hdu.writeto(filename,clobber=True)
+
+    if (astropy.version.major >=1 and astropy.version.minor >=3):
+        hdu.writeto(filename,overwrite=True)
+    else:
+        hdu.writeto(filename,clobber=True)
 
     return
