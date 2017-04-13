@@ -315,7 +315,7 @@ def mkWaveSpatGridSlice(input):
 
     for i in range(dataSlc.shape[0]):
         for j in range(dataSlc.shape[1]):
-            if (~np.isnan(waveSlc[i,j]) and ~np.isnan(distSlc[i,j])):
+            if (~np.isnan(waveSlc[i,j]) and waveSlc[i,j]!=0 and ~np.isnan(distSlc[i,j])):
                 points.append([distSlc[i,j],waveSlc[i,j]])
                 vals.append(dataSlc[i,j])
 
