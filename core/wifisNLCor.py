@@ -62,7 +62,7 @@ def getNLCorCL(data, satFrame, nSplit):
 
     #get input array dimensions and set working size of temporary chunks
     ny = data.shape[0]
-    nx = data.shape[1]/nSplit
+    nx = int(data.shape[1]/nSplit)
     ntime = data.shape[2]
 
     #initialize the array
@@ -162,7 +162,7 @@ def applyNLCorCL(data, nlCoeff, nSplit):
 
     #get input data array dimensions
     ny = data.shape[0]
-    nx = data.shape[1]/nSplit
+    nx = int(data.shape[1]/nSplit)
     ntime = data.shape[2]
 
     #get OpenCL context object, can set to fixed value if wanted
