@@ -107,7 +107,7 @@ def getSatCountsCL(data, thresh, nSplit):
 
     #get data array dimensions
     ny = data.shape[0]
-    nx = data.shape[1]/nSplit
+    nx = int(data.shape[1]/nSplit)
     nt = data.shape[2]
 
     #initialize output array
@@ -204,7 +204,7 @@ def getSatFrameCL(data,satCounts, nSplit):
 
     satFrame = np.zeros((ny,data.shape[1]),dtype='int32') # specifies saturation frame
     
-    nx = nx/nSplit
+    nx = int(nx/nSplit)
     
     #First run code to determine maximum counts
     #read OpenCL kernel code
