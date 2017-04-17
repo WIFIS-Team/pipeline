@@ -91,6 +91,7 @@ def getSolQuick(input):
     mxorder = input[3]
     templateSol = input[4]
     winRng = input[5]
+    winRng2 = int(winRng/2)
     mxCcor = input[6]
     useWeights = input[7]
     plot = input[8]
@@ -170,7 +171,7 @@ def getSolQuick(input):
 
         for i in range(nlines):
             try:
-                pixRng = (np.arange(winRng)-winRng/2 + atlasPix[i]).astype('int') #Centre window on predicted line centre
+                pixRng = (np.arange(winRng)-winRng2 + atlasPix[i]).astype('int') #Centre window on predicted line centre
 
                 if (np.max(pixRng) < totPix):
                     yRng = yRow[pixRng]
@@ -183,7 +184,7 @@ def getSolQuick(input):
                     while (mxPos != prevMx):
                         #update the search range to centre on peak
                         prevMx = mxPos
-                        pixRng = (np.arange(winRng)-winRng/2 + pixRng[mx]).astype('int')
+                        pixRng = (np.arange(winRng)-winRng2 + pixRng[mx]).astype('int')
                         yRng = yRow[pixRng]
                         mx = np.argmax(yRng)
                         mxPos = pixRng[mx]
