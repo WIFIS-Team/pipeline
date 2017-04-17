@@ -1,8 +1,12 @@
 #import matplotlib
 #matplotlib.use('tkagg')
-import wifisIO
 import matplotlib.pyplot as plt
 import numpy as np
+import os
+import time
+import sys
+sys.path.append(os.getcwd())
+
 import wifisCombineData as combineData
 import wifisNLCor as nlCor
 import wifisGetSatInfo as satInfo
@@ -11,17 +15,18 @@ import wifisSlices as slices
 import wifisSpatialCor as spatialCor
 import wifisWaveSol as waveSol
 import wifisCreateCube as createCube
-import os
-import time
-import sys
+import wifisIO
+from matplotlib.backends.backend_pdf import PdfPages
 
 #os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
-os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
+os.environ['PYOPENCL_CTX'] = ':1' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
 
 #***********************************
 outfile='benchmark_results.out'
 nruns = 1
-ncpuLst = [16]
+ncpuLst = [4]
+plot = True
+opencl = False
 #***********************************
 
 if sys.version_info >= (3,0):
@@ -30,71 +35,71 @@ else:
     savefile = open(outfile, 'w', 0)
 
 tStart = time.time()
-
-#test reference pixel corrections
-data, inttime, hdr = wifisIO.readImgsFromFile('WIFIS_H2RG_SingleEnd_100KHz_18dB.47.1.1.fits')
-print('benchmarking OpenCL portion')
-print('testing channel reference correction')
-t1=time.time()
-for i in range(nruns):
-    refCor.channelCL(data, 32)
-
-if sys.version_info >= (3,0):
-    savefile.write(bytes('average time to run chanel cor: '+str((time.time()-t1)/float(nruns))+'\n','utf-8'))
-else:
-    savefile.write('average time to run chanel cor: '+str((time.time()-t1)/float(nruns))+'\n')
+if (opencl):
+    #test reference pixel corrections
+    data, inttime, hdr = wifisIO.readImgsFromFile('WIFIS_H2RG_SingleEnd_100KHz_18dB.47.1.1.fits')
+    print('benchmarking OpenCL portion')
+    print('testing channel reference correction')
+    t1=time.time()
+    for i in range(nruns):
+        refCor.channelCL(data, 32)
+        
+    if sys.version_info >= (3,0):
+        savefile.write(bytes('average time to run chanel cor: '+str((time.time()-t1)/float(nruns))+'\n','utf-8'))
+    else:
+        savefile.write('average time to run chanel cor: '+str((time.time()-t1)/float(nruns))+'\n')
 
     
-print('testing row reference correction')
-t1=time.time()
-for i in range(nruns):
-    refCor.rowCL(data, 4,5)
-if sys.version_info >= (3,0):
-    savefile.write(bytes('average time to run row cor: '+str((time.time()-t1)/float(nruns))+'\n','utf-8'))
-else:
-    savefile.write('average time to run row cor: '+str((time.time()-t1)/float(nruns))+'\n')
+    print('testing row reference correction')
+    t1=time.time()
+    for i in range(nruns):
+        refCor.rowCL(data, 4,5)
+    if sys.version_info >= (3,0):
+        savefile.write(bytes('average time to run row cor: '+str((time.time()-t1)/float(nruns))+'\n','utf-8'))
+    else:
+        savefile.write('average time to run row cor: '+str((time.time()-t1)/float(nruns))+'\n')
 
-#test getting saturation info
-print('testing get sat counts')
-t1=time.time()
-for i in range(nruns):
-    satCounts = satInfo.getSatCountsCL(data, 0.95, 32)
-if sys.version_info >= (3,0):
-    savefile.write(bytes('average time to run getSatCounts: '+str((time.time()-t1)/float(nruns))+'\n','utf-8'))
-else:
-    savefile.write('average time to run getSatCounts: '+str((time.time()-t1)/float(nruns))+'\n')
+    #test getting saturation info
+    print('testing get sat counts')
+    t1=time.time()
+    for i in range(nruns):
+        satCounts = satInfo.getSatCountsCL(data, 0.95, 32)
+    if sys.version_info >= (3,0):
+        savefile.write(bytes('average time to run getSatCounts: '+str((time.time()-t1)/float(nruns))+'\n','utf-8'))
+    else:
+        savefile.write('average time to run getSatCounts: '+str((time.time()-t1)/float(nruns))+'\n')
 
-print('testing get sat frame')
-t1=time.time()
-for i in range(nruns):
-    satFrame = satInfo.getSatFrameCL(data, satCounts,32)
-if sys.version_info >= (3,0):
-    savefile.write(bytes('average time to run getSatFrame: '+str((time.time()-t1)/float(nruns))+'\n','utf-8'))
-else:
-    savefile.write('average time to run getSatFrame: '+str((time.time()-t1)/float(nruns))+'\n')
+    print('testing get sat frame')
+    t1=time.time()
+    for i in range(nruns):
+        satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+    if sys.version_info >= (3,0):
+        savefile.write(bytes('average time to run getSatFrame: '+str((time.time()-t1)/float(nruns))+'\n','utf-8'))
+    else:
+        savefile.write('average time to run getSatFrame: '+str((time.time()-t1)/float(nruns))+'\n')
 
-#test up-the-ramp performance
-print('testing up the ramp comb')
-t1 = time.time()
-for i in range(nruns):
-    flux = combineData.upTheRampCL(inttime, data, satFrame, 32)
-if sys.version_info >= (3,0):
-    savefile.write(bytes('average time to run up the ramp: '+str((time.time()-t1)/float(nruns))+'\n','utf-8'))
-else:
-    savefile.write('average time to run up the ramp: '+str((time.time()-t1)/float(nruns))+'\n')
+    #test up-the-ramp performance
+    print('testing up the ramp comb')
+    t1 = time.time()
+    for i in range(nruns):
+        flux = combineData.upTheRampCL(inttime, data, satFrame, 32)
+    if sys.version_info >= (3,0):
+        savefile.write(bytes('average time to run up the ramp: '+str((time.time()-t1)/float(nruns))+'\n','utf-8'))
+    else:
+        savefile.write('average time to run up the ramp: '+str((time.time()-t1)/float(nruns))+'\n')
 
-#test up-the-ramp performance
-print('testing up the ramp CR rejection')
-t1 = time.time()
-for i in range(nruns):
-    flux = combineData.upTheRampCRRejectCL(inttime, data, satFrame, 32)
+    #test up-the-ramp performance
+    print('testing up the ramp CR rejection')
+    t1 = time.time()
+    for i in range(nruns):
+        flux = combineData.upTheRampCRRejectCL(inttime, data, satFrame, 32)
 
-if sys.version_info >= (3,0):
-    savefile.write(bytes('average time to run up the ramp with CR Rejection: '+str((time.time()-t1)/float(nruns))+'\n','utf-8'))
-else:
-    savefile.write('average time to run up the ramp with CR Rejection: '+str((time.time()-t1)/float(nruns))+'\n')
+    if sys.version_info >= (3,0):
+        savefile.write(bytes('average time to run up the ramp with CR Rejection: '+str((time.time()-t1)/float(nruns))+'\n','utf-8'))
+    else:
+        savefile.write('average time to run up the ramp with CR Rejection: '+str((time.time()-t1)/float(nruns))+'\n')
 
-data = 0
+    data = 0
 
 #test other processing stages
 
@@ -117,9 +122,17 @@ for ncpu in ncpuLst:
     else:
         savefile.write('average time to find limits with '+str(ncpu)+' process(es): '+str((time.time()-t1)/float(nruns))+'\n')
 
-
 wifisIO.writeFits(limits, 'limits.fits')
 limits=wifisIO.readImgFromFile('limits.fits')[0]
+
+if (plot):
+    with PdfPages('limits_trace.pdf') as pdf:
+        plt.imshow(flat, aspect='auto')
+        for i in range(limits.shape[0]):
+            plt.plot(limits[i,:], 'k')
+        pdf.savefig(dpi=300)
+        plt.clf()
+        plt.close('all')
 
 #extract flat slices
 flatSlices = slices.extSlices(flat, limits, dispAxis=1)
@@ -151,6 +164,29 @@ dispSol = np.array(dispSol)
 wifisIO.writeTable(dispSol,'dispSol.dat')
 dispSol = wifisIO.readTable('dispSol.dat')
 
+if (plot):
+    with PdfPages('wavesol.pdf') as pdf:
+        plt.close('all')
+        plt.clf()
+        whr = np.where(dispSol[:,0] < 1310)[0]
+        dispSol[whr,:] = np.nan
+        whr = np.where(dispSol[:,0] > 1330)[0]
+        dispSol[whr,:] = np.nan
+        
+        plt.plot(dispSol[:,0])
+        plt.title('starting wavelength')
+        pdf.savefig(dpi=300)
+        plt.close()
+
+        whr = np.where(dispSol[:,1] < -0.215)[0]
+        dispSol[whr,1] = np.nan
+        whr = np.where(dispSol[:,1] > -0.211)[0]
+        dispSol[whr,1] = np.nan
+        plt.plot(dispSol[:,1])
+        plt.title('linear dispersion')
+        pdf.savefig(dpi=300)
+        plt.close()
+
 waveMap = waveSol.buildWaveMap(flat, dispSol, dispAxis=1)
 waveSlices = slices.extSlices(waveMap, limits, dispAxis=1)
 wifisIO.writeImgSlices(waveMap, waveSlices,'wave_slices.fits')
@@ -163,7 +199,6 @@ wifisIO.writeImgSlices(ronchi, ronchiSlices, 'ronchi_slices.fits')
 ronchiSlices=wifisIO.readImgExtFromFile('ronchi_slices.fits')[0][1:]
 
 #benchmark ronchi tracing
-
 for ncpu in ncpuLst:
     t1 = time.time()
     for i in range(nruns):
@@ -176,6 +211,16 @@ for ncpu in ncpuLst:
 wifisIO.writeImgSlices(ronchi, ronchiTraces, 'ronchi_traces.fits')
 ronchiTraces = wifisIO.readImgExtFromFile('ronchi_traces.fits')[0][1:]
 
+if (plot):
+    with PdfPages('ronchi_traces.pdf') as pdf:
+        for i in range(len(ronchiSlices)):
+            plt.imshow(ronchiSlices[i], aspect='auto')
+            for j in range(ronchiTraces[i].shape[0]):
+                plt.plot(ronchiTraces[i][j,:],'k')
+            pdf.savefig(dpi=300)
+            plt.clf()
+            plt.close()
+            
 #test tracing of zero-point offset
 print('testing zero-point wire frame tracing')
 zeroImg = wifisIO.readImgFromFile('raytrace_wireframe.fits')[0]
@@ -203,6 +248,15 @@ for ncpu in ncpuLst:
 
 wifisIO.writeImgSlices(None, zeroTraces, 'zeropoint_traces.fits')
 zeroTraces = wifisIO.readImgExtFromFile('zeropoint_traces.fits')[0][1:]
+
+if (plot):
+    with PdfPages('zero_traces.pdf') as pdf:
+        for i in range(len(zeroSlices)):
+            plt.imshow(zeroSlices[i], aspect='auto')
+            plt.plot(zeroTraces[i],'k')
+            pdf.savefig(dpi=300)
+            plt.clf()
+            plt.close()
 
 #test trace interpolation/extrapolation
 print('testing interpolation/extrapolation for ronchi trace')
