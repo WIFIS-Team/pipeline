@@ -86,7 +86,7 @@ __kernel void getsatframe(const unsigned int nx, const unsigned int nt, __global
   
   float d = 0;
   float mx = satval[pos2d];
-  unsigned int mxframe = nt-1;
+  unsigned int mxframe = nt;
 
   for (k=0; k<nt; k++) {
     pos3d = i*(nx*nt) + j*nt + k;
