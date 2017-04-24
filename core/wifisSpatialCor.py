@@ -466,7 +466,7 @@ def extendTraceSlice(input):
     z = griddata(points, vals, (gridX, gridY), method=method)
 
     #check if the zero points are provided
-    if (zero != None):
+    if (zero is not None):
         #use zeropoint trace to place grid on an absolute scale
         #first determine spatial coordinate for each trace point
         zeroInterp = np.empty(zero.shape)
@@ -534,14 +534,14 @@ def extendTraceAll(traceLst, extSlices, zeroTraces,space=5.,method='linear', ncp
 
         for i in range(len(traceLst)):
 
-            if (zeroTraces == None):
+            if (zeroTraces is None):
                 interpLst.append(extendTraceSlice([traceLst[i], extSlices[i], space, None, method]))
             else:
                 interpLst.append(extendTraceSlice([traceLst[i], extSlices[i], space, zeroTraces[i], method]))
     else:
         lst = []
         for i in range(len(traceLst)):
-            if (zeroTraces == None):
+            if (zeroTraces is None):
                 lst.append([traceLst[i], extSlices[i], space, None, method])
             else:        
                 lst.append([traceLst[i], extSlices[i], space, zeroTraces[i],method])
