@@ -108,8 +108,8 @@ ronchi = wifisIO.readImgFromFile('raytrace_ronchi.fits')[0]
 wave = wifisIO.readImgFromFile('raytrace_arc.fits')[0]
 
 flat = np.random.normal(flat)
-ronchi += np.random.normal(ronchi)
-wave += np.random.normal(wave)
+ronchi = np.random.normal(ronchi)
+wave = np.random.normal(wave)
 
 #testing find limits
 print('testing finding limits')
