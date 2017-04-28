@@ -24,7 +24,7 @@ os.environ['PYOPENCL_CTX'] = ':1' # Used to specify which OpenCL device to targe
 #***********************************
 outfile='benchmark_results.out'
 nruns = 1
-ncpuLst = [4]
+ncpuLst = [1]
 plot = True
 opencl = False
 #***********************************
@@ -107,6 +107,7 @@ flat = wifisIO.readImgFromFile('raytrace_flat.fits')[0]
 ronchi = wifisIO.readImgFromFile('raytrace_ronchi.fits')[0]
 wave = wifisIO.readImgFromFile('raytrace_arc.fits')[0]
 
+#add some random noise
 flat = np.random.normal(flat)
 ronchi = np.random.normal(ronchi)
 wave = np.random.normal(wave)
@@ -284,7 +285,6 @@ for ncpu in ncpuLst:
     else:
         savefile.write('average time to distortion correct image with '+str(ncpu)+' process: '+str((time.time()-t1)/float(nruns))+'\n')
 
-
 wifisIO.writeImgSlices(None, flatCor, 'flatslices_corrected.fits')
 flatCor = wifisIO.readImgExtFromFile('flatslices_corrected.fits')[0][1:]
 
@@ -380,7 +380,7 @@ for ncpu in ncpuLst:
     if (ncpu == 1):
         t1 = time.time()
         for i in range(nruns):
-            dataCube = createCube.mkCube2(dataGrid,ndiv=1, MP=False)
+            dataCube = createCube.mkCube(dataGrid,ndiv=1, MP=False)
         if sys.version_info >= (3,0):
             savefile.write(bytes('average time to create data cube serialized:'+str((time.time()-t1)/float(nruns))+'\n','utf-8'))
         else:
