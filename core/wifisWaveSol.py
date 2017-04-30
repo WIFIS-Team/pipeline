@@ -10,6 +10,9 @@ import matplotlib.pyplot as plt
 import multiprocessing as mp
 import wifisIO
 
+import warnings
+warnings.simplefilter('ignore', np.RankWarning)
+
 def crossCor (spectrum, template,mx):
     """
     Carries out cross-correlation between input spectrum and template and returns the relative shift between the two.
@@ -207,7 +210,7 @@ def getSolQuick(input):
                                     ampFit.append(amp)
                                     atlasFit.append(atlas[i,0])
 
-                                if (len(centFit)>3 and buildSol):
+                                if (len(centFit)>mxorder and buildSol):
                                     #update "guessed" dispersion solution to get better line centres
                                     tmpCoef = np.polyfit(centFit, atlasFit,1, w=ampFit)
                                     atlasPix = (atlas[:,0]-tmpCoef[1])/tmpCoef[0]
@@ -251,7 +254,7 @@ def getSolQuick(input):
                     dev = atlasFit-poly(centFit)
                     whr = np.where(np.abs(dev) < 1.*np.std(dev))
                     if (plot):
-                        print('std dev for round',i, 'is',np.std(dev))
+                        print('std dev for round',i, 'is',np.std(dev), ' in wavelength')
                 
                     centFit = centFit[whr[0]]
                     atlasFit = atlasFit[whr[0]]
@@ -291,14 +294,14 @@ def getSolQuick(input):
                         plt.xlabel('Pixel #')
                         plt.ylabel('Residuals (pixels)')
                         plt.plot([0, len(atlasFit)],[0,0],'--')
-                        print('final std dev:',np.std(polyPix(atlasFit) - centFit))
+                        print('final std dev:',np.std(atlasFit - poly(centFit)), ' in wavelength')
                         plt.show()
         
     
     if (goodFit):
         return(fitCoef[::-1],widthFit*2.*np.sqrt(2.*np.log(2.)), centFit, atlasFit, np.abs(rms))
     else:
-        return np.repeat(np.nan,mxorder+1), [],[], [],[]
+        return np.repeat(np.nan,mxorder+1), [],[], [],np.nan
     
 
 def getWaveSol (data, template,atlas, mxorder, prevSolution, dispAxis=1, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None):
