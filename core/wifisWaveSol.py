@@ -66,6 +66,8 @@ def gaussFit(x, y, guessWidth, plot=False):
         plt.plot(x,ytmp)
         plt.plot(x, ytmp, 'ro')
         plt.plot(x, gaussian(x, popt[0], popt[1], popt[2]))
+        plt.xlabel('Pixel')
+        plt.ylabel('Value')
         plt.show()
         
     return popt
@@ -207,7 +209,7 @@ def getSolQuick(input):
 
                                 if (len(centFit)>3 and buildSol):
                                     #update "guessed" dispersion solution to get better line centres
-                                    tmpCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit)
+                                    tmpCoef = np.polyfit(centFit, atlasFit,1, w=ampFit)
                                     atlasPix = (atlas[:,0]-tmpCoef[1])/tmpCoef[0]
                                     
                             except (RuntimeError):
@@ -263,20 +265,33 @@ def getSolQuick(input):
                         fitCoef = np.polyfit(centFit, atlasFit,mxorder) # returns polynomial coefficients in reverse order
                     goodFit = True
             
-                    #compute RMS
-                    poly = np.poly1d(fitCoef)
-                    diff = atlasFit - poly(centFit)
-                    rms = np.sqrt((1./centFit.shape[0])*(np.sum(diff**2.)))
-                    rms /= fitCoef[0]
+                    #compute RMS, in terms of pixels
+                    if (useWeights):
+                        pixCoef = np.polyfit(atlasFit, centFit, mxorder, w=ampFit)
+                    else:
+                        pixCoef = np.polyfit(atlasFit, centFit, mxorder)
+                        
+                    polyPix = np.poly1d(pixCoef)
+                    diff = polyPix(atlasFit) - centFit # wavelength units
+                    rms = np.sqrt((1./centFit.shape[0])*(np.sum(diff**2.))) #wavelength units
+                    #compute dispersion
+                    #dispersion =0
+                    #for k in range(1,mxorder):
+                    #    dispersion += fitCoef[k]**k
+                    #rms /= dispersion #fitCoef[0]
                     
                     #for testing purposes only
                     if (plot):
                         plt.plot(centFit, atlasFit, 'ro')
+                        plt.xlabel('Pixel #')
+                        plt.ylabel('Wavelength')
                         plt.plot(np.arange(len(yRow)), poly(np.arange(len(yRow))))
                         plt.subplot(212)
-                        plt.plot(centFit, atlasFit - poly(centFit), 'ro')
+                        plt.plot(centFit, polyPix(atlasFit) - centFit, 'ro')
+                        plt.xlabel('Pixel #')
+                        plt.ylabel('Residuals (pixels)')
                         plt.plot([0, len(atlasFit)],[0,0],'--')
-                        print('final std dev:',np.std(atlasFit - poly(centFit)))
+                        print('final std dev:',np.std(polyPix(atlasFit) - centFit))
                         plt.show()
         
     
