@@ -12,10 +12,10 @@ import os
 import sys
 import astropy
 
-def readImgsFromFile(filename):
+def readRampFromFile(filename):
     """
-    Read a set of images contained as multi extensions from the FITS file provided
-    Usage: outImg, outTime, hdr = readImgsFromFile(filename)
+    Read a set of images contained as multi extensions from the FITS file provided. Assumes that each extensions is at most a 2D image.
+    Usage: outImg, outTime, hdr = readRampFromFile(filename)
     filename is name of the FITS file from which to read
     outImg is the returned data cube
     outTime is the returned array containing the integration times for each image in the list
@@ -24,11 +24,11 @@ def readImgsFromFile(filename):
 
     #open first file to get image dimensions
     tmp = fits.open(filename)
-    nx = tmp[0].header['NAXIS2']
-    ny = tmp[0].header['NAXIS1']
+    ny = tmp[0].header['NAXIS2']
+    nx = tmp[0].header['NAXIS1']
     listLen = len(tmp)
     
-    outImg = np.zeros((nx,ny,listLen), dtype='float32')
+    outImg = np.zeros((ny,nx,listLen), dtype=tmp[0].data.dtype)
     outTime = np.zeros((listLen), dtype='float32')
 
     #now populate the array
@@ -47,37 +47,68 @@ def readImgsFromFile(filename):
     
     return outImg, outTime, hdr
 
-def readImgFromFile(file):
+def readImgsFromFile(file):
     """
-    Reads an FITS image cube from the specified file
-    Usage: outImg = readImgFromFile(file)
-    file is a text input corresponding to the file name
-    outImg is the returned image array
+    Reads a FITS image or cube from the specified file. File can contain multiple extensions as well.
+    Usage: out,hdr = readImgsFromFile(file)
+    file is a string corresponding to the file name
+    out,hdr is the returned image array
     """
 
     #get FITS file information
     tmp = fits.open(file)
-    nx = tmp[0].header['NAXIS2']
-    ny = tmp[0].header['NAXIS1']
-
-    #check if there are multiple HDUs
-    nz = len(tmp)
     
-    if (nz > 1):
-        outImg = np.zeros((nx,ny, nz), dtype='float32')
-        for i in range(nz):
-            np.copyto(outImg[:,:,i], tmp[i].data)
+    nexts = len(tmp)
+    
+    if (nexts > 1):
+        print('multiple extensions')
+        
+        out = []
+        hdr = []
+
+        for i in range(nexts):
+            ny = tmp[i].header['NAXIS2']
+            nx = tmp[i].header['NAXIS1']
+              
+            try:
+                nz = tmp[i].header['NAXIS3']
+            except(KeyError):
+                nz = 1
+
+            #data is read in as [naxis3, naxis2, naxis1], swap
+            #so that it becomes [naxis2, naxis1, naxsi3]
+            
+            if (nz > 1):
+                print('more than 2 axes')
+                outImg = np.zeros((ny,nx, nz), dtype=tmp[i].data.dtype)
+        
+                for j in range(nz):
+                    np.copyto(outImg[:,:,j],tmp[i].data[j,:,:])
+            else:
+                outImg = tmp[i].data
+
+            out.append(outImg)
+            hdr.append(tmp[i].header)
     else:
-        outImg = np.zeros((nx,ny), dtype='float32')
-        np.copyto(outImg, tmp[0].data)
+        try:
+            nz = tmp[0].header['NAXIS3']
+        except(KeyError):
+            nz = 1
 
-    #get header
-    hdr = tmp[-1].header
-    
+        if (nz > 1):
+            out = np.zeros((ny,nx, nz), dtype=tmp[0].data.dtype)
+            
+            for j in range(nz):
+               np.copyto(out[:,:,j],tmp[0].data[j,:,:])
+        else:
+            out = tmp[0].data
+        hdr = tmp[0].header
+
     tmp.close()
-    return outImg, hdr
+    del tmp
+    return out, hdr
 
-def readImgExtFromFile(file):
+def readImgExtFromFile(file): # **** redundant now ****
     """
     Reads a FITS image with multiple extensions of possibly different dimensions from the specified file
     Usage: outImg = readImgExtFromFile(file)
@@ -100,12 +131,13 @@ def readImgExtFromFile(file):
     hdr = tmp[-1].header
     
     tmp.close()
+    del tmp
     return outImg, hdr
 
-def readImgsFromList(list):
+def readRampFromList(list):
     """
     Read a set of images from the list provided
-    Usage: outImg, outTime, hdr = readImgsFromList(list)
+    Usage: outImg, outTime, hdr = readRampFromList(list)
     list is an array or python list containing the names of each file from which to read
     outImg is the returned data cube
     outTime is the returned array containing the integration times for each image in the list
@@ -118,7 +150,7 @@ def readImgsFromList(list):
     ny = tmp[0].header['NAXIS1']
     listLen = len(list)
     
-    outImg = np.zeros((nx,ny,listLen), dtype='float32')
+    outImg = np.zeros((nx,ny,listLen), dtype=tmp[0].data.dtype)
     outTime = np.zeros((listLen), dtype='float32')
 
     #now populate the array
@@ -134,68 +166,69 @@ def readImgsFromList(list):
 
     #get header of last image only
     hdr = tmp[-1].header
-
+    tmp.close()
+    del tmp
     return outImg, outTime, hdr
 
 
-def readImgsFromAsciiList(filename):
+def readRampFromAsciiList(filename):
     """
-    Read ASCII file containing a list of strings (filenames) into a python list.
-    Usage: output = readAsciiList(filename)
-    filename is the name of the input ASCII file containing the list
-    output is the returned python array containing the list of strings
+    Read a set of images from an ASCII file containing a list of strings (filenames) 
+    Usage: output, outtime, hdr = readRampFromAsciiList(filename)
+    filename is the name of the ascii file containing the names of each file from which to read
+    outImg is the returned data cube
+    outTime is the returned array containing the integration times for each image in the list
+    hdr is the header of the last FITS file
     """
     
     list = np.loadtxt(filename, dtype=np.str_)
-    output, outtime, hdr = readImgsFromList(list)
+    output, outtime, hdr = readRampFromList(list)
 
     return output, outtime, hdr
 
-def writeFits(data, filename, hdr=None):
+def writeFits_old(data, filename, hdr=None):
     """
-    Write a data file to a FITS image.
+    Write a data file to a FITS file.
     Usage writeFits(data, filename)
-    data is the input data (can contain multiple HDUs, i.e. more than 2 dimensions)
+    data is the input data (can be more than 2 dimensions). Assumes data is stored as follows: [y-coordinates,x-coordinates,lamba-coordinates]
     filename is the name of the file to write the FITS file to.
-
     """
 
-    if (hdr != None):
+    if (data.ndim > 2):
+        #convert data from [y,x,lambda] -> [lambda, y, x]
+
+        out = np.zeros((data.shape[2], data.shape[0], data.shape[1]), dtype=data.dtype)
+    
+        for i in range(data.shape[2]):
+            out[i,:,:] = data[:,:,i]
+    else:
+        out = data
+        
+    if (hdr is not None):
         #add additional FITS keywords
         prihdr = fits.Header()
         prihdr = hdr
     else:
         prihdr = None
 
-    #find out if the image requires multiple HDUs
-    if (data.ndim > 2):
-        nFrames = data.shape[2]
-
-        list = [fits.PrimaryHDU(data[:,:,0], header=prihdr)]
-
-        for i in range(1,nFrames):
-            list.append(fits.ImageHDU(data[:,:,i]))
-
-        hdu = fits.HDUList(list)
-    else:
-        hdu = fits.PrimaryHDU(data, header=prihdr)
+    hdu = fits.PrimaryHDU(out, header=prihdr)
 
     if (astropy.version.major >=1 and astropy.version.minor >=3):
         hdu.writeto(filename,overwrite=True)
     else:
         hdu.writeto(filename,clobber=True)
 
-def readImgsFromFolder(folderName):
+def readRampFromFolder(folderName):
     """
     read all H2RG files from specified folder.
-    Usage: output = readImgsFromFolder(folderName)
+    Usage: output = readRampFromFolder(folderName)
     folderName is the name of the folder from which to read files
     output is the data cube generated from the files contained in the specified folder.    
     """
     list = glob.glob(folderName+'/H2*fits')
     list = sorted_nicely(list)
     
-    output,outtime,hdr = readImgsFromList(list)    
+    output,outtime,hdr = readRampFromList(list)    
     
     return output,outtime,hdr
 
@@ -237,10 +270,10 @@ def createDir(name):
     name is the name of the folder/directory
     """
 
-    if os.path.exists('processed'):
+    if os.path.exists(name):
         pass
     else:
-        os.mkdir('processed')
+        os.mkdir(name)
 
     return
 
@@ -277,7 +310,7 @@ def writeImgSlices(data, extSlices,filename, hdr=None):
     filename is the name of the file to write the FITS file to.
     """
 
-    if (hdr != None):
+    if (hdr is not None):
         #add additional FITS keywords
         prihdr = fits.Header()
         prihdr = hdr
@@ -298,4 +331,78 @@ def writeImgSlices(data, extSlices,filename, hdr=None):
     else:
         hdu.writeto(filename,clobber=True)
 
+    return
+
+def writeFits(data, filename, hdr=None):
+    """
+    Write a data file to a FITS file.
+    Usage writeFits(data, filename)
+    data is the input data (can be more than 2 dimensions). Assumes data is stored as follows: [y-coordinates,x-coordinates,lamba-coordinates]
+    filename is the name of the file to write the FITS file to.
+    """
+
+    if(os.path.exists(filename)):
+        cont = userInput(filename + ' already exists, do you want to replace (y/n)?')
+        if (cont.lower() == 'y'):
+            contWrite = True
+        else:
+            contWrite = False
+    else:
+        contWrite = True
+        
+    if (not contWrite):
+        return
+    
+    #check if a header, or list of headers, is provided
+    if (hdr is not None):
+        if (type(hdr) is list):
+            prihdr = hdr[0]
+        else:
+            prihdr = hdr
+    else:
+        prihdr = fits.Header()
+
+    #check if data is a list of images
+    if (type(data) is list):
+
+        d = data[0]
+        if (d.ndim > 2):
+            #convert data from [y,x,lambda] -> [lambda, y, x]
+            #swap first and last
+            d = d.swapaxes(0,2)
+            #now swap last two
+            d = d.swapaxes(1,2)
+            
+        allHDU = [fits.PrimaryHDU(d, header=prihdr)]
+        
+        for i in range(1,len(data)):
+            d = data[i]
+            
+            if (d.ndim > 2):
+                d = d.swapaxes(0,2)
+                d = d.swapaxes(1,2)
+
+            #check if multiple headers are provided
+            if (hdr is not None):
+                if (type(hdr) is list):
+                    allHDU.append(fits.ImageHDU(d, header=hdr[i]))
+            else:
+                allHDU.append(fits.ImageHDU(d))
+    else:
+        if (data.ndim > 2):
+            d = data.swapaxes(0,2)
+            d = d.swapaxes(1,2)
+        else:
+            d = data
+
+        allHDU = fits.PrimaryHDU(d, header=prihdr)
+
+    hdu = fits.HDUList(allHDU)
+         
+    if (astropy.version.major >=1 and astropy.version.minor >=3):
+        hdu.writeto(filename,overwrite=True)
+    else:
+        hdu.writeto(filename,clobber=True)
+
+    hdu.close()
     return
