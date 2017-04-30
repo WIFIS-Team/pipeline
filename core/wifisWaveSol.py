@@ -283,7 +283,7 @@ def getSolQuick(input):
     if (goodFit):
         return(fitCoef[::-1],widthFit*2.*np.sqrt(2.*np.log(2.)), centFit, atlasFit, np.abs(rms))
     else:
-        return np.repeat(np.nan,mxorder+1), [],[]
+        return np.repeat(np.nan,mxorder+1), [],[], [],[]
     
 
 def getWaveSol (data, template,atlas, mxorder, prevSolution, dispAxis=1, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None):
@@ -292,14 +292,16 @@ def getWaveSol (data, template,atlas, mxorder, prevSolution, dispAxis=1, winRng=
     Usage: output = getWaveSol(data, template, mxorder, prevSolution, dispAxis, winRng, mxCcor, weights)
     data is the input 2D image from which the new dispersion solution will be derived
     template is a template image from which a known solution is already determined. Template can instead be a 1D array that will be used as input for all vectors along the dispersion axis.
-    atlas is the name of the file containing the atlas line list to use for fitting
+    atlas is the name of the file containing the atlas line list to use for fitting (a 2 column file with the first column corresponding to the central wavelength of the line, and the second the line intensity/flux)
     mxorder is the highest allowable term in the polynomial solution of the form y = Sum_i^mx a_i*x^i, where mx is the maximum polynomial order (e.g. mx = 1 -> y = a0 + a1*x).
     prevSolution is a list of containing the previously determined coefficients for each set of pixels. If a single solution is given, then it is used as input for all vectors along the dispersion axis.
-    disAxis specifies the dispersion direction (0 -> along the y-axis, 1-> along the x-axis)
+    dispAxis specifies the dispersion direction (0 -> along the y-axis, 1-> along the x-axis)
     winRng is a keyword to change window range for searching for line centre and fitting (default is 7 pixels)
     mxCcor is a keyword to change the the window range for finding the maximum searchable pixel shift between the template and spectrum (default is 30 pixels)
     weights is a keyword to carry out a weighted polynomial fit for determining dispersion solution (default is False) 
-    Returns ???
+    buildSol is a boolean keyword indicating if the dispersion solution (and hence finding of lines) should be determined as searching goes, or whether the previous input solution is only used
+    ncpus is an integer keyword indicating the number of simultaneously run processes
+    Returns the coefficients of the polynomial fits [lambda(pixel) = p(pixel)], the FWHM of each fit, the line centres of the lines that were fit (in pixels), the corresponding line centres according to the line atlas, the RMS of the polynomial solution
     """
 
     #read in line atlas 
