@@ -173,7 +173,7 @@ def readRampFromList(list):
     return outImg, outTime, hdr
 
 
-def readRampFromAsciiList(filename):
+def readRampFromAsciiList(filename, sort=True):
     """
     Read a set of images from an ASCII file containing a list of strings (filenames) 
     Usage: output, outtime, hdr = readRampFromAsciiList(filename)
@@ -184,6 +184,9 @@ def readRampFromAsciiList(filename):
     """
     
     list = np.loadtxt(filename, dtype=np.str_)
+    if (sort):
+        list = sorted_nicely(list)
+
     output, outtime, hdr = readRampFromList(list)
 
     return output, outtime, hdr
