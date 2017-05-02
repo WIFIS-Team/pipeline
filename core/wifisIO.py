@@ -165,8 +165,7 @@ def readRampFromList(list):
     print('Done reading')
 
     #get header of last image only
-    hdr = tmp[-1].header
-    tmp.close()
+    hdr = fits.getheader(list[-1])
     del tmp
     return outImg, outTime, hdr
 
@@ -342,7 +341,7 @@ def writeFits(data, filename, hdr=None):
     """
 
     if(os.path.exists(filename)):
-        cont = userInput(filename + ' already exists, do you want to replace (y/n)?')
+        cont = userInput(filename + ' already exists, do you want to replace (y)?')
         if (cont.lower() == 'y'):
             contWrite = True
         else:
