@@ -177,6 +177,7 @@ def rowCL(data,winSize,nSplit):
 
     #convert input to a float32
     data = data.astype('float32')
+    
     #get OpenCL context object, can set to fixed value if wanted
     ctx = cl.create_some_context(interactive=True)
     queue = cl.CommandQueue(ctx)
