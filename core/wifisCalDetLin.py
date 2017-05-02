@@ -24,17 +24,15 @@ import os
 import wifisIO 
 
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
-os.environ['PYOPENCL_CTX'] = ':1' # Used to specify which OpenCL device to target, should uncomment and set to preferred device to avoid interactively selecting each time
+os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target, should uncomment and set to preferred device to avoid interactively selecting each time
 
 t0 = time.time()
 
 #*****************************************************************************
 #*************************** Required input **********************************
 
-#set folder name
-#filename = 'test1'
-filename = 'wifis_h2rg_singleend_100khz_12db.24.1.1.fits'
-fileList = 'list'
+#set file list
+fileList = 'det.lst'
 #*****************************************************************************
 
 #read file list
@@ -73,8 +71,8 @@ if (contProc):
         t1 = time.time()
 
         #adjust accordingly depending on data source
-        #data, inttime, hdr = wifisIO.readRampFromFolder(filename)
-        data, inttime, hdr = wifisIO.readRampFromFile(filename)
+        data, inttime, hdr = wifisIO.readRampFromFolder(filename)
+        #data, inttime, hdr = wifisIO.readRampFromFile(filename)
 
         print("time to read all files took", time.time()-t1, " seconds")
     
@@ -106,11 +104,11 @@ if (contProc):
             if (cont.lower() == 'y'):
                 print('Getting saturation info')
                 ta = time.time()
-                satCounts = satInfo.getSatCountsCL(data,0.95, 32)
+                satCounts = satInfo.getSatCountsCL(data,0.95, 1)
                 print ("saturation code took ", time.time()-ta, " seconds")
 
                 #save file
-                wifisIO.writeFits(nlCoeff, savename+'_satCounts.fits')
+                wifisIO.writeFits(satCounts, savename+'_satCounts.fits')
                 
         else:
             print('Reading saturation info from file')
@@ -119,7 +117,7 @@ if (contProc):
         satCountsLst.append(satCounts)
         
         #find the first saturated frames
-        satFrame = satInfo.getSatFrameCL(data,satCounts,32)
+        satFrame = satInfo.getSatFrameCL(data,satCounts,1)
 
         #**********************************************************************
         #**********************************************************************
