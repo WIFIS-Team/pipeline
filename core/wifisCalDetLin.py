@@ -62,45 +62,55 @@ if (contProc):
         filename = filename.tostring()
         savename = 'processed/'+filename.replace('.fits','')
 
-        print('Processing '+filename)
-        
-        #**********************************************************************
-        #**********************************************************************
-
-        #Read in data
-        t1 = time.time()
-
-        #adjust accordingly depending on data source
-        data, inttime, hdr = wifisIO.readRampFromFolder(filename)
-        #data, inttime, hdr = wifisIO.readRampFromFile(filename)
-
-        print("time to read all files took", time.time()-t1, " seconds")
-    
-        nFrames = inttime.shape[0]
-        nx = data.shape[1]
-        ny = data.shape[0]
-
-        #**********************************************************************
-        #**********************************************************************
-   
-        #Correct data for reference pixels
-        ta = time.time()
-        print("Subtracting reference pixel channel bias")
-        refCor.channelCL(data, 32)
-        print("Subtracting reference pixel row bias")
-        refCor.rowCL(data, 4,1) 
-        print("time to apply reference pixel corrections ", time.time()-ta, " seconds")
-
-        #**********************************************************************
-        #**********************************************************************
-
-        #Get saturation info
-        if(os.path.exists(savename+'_satCounts.fits')):
-            cont = wifisIO.userInput('satCounts file already exists for ' +filename+', do you want to replace (y/n)?')
+        if(os.path.exists(savename+'_satCounts.fits') and os.path.exists(savename+'_NLCoeff.fits')):
+            cont = wifisIO.userInput('Non-linearity processed files already exists for ' + filename +', do you want to continue processing (y/n)?')
+           
+            if (cont.lower() == 'y'):
+                contProc2 = True
+            else:
+                contProc2 = False
         else:
-            cont = 'y'
+            contProc2 = True
+           
+        if (contProc2):
+            print('Processing '+filename)
+        
+            #**********************************************************************
+            #**********************************************************************
 
-        if (cont.lower() == 'y'):
+            #Read in data
+            t1 = time.time()
+
+            #adjust accordingly depending on data source
+            data, inttime, hdr = wifisIO.readRampFromFolder(filename)
+            
+            #data, inttime, hdr = wifisIO.readRampFromFile(filename)
+            
+            print("time to read all files took", time.time()-t1, " seconds")
+            
+            #convert data cube to a float for future processing
+            data = data.astype('float32')
+            
+            #**********************************************************************
+            #**********************************************************************
+   
+            #Correct data for reference pixels
+            ta = time.time()
+            print("Subtracting reference pixel channel bias")
+            refCor.channelCL(data, 32)
+            print("Subtracting reference pixel row bias")
+            refCor.rowCL(data, 4,1) 
+            print("time to apply reference pixel corrections ", time.time()-ta, " seconds")
+
+            #**********************************************************************
+            #**********************************************************************
+
+            #Get saturation info
+            if(os.path.exists(savename+'_satCounts.fits')):
+                cont = wifisIO.userInput('satCounts file already exists for ' +filename+', do you want to replace (y/n)?')
+            else:
+                cont = 'y'
+
             if (cont.lower() == 'y'):
                 print('Getting saturation info')
                 ta = time.time()
@@ -110,58 +120,64 @@ if (contProc):
                 #save file
                 wifisIO.writeFits(satCounts, savename+'_satCounts.fits')
                 
-        else:
-            print('Reading saturation info from file')
-            satCounts = wifisIO.readImgsFromFile(savename+'_satCounts.fits')[0]
+            else:
+                print('Reading saturation info from file')
+                satCounts = wifisIO.readImgsFromFile(savename+'_satCounts.fits')[0]
 
-        satCountsLst.append(satCounts)
+            satCountsLst.append(satCounts)
         
-        #find the first saturated frames
-        satFrame = satInfo.getSatFrameCL(data,satCounts,1)
+            #find the first saturated frames
+            satFrame = satInfo.getSatFrameCL(data,satCounts,1)
 
-        #**********************************************************************
-        #**********************************************************************
+            #**********************************************************************
+            #**********************************************************************
 
-        # Get the non-linearity correction coefficients
-        if(os.path.exists(savename+'_NLCoeff.fits')):
-            cont = wifisIO.userInput('NLCoeff file already exists for ' +filename+', do you want to replace (y/n)?')
+            # Get the non-linearity correction coefficients
+            if(os.path.exists(savename+'_NLCoeff.fits')):
+                cont = wifisIO.userInput('NLCoeff file already exists for ' +filename+', do you want to replace (y/n)?')
+            else:
+                cont = 'y'
+
+            if (cont.lower() == 'y'):
+                print('Determining non-linearity corrections')
+                ta = time.time()
+                nlCoeff = NLCor.getNLCorCL(data,satFrame,32)
+                print ("non-linearity code took", time.time()-ta, " seconds")
+
+                #save file
+                wifisIO.writeFits(nlCoeff, savename+'_NLCoeff.fits')
+            else:
+                print('Reading non-linearity coefficient file')
+                nlCoeff = wifisIO.readImgsFromFile(savename+'_NLCoeff.fits')[0]
+
+            nlCoeffLst.append(nlCoeff)
+            
+            #**********************************************************************
+            #**********************************************************************
+        
+            print('Done processing and determining saturation info and non-linearity coefficients')
+            data = 0 #clean up data cube to reduce memory usage for next iteration
         else:
-            cont = 'y'
-
-        if (cont.lower() == 'y'):
-            print('Determining non-linearity corrections')
-            ta = time.time()
-            nlCoeff = NLCor.getNLCorCL(data,satFrame,32)
-            print ("non-linearity code took", time.time()-ta, " seconds")
-
-            #save file
-            wifisIO.writeFits(nlCoeff, savename+'_NLCoeff.fits')
-        else:
-            print('Reading non-linearity coefficient file')
-            nlCoeff = wifisIO.readImgsFromFile(savename+'_NLCoeff.fits')[0]
-
-        nlCoeffLst.append(nlCoeff)
-        #**********************************************************************
-        #**********************************************************************
-
-        print('Done processing and determining saturation info and non-linearity coefficients')
-        data = 0 #clean up data cube to reduce memory usage for next iteration
-
+            #read data from files
+            print('Reading information from files instead')
+            satCountsLst.append(wifisIO.readImgsFromFile(savename+'_satCounts.fits')[0])
+            nlCoeffLst.append(wifisIO.readImgsFromFile(savename+'_NLCoeff.fits')[0])
+    
     #create and write master files
     print('Creating master files')
-    if len(satCountsLst > 1):
-        masterSatCounts = np.median(np.array(satCountsLst),axis=0)
+    if (len(satCountsLst) > 1):
+        masterSatCounts = np.nanmedian(np.array(satCountsLst),axis=0)
     else:
         masterSatCounts = satCountsLst[0]
 
     if (len(nlCoeffLst)>1):
-        masterNLCoeff = np.median(np.array(nlCoeffLst),axis=0)
+        masterNLCoeff = np.nanmedian(np.array(nlCoeffLst),axis=0)
     else:
         masterNLCoeff = nlCoeffLst[0]
 
     #write files, if necessary
-    wifisIO.writeFits(masterSatCounts, response,'processed/master_detLin_satCounts.fits')
-    wifisIO.writeFits(masterSatCounts, response,'processed/master_detLin_NLCoeff.fits')
+    wifisIO.writeFits(masterSatCounts,'processed/master_detLin_satCounts.fits')
+    wifisIO.writeFits(masterNLCoeff,'processed/master_detLin_NLCoeff.fits')
         
 else:
     print('No processing necessary')
