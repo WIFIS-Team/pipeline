@@ -101,6 +101,8 @@ def channelCL(data,nChannel):
     nChannel is an integer specifying the number of channels used when obtaining the data
     The input data is modified in place
     """
+    #convert the input to a float32
+    data = data.astype('float32')
     
     #get OpenCL context object, can set to fixed value if wanted
     ctx = cl.create_some_context(interactive=True)
@@ -172,7 +174,9 @@ def rowCL(data,winSize,nSplit):
     nSplit is an integer specifying the number of separate OpenCL calls to split the workload into. MUST be an integer multiple of the number of frames in input cube. Fewer is faster, but uses more ram, so can potentially be very slow if SWAP space is used or fail if buffer size is too large for OpenCL device.
     The input data is modified in place
     """
-    
+
+    #convert input to a float32
+    data = data.astype('float32')
     #get OpenCL context object, can set to fixed value if wanted
     ctx = cl.create_some_context(interactive=True)
     queue = cl.CommandQueue(ctx)
