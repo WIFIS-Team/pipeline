@@ -335,7 +335,7 @@ def writeImgSlices(data, extSlices,filename, hdr=None):
 
     return
 
-def writeFits(data, filename, hdr=None):
+def writeFits(data, filename, hdr=None, ask=True):
     """
     Write a data file to a FITS file.
     Usage writeFits(data, filename)
@@ -343,17 +343,18 @@ def writeFits(data, filename, hdr=None):
     filename is the name of the file to write the FITS file to.
     """
 
-    if(os.path.exists(filename)):
-        cont = userInput(filename + ' already exists, do you want to replace (y)?')
-        if (cont.lower() == 'y'):
-            contWrite = True
+    if (ask):
+        if(os.path.exists(filename)):
+            cont = userInput(filename + ' already exists, do you want to replace (y)?')
+            if (cont.lower() == 'y'):
+                contWrite = True
+            else:
+                contWrite = False
         else:
-            contWrite = False
-    else:
-        contWrite = True
+            contWrite = True
         
-    if (not contWrite):
-        return
+        if (not contWrite):
+            return
     
     #check if a header, or list of headers, is provided
     if (hdr is not None):
