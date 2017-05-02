@@ -101,7 +101,11 @@ def channelCL(data,nChannel):
     nChannel is an integer specifying the number of channels used when obtaining the data
     The input data is modified in place
     """
-      
+
+    if (np.issubdtype(data.dtype,np.integer)):
+        raise TypeError('**** INPUT DATA TYPE CANNOT BE INTEGER ****')
+
+    
     #get OpenCL context object, can set to fixed value if wanted
     ctx = cl.create_some_context(interactive=True)
     queue = cl.CommandQueue(ctx)
@@ -144,18 +148,20 @@ def channelCL(data,nChannel):
             cl.enqueue_read_buffer(queue, data_buf, dTmp).wait()
 
             #replace the input data with output from OpenCL
-            np.copyto(data[:,n*nx:(n+1)*nx,:].astype('float32'),dTmp)            
+            np.copyto(data[:,n*nx:(n+1)*nx,:],dTmp)            
     else:
         #set temporary arrays
         
         #create OpenCL buffers
+        
         data_buf = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=data.astype('float32'))
-
+        dTmp = np.empty(data.shape, dtype='float32')
+        
         #run the opencl code
         program.channel.set_scalar_arg_dtypes([np.uint32,np.uint32, np.uint32, None])
         program.channel(queue,(nFrames,),None,np.uint32(ny), np.uint32(nx),np.uint32(nFrames),data_buf)
-        cl.enqueue_read_buffer(queue, data_buf, data.astype('float32')).wait()
-        
+        cl.enqueue_read_buffer(queue, data_buf, dTmp).wait()
+        data[:] = dTmp[:]
 
     #modify variables to reduce memory consumption
     dTmp = 0
@@ -172,9 +178,9 @@ def rowCL(data,winSize,nSplit):
     nSplit is an integer specifying the number of separate OpenCL calls to split the workload into. MUST be an integer multiple of the number of frames in input cube. Fewer is faster, but uses more ram, so can potentially be very slow if SWAP space is used or fail if buffer size is too large for OpenCL device.
     The input data is modified in place
     """
-
-    #convert input to a float32
-    data = data.astype('float32')
+   
+    if (np.issubdtype(data.dtype,np.integer)):
+        raise TypeError('**** INPUT DATA TYPE CANNOT BE INTEGER ****')
     
     #get OpenCL context object, can set to fixed value if wanted
     ctx = cl.create_some_context(interactive=True)
@@ -231,7 +237,7 @@ def rowCL(data,winSize,nSplit):
         
         #create OpenCL buffers
         data_buf = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=data.astype('float32'))
-
+        
         #run the opencl code
         program.row.set_scalar_arg_dtypes([np.uintc,np.uintc, np.uintc, np.uintc,None])
         program.row(queue,(ny,nFrames),None,np.uintc(ny), np.uintc(nx),np.uintc(nFrames),np.uintc(winSize),data_buf)
