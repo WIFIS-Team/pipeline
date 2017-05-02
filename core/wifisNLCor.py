@@ -221,9 +221,6 @@ def applyNLCorCL(data, nlCoeff, nSplit):
         np.copyto(a2_array, nlCoeff[:,:,2])
         np.copyto(a3_array, nlCoeff[:,:,3])
 
-        print(nlCoeff[1940,160,:])
-        print(a0_array[1940,160], a1_array[1940,160], a2_array[1940,160],a3_array[1940,160])
-        
         #create OpenCL buffers
         data_buf = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=data.astype('float32'))
         a0_buf = cl.Buffer(ctx,mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=a0_array)
