@@ -144,7 +144,7 @@ def channelCL(data,nChannel):
             cl.enqueue_read_buffer(queue, data_buf, dTmp).wait()
 
             #replace the input data with output from OpenCL
-            np.copyto(data[:,n*nx:(n+1)*nx,:],dTmp)            
+            np.copyto(data[:,n*nx:(n+1)*nx,:].astype('float32'),dTmp)            
     else:
         #set temporary arrays
         
@@ -154,7 +154,7 @@ def channelCL(data,nChannel):
         #run the opencl code
         program.channel.set_scalar_arg_dtypes([np.uint32,np.uint32, np.uint32, None])
         program.channel(queue,(nFrames,),None,np.uint32(ny), np.uint32(nx),np.uint32(nFrames),data_buf)
-        cl.enqueue_read_buffer(queue, data_buf, data).wait()
+        cl.enqueue_read_buffer(queue, data_buf, data.astype('float32')).wait()
         
 
     #modify variables to reduce memory consumption
