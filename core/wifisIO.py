@@ -348,7 +348,7 @@ def writeFits(data, filename, hdr=None, ask=True):
 
     if (ask):
         if(os.path.exists(filename)):
-            cont = userInput(filename + ' already exists, do you want to replace (y/any)?')
+            cont = userInput(filename + ' already exists, do you want to replace (y/anything else for no)?')
             if (cont.lower() == 'y'):
                 contWrite = True
             else:
