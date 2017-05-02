@@ -161,8 +161,8 @@ def readRampFromList(list):
 
     for i in range(0,listLen):
         tmp = fits.open(list[i])
-        outTime[i] = tmp[0].header['INTTIME']
-        np.copyto(outImg[:,:,i], tmp[0].data)
+        outTime[i] = tmp[i].header['INTTIME']
+        np.copyto(outImg[:,:,i], tmp[i].data)
         tmp.close()
         
     print('Done reading')
