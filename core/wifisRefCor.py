@@ -101,9 +101,7 @@ def channelCL(data,nChannel):
     nChannel is an integer specifying the number of channels used when obtaining the data
     The input data is modified in place
     """
-    #convert the input to a float32
-    data = data.astype('float32')
-    
+      
     #get OpenCL context object, can set to fixed value if wanted
     ctx = cl.create_some_context(interactive=True)
     queue = cl.CommandQueue(ctx)
