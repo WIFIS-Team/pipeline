@@ -73,8 +73,8 @@ if (contProc):
         t1 = time.time()
 
         #adjust accordingly depending on data source
-        #data, inttime, hdr = wifisIO.readImgsFromFolder(filename)
-        data, inttime, hdr = wifisIO.readImgsFromFile(filename)
+        #data, inttime, hdr = wifisIO.readRampFromFolder(filename)
+        data, inttime, hdr = wifisIO.readRampFromFile(filename)
 
         print("time to read all files took", time.time()-t1, " seconds")
     
@@ -88,9 +88,9 @@ if (contProc):
         #Correct data for reference pixels
         ta = time.time()
         print("Subtracting reference pixel channel bias")
-        refCor.channelCL(data, nFrames, 32)
+        refCor.channelCL(data, 32)
         print("Subtracting reference pixel row bias")
-        refCor.row(data, nFrames, 4,1) 
+        refCor.rowCL(data, 4,1) 
         print("time to apply reference pixel corrections ", time.time()-ta, " seconds")
 
         #**********************************************************************
@@ -114,7 +114,7 @@ if (contProc):
                 
         else:
             print('Reading saturation info from file')
-            satCounts = wifisIO.readImgFromFile(savename+'_satCounts.fits')[0]
+            satCounts = wifisIO.readImgsFromFile(savename+'_satCounts.fits')[0]
 
         satCountsLst.append(satCounts)
         
@@ -140,7 +140,7 @@ if (contProc):
             wifisIO.writeFits(nlCoeff, savename+'_NLCoeff.fits')
         else:
             print('Reading non-linearity coefficient file')
-            nlCoeff = wifisIO.readImgFromFile(savename+'_NLCoeff.fits')[0]
+            nlCoeff = wifisIO.readImgsFromFile(savename+'_NLCoeff.fits')[0]
 
         nlCoeffLst.append(nlCoeff)
         #**********************************************************************
@@ -161,32 +161,9 @@ if (contProc):
     else:
         masterNLCoeff = nlCoeffLst[0]
 
-    #if(os.path.exists('processed/master_detLin_NLCoeff.fits') and os.path.exists('processed/master_detLin_satCounts.fits')):
-    if(os.path.exists('processed/master_detLin_satCounts.fits')):
-        cont = wifisIO.userInput('Master satCounts file already exists, do you want to replace (y/n)?')
-        if (cont.lower() == 'y'):
-            contWrite = True
-        else:
-            contWrite = False
-    else:
-        contWrite = True
-
-    if (contWrite):
-        #add/modify header information here
-        wifisIO.writeFits(masterSatCounts, response,'processed/master_detLin_satCounts.fits')
-
-    if(os.path.exists('processed/master_detLin_NLCoeff.fits')):
-        cont = wifisIO.userInput('Master NLCoeff file already exists, do you want to replace (y/n)?')
-        if (cont.lower() == 'y'):
-            contWrite = True
-        else:
-            contWrite = False
-    else:
-        contWrite = True
-
-    if (contWrite):
-        #add/modify header information here
-        wifisIO.writeFits(masterSatCounts, response,'processed/master_detLin_NLCoeff.fits')
+    #write files, if necessary
+    wifisIO.writeFits(masterSatCounts, response,'processed/master_detLin_satCounts.fits')
+    wifisIO.writeFits(masterSatCounts, response,'processed/master_detLin_NLCoeff.fits')
         
 else:
     print('No processing necessary')
@@ -209,10 +186,10 @@ else:
     if (~contProc):
         #read in nlCoeff instead
         print('Reading non-linearity coefficient file')
-        nlCoeff = wifisIO.readImgFromFile('processed/master_detLin_NLCoeff.fits')[0]
+        nlCoeff = wifisIO.readImgsFromFile('processed/master_detLin_NLCoeff.fits')[0]
     
     if (cont == 'update'):
-        BPM = wifisIO.readImgFromFile('processed/bad_pixel_mask.fits')[0]
+        BPM = wifisIO.readImgsFromFile('processed/bad_pixel_mask.fits')[0]
     else:
         BPM = np.zeros(nlCoeff[:,:,0].shape, dtype='int8')
 
