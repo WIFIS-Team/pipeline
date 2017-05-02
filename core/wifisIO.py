@@ -90,6 +90,9 @@ def readImgsFromFile(file):
             out.append(outImg)
             hdr.append(tmp[i].header)
     else:
+        ny = tmp[i].header['NAXIS2']
+        nx = tmp[i].header['NAXIS1']
+        
         try:
             nz = tmp[0].header['NAXIS3']
         except(KeyError):
