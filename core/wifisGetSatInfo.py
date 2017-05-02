@@ -100,6 +100,7 @@ def getSatCountsCL(data, thresh, nSplit):
     nSplit is a value indicating the number of temporary arrays to split the input data array into for processing. this value should be an integer multiple of the array dimension (dimenions 1)
     satCounts is the output that will contain the saturation level for each pixel
     """
+
     
     #get OpenCL context object, can set to fixed value if wanted
     ctx = cl.create_some_context(interactive=True)
@@ -133,7 +134,7 @@ def getSatCountsCL(data, thresh, nSplit):
         for n in range(nSplit):
             #create temporary array to hold information
             #mxCounts = np.zeros((ny,nx),dtype='float32')
-            mxCounts = np.array(data[:,n*nx:(n+1)*nx,-1]) # assume max counts occurs at last frame
+            mxCounts = np.array(data[:,n*nx:(n+1)*nx,-1]).astype('float32') # assume max counts occurs at last frame
             
             dTmp = np.array(data[:, n*nx:(n+1)*nx,:].astype('float32'))
             sTmp = np.zeros((ny,nx),dtype='float32')
@@ -158,11 +159,11 @@ def getSatCountsCL(data, thresh, nSplit):
     else:
         #create OpenCL buffers
         #mxCounts = np.zeros((ny,nx),dtype='float32')
-        mxCounts = np.array(data[:,:,-1])
-        
+        mxCounts = np.array(data[:,:,-1]).astype('float32')
+
         data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=data.astype('float32'))
         #mxCounts_buf = cl.Buffer(ctx, mf.WRITE_ONLY, mxCounts.nbytes)
-            
+        
         #Run OpenCL code to and put data back into variables
         #program.getmaxval(queue,(ny,nx),None,np.uint32(nx), np.uint32(nt), data_buf, mxCounts_buf)
         #cl.enqueue_read_buffer(queue, mxCounts_buf, mxCounts).wait()
