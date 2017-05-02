@@ -103,7 +103,7 @@ def channelCL(data,nChannel):
     """
 
     if (np.issubdtype(data.dtype,np.integer)):
-        raise TypeError('**** INPUT DATA TYPE CANNOT BE INTEGER ****')
+        raise TypeError('**** INPUT DATA TYPE CANNOT BE INTEGER. CONVERT TO FLOAT ****')
 
     
     #get OpenCL context object, can set to fixed value if wanted
@@ -180,7 +180,7 @@ def rowCL(data,winSize,nSplit):
     """
    
     if (np.issubdtype(data.dtype,np.integer)):
-        raise TypeError('**** INPUT DATA TYPE CANNOT BE INTEGER ****')
+        raise TypeError('**** INPUT DATA TYPE CANNOT BE INTEGER. CONVERT TO FLOAT ****')
     
     #get OpenCL context object, can set to fixed value if wanted
     ctx = cl.create_some_context(interactive=True)
