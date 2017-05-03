@@ -42,7 +42,7 @@ lst= wifisIO.readAsciiList(fileList)
 wifisIO.createDir('processed')
 
 #check if processing needs to be done
-if(os.path.exists('processed/master_detLin_NLCoeff.fits') and os.path.exists('processed/master_detLin_satCounts.fits')):
+if(os.path.exists('processed/master_detLin_NLCoeff.fits.gz') and os.path.exists('processed/master_detLin_satCounts.fits.gz')):
     
     cont = wifisIO.userInput('Master non-linearity processed files already exists, do you want to continue processing (y/n)?')
 
@@ -62,7 +62,7 @@ if (contProc):
         filename = filename.tostring()
         savename = 'processed/'+filename.replace('.fits','')
 
-        if(os.path.exists(savename+'_satCounts.fits') and os.path.exists(savename+'_NLCoeff.fits')):
+        if(os.path.exists(savename+'_satCounts.fits.gz') and os.path.exists(savename+'_NLCoeff.fits.gz')):
             cont = wifisIO.userInput('Non-linearity processed files already exists for ' + filename +', do you want to continue processing (y/n)?')
            
             if (cont.lower() == 'y'):
@@ -79,14 +79,14 @@ if (contProc):
             #**********************************************************************
 
             #Read in data
-            t1 = time.time()
+            ta = time.time()
 
             #adjust accordingly depending on data source
             data, inttime, hdr = wifisIO.readRampFromFolder(filename)
             
             #data, inttime, hdr = wifisIO.readRampFromFile(filename)
             
-            print("time to read all files took", time.time()-t1, " seconds")
+            print("time to read all files took", time.time()-ta, " seconds")
             
             #convert data cube to a float for future processing
             data = data.astype('float32')
@@ -106,7 +106,7 @@ if (contProc):
             #**********************************************************************
 
             #Get saturation info
-            if(os.path.exists(savename+'_satCounts.fits')):
+            if(os.path.exists(savename+'_satCounts.fits.gz')):
                 cont = wifisIO.userInput('satCounts file already exists for ' +filename+', do you want to replace (y/n)?')
             else:
                 cont = 'y'
@@ -118,11 +118,11 @@ if (contProc):
                 print ("saturation code took ", time.time()-ta, " seconds")
 
                 #save file
-                wifisIO.writeFits(satCounts, savename+'_satCounts.fits')
+                wifisIO.writeFits(satCounts, savename+'_satCounts.fits.gz')
                 
             else:
                 print('Reading saturation info from file')
-                satCounts = wifisIO.readImgsFromFile(savename+'_satCounts.fits')[0]
+                satCounts = wifisIO.readImgsFromFile(savename+'_satCounts.fits.gz')[0]
 
             satCountsLst.append(satCounts)
         
@@ -133,7 +133,7 @@ if (contProc):
             #**********************************************************************
 
             # Get the non-linearity correction coefficients
-            if(os.path.exists(savename+'_NLCoeff.fits')):
+            if(os.path.exists(savename+'_NLCoeff.fits.gz')):
                 cont = wifisIO.userInput('NLCoeff file already exists for ' +filename+', do you want to replace (y/n)?')
             else:
                 cont = 'y'
@@ -145,10 +145,10 @@ if (contProc):
                 print ("non-linearity code took", time.time()-ta, " seconds")
 
                 #save file
-                wifisIO.writeFits(nlCoeff, savename+'_NLCoeff.fits')
+                wifisIO.writeFits(nlCoeff, savename+'_NLCoeff.fits.gz')
             else:
                 print('Reading non-linearity coefficient file')
-                nlCoeff = wifisIO.readImgsFromFile(savename+'_NLCoeff.fits')[0]
+                nlCoeff = wifisIO.readImgsFromFile(savename+'_NLCoeff.fits.gz')[0]
 
             nlCoeffLst.append(nlCoeff)
             
@@ -160,8 +160,8 @@ if (contProc):
         else:
             #read data from files
             print('Reading information from files instead')
-            satCountsLst.append(wifisIO.readImgsFromFile(savename+'_satCounts.fits')[0])
-            nlCoeffLst.append(wifisIO.readImgsFromFile(savename+'_NLCoeff.fits')[0])
+            satCountsLst.append(wifisIO.readImgsFromFile(savename+'_satCounts.fits.gz')[0])
+            nlCoeffLst.append(wifisIO.readImgsFromFile(savename+'_NLCoeff.fits.gz')[0])
     
     #create and write master files
     print('Creating master files')
@@ -176,14 +176,14 @@ if (contProc):
         masterNLCoeff = nlCoeffLst[0]
 
     #write files, if necessary
-    wifisIO.writeFits(masterSatCounts,'processed/master_detLin_satCounts.fits')
-    wifisIO.writeFits(masterNLCoeff,'processed/master_detLin_NLCoeff.fits')
+    wifisIO.writeFits(masterSatCounts,'processed/master_detLin_satCounts.fits.gz')
+    wifisIO.writeFits(masterNLCoeff,'processed/master_detLin_NLCoeff.fits.gz')
         
 else:
     print('No processing necessary')
 
     #check if analysis of NL coefficients needs to be done
-    if(os.path.exists('processed/bad_pixel_mask.fits')):
+    if(os.path.exists('processed/bad_pixel_mask.fits.gz')):
         cont = wifisIO.userInput('bad pixel mask already exists, do you want to update, replace, skip? (update/replace/skip)')
     
         if (cont.lower() == 'update' or cont.lower() == 'replace'):
@@ -200,10 +200,10 @@ else:
     if (~contProc):
         #read in nlCoeff instead
         print('Reading non-linearity coefficient file')
-        nlCoeff = wifisIO.readImgsFromFile('processed/master_detLin_NLCoeff.fits')[0]
+        nlCoeff = wifisIO.readImgsFromFile('processed/master_detLin_NLCoeff.fits.gz')[0]
     
     if (cont == 'update'):
-        BPM = wifisIO.readImgsFromFile('processed/bad_pixel_mask.fits')[0]
+        BPM = wifisIO.readImgsFromFile('processed/bad_pixel_mask.fits.gz')[0]
     else:
         BPM = np.zeros(nlCoeff[:,:,0].shape, dtype='int8')
 
@@ -319,7 +319,6 @@ else:
     #BPM[whr] = 1
 
     print('Saving bad pixel mask')
-    wifisIO.writeFits(BPM.astype('int'),'processed/bad_pixel_mask.fits')
+    wifisIO.writeFits(BPM.astype('int'),'processed/bad_pixel_mask.fits.gz')
 
-t1 = time.time()
-print ("Total time to run entire script: ",t1-t0)
+print ("Total time to run entire script: ",time.time()-t0)
