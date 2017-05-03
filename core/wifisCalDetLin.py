@@ -33,6 +33,9 @@ t0 = time.time()
 
 #set file list
 fileList = 'det.lst'
+
+#if exists and to be updated
+bpmFile = 'processed/bad_pixel_mask.fits.gz'
 #*****************************************************************************
 
 #read file list
@@ -61,6 +64,7 @@ if (contProc):
     for filename in lst:
         filename = filename.tostring()
         savename = 'processed/'+filename.replace('.fits','')
+        savename = 'processed/'+filename.replace('.gz','')
 
         if(os.path.exists(savename+'_satCounts.fits.gz') and os.path.exists(savename+'_NLCoeff.fits.gz')):
             cont = wifisIO.userInput('Non-linearity processed files already exists for ' + filename +', do you want to continue processing (y/n)?')
@@ -118,7 +122,7 @@ if (contProc):
                 print ("saturation code took ", time.time()-ta, " seconds")
 
                 #save file
-                wifisIO.writeFits(satCounts, savename+'_satCounts.fits.gz')
+                wifisIO.writeFits(satCounts, savename+'_satCounts.fits.gz',ask=False)
                 
             else:
                 print('Reading saturation info from file')
@@ -145,7 +149,7 @@ if (contProc):
                 print ("non-linearity code took", time.time()-ta, " seconds")
 
                 #save file
-                wifisIO.writeFits(nlCoeff, savename+'_NLCoeff.fits.gz')
+                wifisIO.writeFits(nlCoeff, savename+'_NLCoeff.fits.gz',ask=False)
             else:
                 print('Reading non-linearity coefficient file')
                 nlCoeff = wifisIO.readImgsFromFile(savename+'_NLCoeff.fits.gz')[0]
@@ -203,7 +207,7 @@ else:
         nlCoeff = wifisIO.readImgsFromFile('processed/master_detLin_NLCoeff.fits.gz')[0]
     
     if (cont == 'update'):
-        BPM = wifisIO.readImgsFromFile('processed/bad_pixel_mask.fits.gz')[0]
+        BPM = wifisIO.readImgsFromFile(bpmFile)[0]
     else:
         BPM = np.zeros(nlCoeff[:,:,0].shape, dtype='int8')
 
@@ -319,6 +323,6 @@ else:
     #BPM[whr] = 1
 
     print('Saving bad pixel mask')
-    wifisIO.writeFits(BPM.astype('int'),'processed/bad_pixel_mask.fits.gz')
+    wifisIO.writeFits(BPM.astype('int'),'processed/bad_pixel_mask.fits.gz',ask=False)
 
 print ("Total time to run entire script: ",time.time()-t0)
