@@ -99,7 +99,9 @@ def upTheRampCL(intTime, data, satFrame, nSplit):
 
     #create tempory array to hold the output image
     outImg = np.zeros((ny,data.shape[1]), dtype='float32')
-
+    varImg = np.zeros((ny,data.shape[1]),dtype='float32')
+    zpntImg = np.zeros((ny,data.shape[1]),dtype='float32')
+    
     #start OpenCL portion
 
     #get OpenCL context object, can set to fixed value if wanted
@@ -113,7 +115,7 @@ def upTheRampCL(intTime, data, satFrame, nSplit):
     mf = cl.mem_flags   
 
     #create OpenCL buffers
-    time_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=intTime)
+    time_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=intTime.astype('float32'))
 
     #only create temporary arrays if needed to avoid excess RAM usage
     if (nSplit > 1):
@@ -123,43 +125,49 @@ def upTheRampCL(intTime, data, satFrame, nSplit):
             sTmp = np.array(satFrame[:,n*nx:(n+1)*nx].astype('int32'))
             oTmp = np.zeros((ny,nx),dtype='float32')
             a0_array = np.zeros((ny,nx), dtype='float32')
+            var_array = np.zeros((ny,nx),dtype='float32')
         
             #create OpenCL buffers
             data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=dTmp)
             sat_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=sTmp)
             a0_buf = cl.Buffer(ctx, mf.WRITE_ONLY, a0_array.nbytes)
             a1_buf = cl.Buffer(ctx, mf.WRITE_ONLY, oTmp.nbytes)
-
+            var_buf = cl.Buffer(ctx, mf.WRITE_ONLY, var_array.nbytes)
+            
             #set openCL arguments and run openCL code
-            program.lsfit.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None,None,None, None])
-            program.lsfit(queue,(ny,nx),None,np.uint32(nx), np.uint32(ntime),time_buf, data_buf,a0_buf,a1_buf,sat_buf)
+            program.lsfit.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None,None,None, None, None])
+            program.lsfit(queue,(ny,nx),None,np.uint32(nx), np.uint32(ntime),time_buf, data_buf,a0_buf,a1_buf,sat_buf, var_buf)
             
             cl.enqueue_read_buffer(queue, a0_buf, a0_array).wait()
             cl.enqueue_read_buffer(queue, a1_buf, oTmp).wait()
+            cl.enqueue_read_buffer(queue, a1_buf, var_array).wait()
 
             #copy to output array
             np.copyto(outImg[:,n*nx:(n+1)*nx],oTmp)
+            np.copyto(varImg[:,n*nx:(n+1)*nx],var_array)
+            np.copyto(zpntImg[:,n*nx:(n+1)*nx],a0_array)
     else:
         
-        a0_array = np.zeros((ny,nx), dtype='float32')
-
         #create OpenCL buffers
         data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=data.astype('float32'))
         sat_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=satFrame.astype('int32'))
-        a0_buf = cl.Buffer(ctx, mf.WRITE_ONLY, a0_array.nbytes)
+        a0_buf = cl.Buffer(ctx, mf.WRITE_ONLY, zpntImg.nbytes)
         a1_buf = cl.Buffer(ctx, mf.WRITE_ONLY, outImg.nbytes)
-        
-        program.lsfit.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None,None,None, None])
-        program.lsfit(queue,(ny,nx),None,np.uint32(nx), np.uint32(ntime),time_buf, data_buf,a0_buf,a1_buf,sat_buf)
-        
-        cl.enqueue_read_buffer(queue, a0_buf, a0_array).wait()
-        cl.enqueue_read_buffer(queue, a1_buf, outImg).wait()
+        var_buf = cl.Buffer(ctx, mf.WRITE_ONLY, varImg.nbytes)
 
+        program.lsfit.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None,None,None, None,None])
+        program.lsfit(queue,(ny,nx),None,np.uint32(nx), np.uint32(ntime),time_buf, data_buf,a0_buf,a1_buf,sat_buf, var_buf)
+        
+        cl.enqueue_read_buffer(queue, a0_buf, zpntImg).wait()
+        cl.enqueue_read_buffer(queue, a1_buf, outImg).wait()
+        cl.enqueue_read_buffer(queue, var_buf, varImg).wait()
+                
     #modify variables to reduce memory consumption
     dTmp = 0
     data_buf = 0
+    a0_array=0
     
-    return outImg
+    return outImg, zpntImg, varImg
 
 def createMaster(data):
     """Creates a collapsed image from a cube of images as a simple median of the images.
