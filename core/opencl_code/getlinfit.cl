@@ -1,6 +1,6 @@
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
 
-__kernel void lsfit(const unsigned int nx, const unsigned int nt, __global float* inttime, __global float* data, __global float* a0,__global float* a1, __global unsigned int* sat)
+__kernel void lsfit(const unsigned int nx, const unsigned int nt, __global float* inttime, __global float* data, __global float* a0,__global float* a1, __global unsigned int* sat, __global float* variance)
 {
 
 // nx is size of 2nd dimension
@@ -36,25 +36,29 @@ __kernel void lsfit(const unsigned int nx, const unsigned int nt, __global float
   
   double a0_tmp = 0;
   double a1_tmp = 0;
-      
+
+  double vari = 0;
+  double fit = 0;
+  
 // goal is to solve least squares problem where
 // m = a + b*x
 // b = covariance(x,y)/variance(x)
 // and a = mean(y) - b*mean(x)
 
 // first find the mean values
-  
-  for (k=0; k<satframe; k++){
-    pos3d = i*(nx*nt) + j*nt + k;
-    d = (double) data[pos3d];
-    t = (double) inttime[k];
-    meanx = meanx + t;
-    meany = meany + d;
-    meanxy = meanxy + t*d;
-    meanx2 = meanx2 + t*t;
-  }
-  
-  if (satframe > 2){
+
+  if (satframe > 1){
+    
+    for (k=0; k<satframe; k++){
+      pos3d = i*(nx*nt) + j*nt + k;
+      d = (double) data[pos3d];
+      t = (double) inttime[k];
+      meanx = meanx + t;
+      meany = meany + d;
+      meanxy = meanxy + t*d;
+      meanx2 = meanx2 + t*t;
+    }
+    
     meanx = meanx/((double)satframe);
     meany = meany/((double)satframe);
     meanxy = meanxy/((double)satframe);
@@ -68,5 +72,17 @@ __kernel void lsfit(const unsigned int nx, const unsigned int nt, __global float
     
     a0[pos2d] = a0_tmp;
     a1[pos2d] = a1_tmp;
+
+    //now compute variance
+    for (k=0; k<satframe;k++){
+      pos3d = i*(nx*nt) + j*nt + k;
+      d = (double) data[pos3d];
+      t = (double) inttime[k];
+
+      fit = a0_tmp + a1_tmp*t;
+      vari = vari + (d-fit)*(d-fit);
+    }
+    variance[pos2d] = (float)(vari/(double)satframe);
+    
   }
 }
