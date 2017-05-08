@@ -38,7 +38,7 @@ __kernel void lsfit(const unsigned int nx, const unsigned int nt, __global float
   double a1_tmp = 0;
 
   double vari = 0;
-  double fit = 0;
+  double diff = 0;
   
 // goal is to solve least squares problem where
 // m = a + b*x
@@ -70,8 +70,8 @@ __kernel void lsfit(const unsigned int nx, const unsigned int nt, __global float
     a1_tmp = covar/varx;
     a0_tmp = meany - a1_tmp*meanx;
     
-    a0[pos2d] = a0_tmp;
-    a1[pos2d] = a1_tmp;
+    a0[pos2d] = (float)a0_tmp;
+    a1[pos2d] = (float)a1_tmp;
 
     //now compute variance
     for (k=0; k<satframe;k++){
@@ -79,10 +79,12 @@ __kernel void lsfit(const unsigned int nx, const unsigned int nt, __global float
       d = (double) data[pos3d];
       t = (double) inttime[k];
 
-      fit = a0_tmp + a1_tmp*t;
-      vari = vari + (d-fit)*(d-fit);
+      diff = a0_tmp + a1_tmp*t -d;
+      vari = vari + diff*diff;
     }
-    variance[pos2d] = (float)(vari/(double)satframe);
+    vari = vari/(double)satframe;
+    
+    variance[pos2d] = (float)vari;
     
   }
 }
