@@ -61,7 +61,6 @@ def readImgsFromFile(file):
     nexts = len(tmp)
     
     if (nexts > 1):
-        print('multiple extensions')
         
         out = []
         hdr = []
