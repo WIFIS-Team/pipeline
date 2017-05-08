@@ -175,7 +175,7 @@ else:
 
 #check if analysis of NL coefficients needs to be done
 if(os.path.exists('processed/bad_pixel_mask.fits')):
-    cont = wifisIO.userInput('bad pixel mask already exists, do you want to update, replace, skip? (update/replace/skip)')
+    cont = wifisIO.userInput('bad pixel mask already exists, do you want to update, replace, skip? ("update"/"replace"/anything else to skip)')
     
     if (cont.lower() == 'update' or cont.lower() == 'replace'):
         contAnalysis = True
@@ -184,7 +184,9 @@ if(os.path.exists('processed/bad_pixel_mask.fits')):
 else:
     contAnalysis = True
     cont = 'replace'
-        
+
+
+
 if (contAnalysis):
     print('Determining bad pixels from non-linearity coefficients')
     
@@ -199,8 +201,9 @@ if (contAnalysis):
         BPM = np.zeros(nlCoeff[:,:,0].shape, dtype='int8')
 
     print('Analyzing non-linearity coefficients and determining outliers')
-    #NLCoeff 0
-    n = nlCoeff[:,:,0]
+
+    #NLCoeff 0, ignoring reference pixels
+    n = nlCoeff[4:2044,4:2044,0]
     
     for i in range(5):
         med = np.median(n)
@@ -209,8 +212,8 @@ if (contAnalysis):
         n = n[whr]
         
     plt.close('all')
-    plt.hist(nlCoeff[:,:,0].flatten(), range=[med-std, med+std],bins=100)
-    hist = np.histogram(nlCoeff[:,:,0].flatten(), range=[med-1.5*std, med+1.5*std], bins=100)
+    plt.hist(nlCoeff[4:2044,4:2044,0].flatten(), range=[med-1.5*std, med+1.5*std],bins=100)
+    hist = np.histogram(nlCoeff[4:2044,4:2044,0].flatten(), range=[med-1.5*std, med+1.5*std], bins=100)
    
     std = np.std(n)
     med = np.median(n)
@@ -220,15 +223,15 @@ if (contAnalysis):
     plt.xlabel('value')
     plt.ylabel('count')
     plt.title('NL correction coefficient 0')
-    plt.savefig('nlcoeff_0_hist.eps', bbox_inches='tight')
+    plt.savefig('processed/nlcoeff_0_hist.eps', bbox_inches='tight')
     #plt.show()
     plt.close('all')
     
-    whr = np.where(np.abs(nlCoeff[:,:,0]-med) > 5.*std)
+    whr = np.where(np.abs(nlCoeff[4:2044,4:2044,0]-med) > 5.*std)
     BPM[whr] = 1
     
     #NLCoeff 1
-    n = nlCoeff[:,:,1]
+    n = nlCoeff[4:2044,4:2044,1]
     
     for i in range(6):
         med = np.median(n)
@@ -236,8 +239,8 @@ if (contAnalysis):
         whr = np.where(np.abs(n-med) < 7.*std)
         n = n[whr]
     
-    plt.hist(nlCoeff[:,:,1].flatten(), range=[med-std, med+std],bins=100)
-    hist = np.histogram(nlCoeff[:,:,1].flatten(), range=[med-std, med+std], bins=100)
+    plt.hist(nlCoeff[4:2044,4:2044,1].flatten(), range=[med-std, med+std],bins=100)
+    hist = np.histogram(nlCoeff[4:2044,4:2044,1].flatten(), range=[med-std, med+std], bins=100)
     
     med = np.median(n)
     std = np.std(n)
@@ -248,7 +251,7 @@ if (contAnalysis):
     plt.xlabel('value')
     plt.ylabel('count')
     plt.title('NL correction coefficient 1')
-    plt.savefig('nlcoeff_1_hist.eps')
+    plt.savefig('processed/nlcoeff_1_hist.eps')
     #plt.show()
     plt.close('all')
     
@@ -256,7 +259,7 @@ if (contAnalysis):
     #BPM[whr] = 1
     
     #NLCoeff 2
-    n = nlCoeff[:,:,2]
+    n = nlCoeff[4:2044,4:2044,2]
     
     for i in range(8):
         med = np.median(n)
@@ -264,8 +267,8 @@ if (contAnalysis):
         whr = np.where(np.abs(n-med) < 7.*std)
         n = n[whr]
         
-    plt.hist(nlCoeff[:,:,2].flatten(), range=[med-std, med+std],bins=100)
-    hist = np.histogram(nlCoeff[:,:,2].flatten(), range=[med-std, med+std], bins=100)
+    plt.hist(nlCoeff[4:2044,4:2044,2].flatten(), range=[med-std, med+std],bins=100)
+    hist = np.histogram(nlCoeff[4:2044,4:2044,2].flatten(), range=[med-std, med+std], bins=100)
     
     med = np.median(n)
     std = np.std(n)
@@ -275,7 +278,7 @@ if (contAnalysis):
     plt.xlabel('value')
     plt.ylabel('count')
     plt.title('NL correction coefficient 2')
-    plt.savefig('nlcoeff_2_hist.eps')
+    plt.savefig('processed/nlcoeff_2_hist.eps')
     #plt.show()
     plt.close('all')
     
@@ -283,7 +286,7 @@ if (contAnalysis):
     #BPM[whr] = 1
     
     #NLCoeff 3
-    n = nlCoeff[:,:,3]
+    n = nlCoeff[4:2044,4:2044,3]
     
     for i in range(9):
         med = np.median(n)
@@ -291,8 +294,8 @@ if (contAnalysis):
         whr = np.where(np.abs(n-med) < 5.*std)
         n = n[whr]
     
-    plt.hist(nlCoeff[:,:,3].flatten(), range=[med-std, med+std],bins=100)
-    hist = np.histogram(nlCoeff[:,:,3].flatten(), range=[med-std, med+std], bins=100)
+    plt.hist(nlCoeff[4:2044,4:2044,3].flatten(), range=[med-std, med+std],bins=100)
+    hist = np.histogram(nlCoeff[4:2044,4:2044,3].flatten(), range=[med-std, med+std], bins=100)
         
     med = np.median(n)
     std = np.std(n)
@@ -302,7 +305,7 @@ if (contAnalysis):
     plt.xlabel('value')
     plt.ylabel('count')
     plt.title('NL correction coefficient 3')
-    plt.savefig('nlcoeff_3_hist.eps')
+    plt.savefig('processed/nlcoeff_3_hist.eps')
     #plt.show()
     plt.close('all')
 
