@@ -123,6 +123,11 @@ def upTheRampCL(intTime, data, satFrame, nSplit):
             #create temporary arrays to hold portions of data cube
             dTmp = np.array(data[:,n*nx:(n+1)*nx,:].astype('float32'))
             sTmp = np.array(satFrame[:,n*nx:(n+1)*nx].astype('int32'))
+            #dTmp = np.empty((ny,nx,ntime),dtype='float32')
+            #sTmp = np.empty((ny,nx),dtype='float32')
+            #np.copyto(dTmp, data[:,n*nx:(n+1)*nx,:].astype('float32'))
+            #np.copyto(sTmp, satFrame[:,n*nx:(n+1)*nx].astype('int32'))
+            
             oTmp = np.zeros((ny,nx),dtype='float32')
             a0_array = np.zeros((ny,nx), dtype='float32')
             var_array = np.zeros((ny,nx),dtype='float32')
@@ -140,7 +145,7 @@ def upTheRampCL(intTime, data, satFrame, nSplit):
             
             cl.enqueue_read_buffer(queue, a0_buf, a0_array).wait()
             cl.enqueue_read_buffer(queue, a1_buf, oTmp).wait()
-            cl.enqueue_read_buffer(queue, a1_buf, var_array).wait()
+            cl.enqueue_read_buffer(queue, var_buf, var_array).wait()
 
             #copy to output array
             np.copyto(outImg[:,n*nx:(n+1)*nx],oTmp)
