@@ -1,7 +1,7 @@
 __kernel void compmeangrad(const unsigned int nx, const unsigned int nt, __global float* data, __global unsigned int* sat, __global float* outgrad)
 {
   // *********************************************************************************************
-  // A MAXIMUM OF 1000 FRAMES IS CURRENTLY HARDCODE. INCREASE THE GRAD VARIABLE ARRAY LENGTH IF MORE THAN 1000 FRAMES BELONG IN THE SEQUENCE
+  // A MAXIMUM OF 1000 FRAMES IS CURRENTLY HARDCODED. INCREASE THE GRAD VARIABLE ARRAY LENGTH IF MORE THAN 1000 FRAMES BELONG IN THE SEQUENCE
   // *********************************************************************************************
 
   // nx is size of 2nd dimension
@@ -44,7 +44,7 @@ __kernel void compmeangrad(const unsigned int nx, const unsigned int nt, __globa
       grad[1] = grad[0];
     }
     //if more than 2 frames, compute gradient over 3-pixels
-    if (satframe >= 2){
+    if (satframe > 1){
       pos3d = i*(nx*nt) + j*nt;
       
       grad[0] = -(3.*data[pos3d] -4.*data[pos3d+1] + data[pos3d+2])/2.;
