@@ -14,6 +14,7 @@ import astropy.convolution as conv
 from scipy.interpolate import griddata
 from scipy.interpolate import RectBivariateSpline
 from astropy.modeling import models, fitting
+from scipy.interpolate import interp1d
 
 def gaussFit(x, y, plot=False):
     """
@@ -70,12 +71,14 @@ def getFit2(x, y, mxWidth=1,plot=False):
     try:
         gfit = gaussFit2(x,y,plot=plot)
         c = gfit[1]
+        width = np.abs(gfit[2])
         
-        if (c < x[0] or c > x[-1]) or (np.abs(gfit[2]) > mxWidth):
+        if (c < x[0] or c > x[-1]) or (width > mxWidth):
             mid = int(len(y)/2)
             mx = np.argmax(y[mid-1:mid+2])+mid-1
             cc = np.nansum(x[mx-1:mx+2]*y[mx-1:mx+2])/np.nansum(y[mx-1:mx+2])
-
+            width = np.nan
+            
             if (plot):
                 plt.plot(x,y)
                 plt.plot([cc,cc],[np.min(y), np.max(y)])
@@ -86,7 +89,8 @@ def getFit2(x, y, mxWidth=1,plot=False):
         mid = len(y)/2
         mx = np.nanargmax(y[int(mid-1):int(mid+2)])+mid-1
         c = np.nansum(x[int(mx-1):int(mx+2)]*y[int(mx-1):int(mx+2)])/np.nansum(y[int(mx-1):int(mx+2)])
-    return c
+        width = np.nan
+    return c,width
 
 def fitColumn(pos,slce,allTrace, winRng, reverse=False, plot=False, prnt=False, mxWidth=1,bright=False):
     """
@@ -108,9 +112,12 @@ def fitColumn(pos,slce,allTrace, winRng, reverse=False, plot=False, prnt=False, 
     y = slce[:,pos]
     nDips = allTrace.shape[0]
     trace =np.zeros(nDips)
+    traceWidth = np.empty(nDips)
+    traceWidth[:] = np.nan
 
     #compute 2nd derivative for identifying centre of bright or dark bands for tracing
     d2 = np.gradient(np.gradient(y))
+    #d2 = y 
     x = np.arange(len(y))
     winRng2 = int(winRng/2)
     
@@ -135,7 +142,7 @@ def fitColumn(pos,slce,allTrace, winRng, reverse=False, plot=False, prnt=False, 
       
         #update centre position for better fitting, but only allow for 1-pixel shift
         ytmp = d2[xtmp]
-
+        
         if (bright):
             try:
                 dipPos = xtmp[np.nanargmin(ytmp[winRng2-1:winRng2+2])+winRng2-1]
@@ -147,7 +154,7 @@ def fitColumn(pos,slce,allTrace, winRng, reverse=False, plot=False, prnt=False, 
             except(ValueError):
                 dipPos = np.nan
 
-        if (dipPos != np.nan):
+        if (dipPos is not np.nan):
             xtmp = (np.arange(winRng)+dipPos - winRng2).astype('int') #can remove once know quality
             xtmp = xtmp[np.where(xtmp < len(y))]
 
@@ -158,9 +165,10 @@ def fitColumn(pos,slce,allTrace, winRng, reverse=False, plot=False, prnt=False, 
                     yfit -= np.nanmin(yfit)
                 else:
                     yfit = d2[xtmp] - np.nanmin(d2[xtmp])
-
+                    
                 if (len(xtmp)>2):
-                    trace[j] =  getFit2(xtmp, yfit, plot=plot, mxWidth=mxWidth)
+                    trace[j],traceWidth[j]  =  getFit2(xtmp, yfit, plot=plot, mxWidth=mxWidth)
+                    
                 else:
                     trace[j] = np.nan
 
@@ -168,12 +176,23 @@ def fitColumn(pos,slce,allTrace, winRng, reverse=False, plot=False, prnt=False, 
                     print(trace[j], prevFit-trace[j])
             else:
                 trace[j] = np.nan
+                yfit = [np.nan]
         else:
             trace[j] = np.nan
+            yfit = [np.nan]
             
         #avoid bad fits
-        if ((np.abs(trace[j]-prevFit) > mxWidth/2.) or np.isnan(trace[j])):
-            
+
+        if (np.isnan(trace[j])):
+            badFit = True
+        else:
+            if ((np.abs(trace[j]-prevFit)) > mxWidth/2.):
+                badFit = True
+            else:
+                badFit = False
+                
+        if (badFit): 
+
             #compute centre as weighted average instead
             try:
                 if (len(xtmp)>2 and len(yfit)>2):
@@ -190,7 +209,9 @@ def fitColumn(pos,slce,allTrace, winRng, reverse=False, plot=False, prnt=False, 
             if (prnt):
                 print(pos, j, trace[j], prevFit, prevFit-trace[j], c, prevFit-c)
 
-            if (np.abs(c-prevFit) > mxWidth) or np.isnan(c):
+            if (np.isnan(c)):
+                trace[j] = np.nan
+            elif (np.abs(c-prevFit) > mxWidth):
                 trace[j] = np.nan
             else:
                 trace[j] = c
@@ -203,7 +224,7 @@ def fitColumn(pos,slce,allTrace, winRng, reverse=False, plot=False, prnt=False, 
             plt.show()   
 
 
-    return trace
+    return trace, traceWidth
 
 
 def gaussian2(x,amp,cen,wid):
@@ -279,7 +300,7 @@ def traceRonchiSlice(input):
         tmp = np.zeros((img.shape[0], maxPix/nbin))
 
         for i in range(tmp.shape[1]-1):
-            tmp[:,i] = img[:,nbin*i]+img[:,nbin*(i+1)]
+            tmp[:,i] = np.nansum(img[:,nbin*i:nbin*(i+1)],axis=1)#+img[:,nbin*(i+1)]
     else:
         tmp  = img
 
@@ -291,16 +312,19 @@ def traceRonchiSlice(input):
     x=np.arange(len(y))
     d2 = np.gradient(np.gradient(y))
 
-    #only use regions where signal > 50% of the max
-    mx = np.nanmax(y)
+    #only use regions where signal in all pixels > 50% of the median signal (of the max portion)
+    #mx = np.nanmax(y)
+    mx = np.nanmedian(y[y>0.05*np.nanmax(y)])
+    
     whr = np.where(y > 0.5*mx)[0]
-    strt = whr[0]-1
-    mxPix = whr[-1]+2
+    strt = whr[0]
+    mxPix = whr[-1]
 
     #now start counting the # of dips
     #and get their positions
 
     trace =[]
+    traceWidth = []
     xtmp = (np.arange(winRng)+strt).astype('int')
     ytmp = y[xtmp]
     
@@ -313,6 +337,7 @@ def traceRonchiSlice(input):
     while (dipPos < mxPix):
 
         xtmp = (np.arange(winRng)+dipPos - winRng2).astype('int')
+        xtmp = xtmp[np.where(np.logical_and(xtmp >0,xtmp<len(y)))]
         
         #fit function to region to determine line centre
         if (bright):
@@ -320,34 +345,46 @@ def traceRonchiSlice(input):
             yfit -= np.nanmin(yfit)
         else:
             yfit = d2[xtmp] - np.nanmin(d2[xtmp])
-
-        trace.append(getFit2(xtmp, yfit, plot=plot, mxWidth=mxWidth))
-
+            
+        fitTmp = getFit2(xtmp, yfit, plot=plot, mxWidth=mxWidth)
+        trace.append(fitTmp[0])
+        traceWidth.append(fitTmp[1])
+        
         if (plot):
+            print(xtmp, mxPix)
             plt.figure()
             plt.plot(y)
             plt.plot([whr[0]-1, mxPix], [0.5*mx, 0.5*mx], 'g--')
             plt.plot(xtmp, y[xtmp], 'ro')
-            plt.plot([trace[-1],trace[-1]], [np.min(y),np.max(y)],'--')
+            plt.plot([trace[-1],trace[-1]], [np.nanmin(y),np.nanmax(y)],'--')
             plt.show()   
                 
         #now start search for next dip
         strt = xtmp[-1]
         xtmp = np.arange(winRng)+strt
         xtmp = xtmp[np.where(xtmp < len(y))]
-
         if (bright):
-            dipPos = xtmp[np.nanargmin(d2[xtmp])]
+            with np.errstate(invalid='raise'):
+                try:
+                    dipPos = xtmp[np.nanargmin(d2[xtmp])]
+                except(ValueError):
+                    dipPos = np.nan
         else:
-            dipPos = xtmp[np.nanargmax(d2[xtmp])]
-                    
+            with np.errstate(invalid='raise'):
+                try:
+                    dipPos = xtmp[np.nanargmax(d2[xtmp])]
+                except(ValueError):
+                    dipPos=np.nan
+                
     #count the number of dips
     nDips = len(trace)
     
     #initialize array to hold positions of each dip across detector
     #allTrace = np.zeros((tmp.shape[1],nDips))
     allTrace = np.empty((nDips, int(maxPix/nbin)))
+    allWidth = np.empty((nDips, int(maxPix/nbin)))
     allTrace[:] = np.nan
+    allWidth[:] = np.nan
     
     #fill in first set of measurements
     allTrace[:,m2] = trace
@@ -355,48 +392,68 @@ def traceRonchiSlice(input):
     #now do the rest of the columns
     #first work backwards from starting position
     for i in range(m2-1,0,-1):
-        allTrace[:,i] = fitColumn(i,tmp,allTrace,winRng=winRng, reverse=True,mxWidth=mxWidth, bright=bright)
+        allTrace[:,i],allWidth[:,i] = fitColumn(i,tmp,allTrace,winRng=winRng, reverse=True,mxWidth=mxWidth, bright=bright)
     
     #now work forwards
     for i in range(int(m2+1),int(maxPix/nbin)):
-        allTrace[:,i] = fitColumn(i,tmp,allTrace, winRng=winRng, mxWidth=mxWidth,bright=bright)
+        allTrace[:,i],allWidth[:,i] = fitColumn(i,tmp,allTrace, winRng=winRng, mxWidth=mxWidth,bright=bright)
 
     #now smooth all traces and fill in missing values due to binning
 
     outTrace = np.empty((allTrace.shape[0], allTrace.shape[1]*nbin))
     outTrace[:] = np.nan
+
+    outWidth = np.empty((allWidth.shape[0], allWidth.shape[1]*nbin))
+    outWidth[:] = np.nan
     
     xTrace = np.arange(allTrace.shape[1])*nbin
-    xtmp = np.arange(outTrace.shape[1])
+    xOut = np.arange(outTrace.shape[1])
 
     if (smth > 0):
         for j in range(allTrace.shape[0]):
             yTrace = allTrace[j,:]
-   
+            wTrace = allWidth[j,:]
+            
             #remove badly fit regions to be replaced by smoothed curve
-            ytmp = np.empty(xtmp.shape)
+            ytmp = np.empty(xOut.shape)
             ytmp[:] = np.nan
             ytmp[xTrace] = yTrace
-            
             gKern = conv.Gaussian1DKernel(smth)
-            ysmth = conv.convolve(ytmp, gKern, boundary='extend')
-            outTrace[j,:] = ysmth
+            outTrace[j,:] = conv.convolve(ytmp, gKern, boundary='extend')
 
+            #remove badly fit regions and replace with linear interpolation
+            wtmp = np.empty(xOut.shape)
+            wtmp[:]=np.nan
+            wtmp[xTrace] = wTrace
+            whrBad = np.where(~np.isfinite(wtmp))[0]
+
+            if(len(whrBad)>0):
+                whrGood = np.where(np.isfinite(wtmp))[0]
+                finter = interp1d(xOut[whrGood],wtmp[whrGood], kind='linear', bounds_error=False)
+                wtmp[whrBad] =finter(xOut[whrBad])
+                outWidth[j,:] = wtmp
+            else:
+                outWidth[j,:] = wtmp
     else:
         outTrace = allTrace
-
+        outWidth = allWidth
+        
     if (plot):
-        tmp = np.sqrt(img)
-        mn = np.min(img[np.where(tmp != 0)])
-        plt.imshow(img, aspect='auto', clim=[mn, np.max(img)])
-    
+        #tmp = np.sqrt(img)
+        #mn = np.nanmin(img[np.where(tmp != 0)])
+        mx = np.nanmax(img)
+        #plt.imshow(img, aspect='auto', clim=[mn, np.max(img)])
+        plt.imshow(img, aspect='auto', clim=[mx*0.05, mx])
+
         for i in range(outTrace.shape[0]):
-            plt.plot(outTrace[i,:], 'k')
-    
-        plt.plot(np.repeat(m2, outTrace.shape[0]),outTrace[:,m2],'ro')
+            if (i%2 == 0):
+                plt.plot(outTrace[i,:], 'k')
+            else:
+                plt.plot(outTrace[i,:], 'k--')
+            plt.plot(np.repeat(m2, outTrace.shape[0]),outTrace[:,m2],'ro')
         plt.show()
 
-    return outTrace
+    return outTrace, outWidth
 
 def traceRonchiAll(extSlices, nbin=2, winRng=5, mxWidth=1,smth=5,bright=False, MP=True,ncpus=None):
     """
@@ -408,6 +465,8 @@ def traceRonchiAll(extSlices, nbin=2, winRng=5, mxWidth=1,smth=5,bright=False, M
     mxWidth is the maximum width of a Gaussian fit, which is used for quality control purposes
     smth is an integer indicating the width of the Gaussian filter used for smoothing the traces
     bright is a boolean value indicating whether the bright bands (True) or dark bands (False) should be fit
+    MP is a boolean keyword used to indicate if multiprocessing is used
+    ncpus is an integer indicating the number of simultanesously run processes, when in multiprocessing mode. An input of None allows the code to automatically determine this value
     result is a list of 2D arrays providing the position of each band along the individual slice
     """
 
@@ -427,8 +486,16 @@ def traceRonchiAll(extSlices, nbin=2, winRng=5, mxWidth=1,smth=5,bright=False, M
         result = []
         for slc in extSlices:
             result.append(traceRonchiSlice([slc, nbin, winRng, slc.shape[1],False, mxWidth, smth, bright]))
-                        
-    return result
+
+    #now organize results
+    traces = []
+    widths = []
+
+    for r in result:
+        traces.append(r[0])
+        widths.append(r[1])
+        
+    return traces, widths
 
 def extendTraceSlice(input):
     """
@@ -560,6 +627,7 @@ def traceZeroPointAll(zeroSlices, nbin=2,winRng=31,smooth=5,bright=False,MP=True
     Usage: cent = traceZeroPointAll(zeroSlices, nbin=2, winRng=31, smooth=5, bright=False, MP=True, plot=False, mxChange=5, ncpus=None)
     zeroSlices is a list containing the zero-point image slices
     nbin is an integer used to specify the number of pixels used for binning each slice to improve the contrast of the zeropoint slices and reduce the computation time of the tracing
+    winRng is the maximum range about the centre of the slice used to find and fit for the zeropoint centre
     smooth is an integer specifying the width of the Gaussian kernel used for smoothing the trace
     bright is a boolean used to indicate whether the feature used for tracing is brigher (True) or darker (False) then its surrounding
     MP is a boolean used to indicate whether multiprocessing should be used
@@ -757,3 +825,25 @@ def traceZeroPointSlice(input):
         centSmth = centOut
         
     return centSmth
+
+def buildWidthMap(traceLst, widthLst, slicesLst):
+    """
+    """
+
+    mapLst = []
+
+    for i in range(len(traceLst)):
+
+        gX, gY = np.mgrid[:slicesLst[i].shape[0],:slicesLst[i].shape[1]]
+
+        points = []
+        vals = []
+
+        for j in range(traceLst[i].shape[0]):
+            for k in range(traceLst[i].shape[1]):
+                if (np.isfinite(traceLst[i][j,k]) and np.isfinite(widthLst[i][j,k])):
+                    points.append([k,traceLst[i][j,k]])
+                    vals.append(widthLst[i][j,k])
+        vals = np.array(vals)
+        mapLst.append(griddata(points, vals, (gY, gX), method='linear'))
+    return mapLst
