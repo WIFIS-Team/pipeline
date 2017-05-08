@@ -25,8 +25,11 @@ def limFit1(input):
     #centGuess=[100,311,530,754,978,1198,1420,1650,1875,2097,2323,2551,2774,3002,3222,3462,3669,3907]
     #centGuess = [34, 255, 466, 694, 915, 1142, 1363, 1593, 1812, 2041,2265,2492,2715, 2943,3167, 3392,3610,3834,4044]
     #centGuess = [85, 195,308,422,535,654,763,877,986,1100,1218,1332, 1442,1564,1669, 1792,1896,2015]
-    centGuess = [13, 122, 232, 345, 458, 570, 683, 795, 908, 1019, 1132, 1245, 1359, 1469, 1582, 1693, 1807, 1919, 2037]
-    
+    #centGuess = [13, 122, 232, 345, 458, 570, 683, 795, 908, 1019, 1132, 1245, 1359, 1469, 1582, 1693, 1807, 1919, 2037]
+    #from first commissioning run
+    #centGuess = [44, 153, 267, 381, 495, 613, 718, 831, 945, 1059, 1173, 1287, 1400, 1515,1628,1742,1855, 1970,2040]
+    #from first commissioning run, better alignment
+    centGuess = [11, 124, 238, 352, 464, 579, 692, 804, 918, 1032, 1146, 1262, 1371, 1487, 1601, 1715, 1828, 1941, 2044]
     y = input[0]
     nRng = input[1]
    
@@ -57,7 +60,7 @@ def limFit1(input):
 
     return limMeas
 
-def findLimits(data, dispAxis=1, winRng=51, imgSmth=5, limSmth=10, ncpus=None):
+def findLimits(data, dispAxis=0, winRng=51, imgSmth=5, limSmth=10, ncpus=None):
     """
     Used to determine slice limits from a full flat-field image
     Usage: limits = findLimits(data, dispAxis=,winRng=,imgSmth=,limSmth= )
@@ -66,6 +69,7 @@ def findLimits(data, dispAxis=1, winRng=51, imgSmth=5, limSmth=10, ncpus=None):
     winRng is a keyword specifying the number of pixels to use when finding the slice edge limits
     imgSmth is a keyword specifying the Gaussian width of the smoothing kernel for finding the slice-edge limits
     limSmth is a keyword specigying the Gaussian width of the smoothing kernel for smoothing the found limits
+    ncpus is a keyword indicating the number of processes to spawn
     returns an array containing the pixel limits for each slice edge along the dispersion axis
     """
 
@@ -108,7 +112,7 @@ def findLimits(data, dispAxis=1, winRng=51, imgSmth=5, limSmth=10, ncpus=None):
     
     return limSmth
 
-def extSlices(data, limits, dispAxis=1):
+def extSlices(data, limits, dispAxis=0):
     """
     Extract a list of slices (sub-images) from the given image.
     Usage: slices = extSlices(data, limits, dispAxis=)
@@ -130,8 +134,8 @@ def extSlices(data, limits, dispAxis=1):
         mn = np.floor(np.min(limits[i,:])).astype('int')
         mx = np.ceil(np.max(limits[i+1,:])).astype('int')
 
-        slice = np.zeros((mx-mn,n))
-        #slice[:] = np.nan
+        slice = np.empty((mx-mn,n))
+        slice[:] = np.nan
         
         for j in range(mn,mx):
             keep = np.ones(n, dtype=bool)
@@ -177,7 +181,7 @@ def getResponse2D(input):
     else:
         sliceSmth = slice
 
-    norm = sliceSmth/np.max(sliceSmth)
+    norm = sliceSmth/np.nanmax(sliceSmth)
     norm[np.where(norm < cutoff)] = 1.
 
     return norm
@@ -349,8 +353,7 @@ def getTrimLimsSlice(input):
     [y1, y2] is a list of the upper and lower limits.
     """
 
-    slc = np.empty((input[0].shape))
-    np.copyto(slc, input[0])
+    slc = input[0]
     threshold = input[1]
     plot = input[2]
     
@@ -358,13 +361,13 @@ def getTrimLimsSlice(input):
     #else, use given threshold
 
     #first, replace all NaN by zero to allow summation
-    slc[np.where(np.isnan(slc))] = 0
+    #slc[np.where(np.isnan(slc))] = 0
     
     if threshold is None:
         #use gradient to define cutoff
         
         #work on axis 1, assumes that wavetrim already took care of other axis
-        ytmp = np.sum(slc, axis=1)
+        ytmp = np.nansum(slc, axis=1)
         n = ytmp.shape[0]
         
         gKern = conv.Gaussian1DKernel(stddev=1) #needs to be optimized, possibly read in
@@ -373,21 +376,21 @@ def getTrimLimsSlice(input):
         #whr = np.where(y > 0.5*np.max(y))[0]
         #y1 = np.argmax(d1[0:whr[0]])
         #y2 = np.argmax(d1[whr[-1]:])+whr[-1]
-        y1 = np.argmax(d1[0:n/2])
-        y2 = np.argmax(d1[n/2:])+n/2
+        y1 = np.nanargmax(d1[0:n/2])
+        y2 = np.nanargmax(d1[n/2:])+n/2
 
     else:
 
-        ytmp = np.sum(slc, axis=1)/float(slc.shape[1])
-        whr = np.where(ytmp >= threshold*np.max(ytmp))[0]
+        ytmp = np.nansum(slc, axis=1)/float(slc.shape[1])
+        whr = np.where(ytmp >= threshold*np.nanmax(ytmp))[0]
         y1 = whr[0]
         y2 = whr[-1]
 
     if(plot):
         plt.figure()
         plt.plot(ytmp)
-        plt.plot([y1,y1],[np.min(ytmp),np.max(ytmp)],'r--')
-        plt.plot([y2,y2],[np.min(ytmp),np.max(ytmp)],'r--')
+        plt.plot([y1,y1],[np.nanmin(ytmp),np.nanmax(ytmp)],'r--')
+        plt.plot([y2,y2],[np.nanmin(ytmp),np.nanmax(ytmp)],'r--')
         plt.show()
         
     return [y1, y2]
