@@ -77,6 +77,7 @@ def distCorSlice(input):
     dataSlc - is the image slice of the input data to be distortion corrected,
     distSlc - is the distortion mapping for the specific slice
     method - is a string indicating the interpolation method to use ("linear", "cubic", or "nearest")
+    Returned is a list of distortion corrected images.
     """
 
     #rename input
@@ -109,34 +110,35 @@ def distCorSlice(input):
 
     return out
 
-def compWaveGrid(waveTrim, dispSol):
+def compWaveGrid(waveTrimSlices):
     """
     Determines mean dispersion solution to use for placing all slices on a uniform wavelength grid. 
-    Usage: result = compWaveGrid(waveTrim, dispSol)
+    Usage: [gridMin, gridMax, gridDisp] = compWaveGrid(waveTrimSlices)
     waveTrim is a list of all trimmed wave map slices, providing the wavelength at each pixel for a given slice
-    dispSol is an array containing the wavelength solution derived for each vector along the dispersion axis on the detector.
+    gridMin is the minimum wavelength of the grid
+    gridMax is the maximum wavelength of the grid
+    gridDisp is the linear dispersion solution of the grid
     """
-    
-    #compute mean dispersion with 3-sigma clipping
-    fnte = np.where(np.isfinite(dispSol[:,1]))[0]
-    gridDisp = np.median(dispSol[fnte,1])
-    whr = np.where(np.abs(dispSol[fnte,1]-gridDisp) < 1*np.std(dispSol[fnte,1]))[0]
-    gridDisp = np.median(dispSol[fnte[whr],1])
-  
-    mnLst = []
-    mxLst = []
-    
-    for w in waveTrim:
-        for i in range(w.shape[0]):
-            y = w[np.where(w>0)]
-            mnLst.append(np.nanmin(y))
-            mxLst.append(np.nanmax(y))
 
-    #compute min and maximum wavelengths
-    gridMin = np.min(mnLst)
-    gridMax = np.max(mxLst)
+
+    wMin = []
+    wMax = []
+    deltaW = []
+    for w in waveTrimSlices:
+        wmin=np.nanmin(w)
+        wmax= np.nanmax(w)
+
+        wMin.append(wmin)
+        wMax.append(wmax)
+
+        n = w.shape[0]
+        deltaW.append((wmax-wmin)/(n-1))
+        
+    waveMin = np.min(wMin)
+    waveMax = np.max(wMax)
+    waveDisp = np.mean(deltaW)
     
-    return gridMin, gridMax, np.abs(gridDisp)
+    return waveMin, waveMax, np.abs(waveDisp)
 
 def collapseCube(cube):
     """
@@ -158,7 +160,7 @@ def mkCube(corSlices, ndiv=1, MP=True, ncpus=None):
     ndiv is a keyword to specify how to subdivide the original slices to artificially increase the output resolution along the y-axis (the between slices). A value of 0 will not increase the number of pixels between each slice. A value of 1 will introduce a single pixel between each slice and linearly interpolate to fill in that value. A value of n will introduce n pixels between each slice.
     MP is a keyword to specify whether multi-processing should be used. For some machines, setting MP=False may result in a speed improvement.
     ncpu is a keyword to specify the number of processes to run simultaneously when running in MP mode. The default is None, which allows python to set this value automatically based on the number of threads supported by your CPU.
-    """
+    Return an image cube with the first axis corresponding to the y-axis of the image, the 2nd to the x-axis, and the third to the wavelength axis.    """
     
     #initialize output cube
 
