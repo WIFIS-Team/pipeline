@@ -60,6 +60,8 @@ if (contProc):
 
     satCountsLst = []
     nlCoeffLst = []
+    zpntLst = []
+    rampLst = []
     
     for filename in lst:
         filename = filename.tostring()
@@ -132,16 +134,20 @@ if (contProc):
             if (cont.lower() == 'y'):
                 print('Determining non-linearity corrections')
                 ta = time.time()
-                nlCoeff = NLCor.getNLCorCL(data,satFrame,32)
+                nlCoeff, zpntImg, rampImg = NLCor.getNLCorCL(data,satFrame,32)
                 print ("non-linearity code took" +str(time.time()-ta)+ " seconds")
 
                 #save file
                 wifisIO.writeFits(nlCoeff, savename+'_NLCoeff.fits',ask=False)
+                wifisIO.writeFits([zpntImg, rampImg], savename+'_polyCoeff.fits', ask=False)
             else:
                 print('Reading non-linearity coefficient file')
                 nlCoeff = wifisIO.readImgsFromFile(savename+'_NLCoeff.fits')[0]
-
+                zpntImg, rampImg = wifisIO.readImgsFromFile(savename+'_polyCoeff.fits')[0:1]
+                
             nlCoeffLst.append(nlCoeff)
+            zpntLst.append(zpntImg)
+            rampLst.append(rampImg)
             
             #**********************************************************************
             #**********************************************************************
@@ -156,20 +162,15 @@ if (contProc):
     
     #create and write master files
     print('Creating master files')
-    if (len(satCountsLst) > 1):
-        masterSatCounts = np.nanmedian(np.array(satCountsLst),axis=0)
-    else:
-        masterSatCounts = satCountsLst[0]
-
-    if (len(nlCoeffLst)>1):
-        masterNLCoeff = np.nanmedian(np.array(nlCoeffLst),axis=0)
-    else:
-        masterNLCoeff = nlCoeffLst[0]
-
+    masterSatCounts = np.nanmedian(np.array(satCountsLst),axis=0)
+    masterNLCoeff = np.nanmedian(np.array(nlCoeffLst),axis=0)
+    masterZpnt = np.nanmedian(np.array(zpntLst), axis=0)
+    masterRamp = np.nanmedian(np.array(rampLst),axis=0)
+    
     #write files, if necessary
     wifisIO.writeFits(masterSatCounts,'processed/master_detLin_satCounts.fits')
     wifisIO.writeFits(masterNLCoeff,'processed/master_detLin_NLCoeff.fits')
-        
+    wifisIO.writeFits([masterZpnt, masterRamp], 'processed/master_detLin_polyCoeff.fits')
 else:
     print('No processing necessary')
 
