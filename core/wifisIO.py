@@ -11,6 +11,7 @@ import re
 import os
 import sys
 import astropy
+import cPickle
 
 def readRampFromFile(filename):
     """
@@ -411,3 +412,34 @@ def writeFits(data, filename, hdr=None, ask=True):
 
     hdu.close()
     return
+
+def writePickle(objct, filename, protocol=-1):
+    """
+    Writes a complex object to a file using cPickle.
+    Usage: writePickle(objct, filename, protocol=-1)
+    objct is the object to save to a file,
+    filename is the name of the file which to save
+    protocol is the protocol to use for pickling (default is the highest version).
+    """
+
+
+    fileout = open(filename, 'w')
+
+    cPickle.dump(objct, fileout,protocol)
+    fileout.close()
+    
+    return
+
+def readPickle(filename):
+    """
+    Reads a pickled object from a file.
+    Usage: objct = readPickle(filename)
+    filename is the name of the file from which to read the pickled object.
+    Returns the unpickled object.
+    """
+
+    filein = open(filename,'r')
+    objct = cPickle.load(filein)
+    filein.close()
+
+    return objct
