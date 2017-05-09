@@ -88,8 +88,8 @@ if (contProc):
             ta = time.time()
 
             #adjust accordingly depending on data source
-            data, inttime, hdr = wifisIO.readRampFromFolder(filename)
-            #data, inttime, hdr = wifisIO.readRampFromAsciiList(filename)
+            #data, inttime, hdr = wifisIO.readRampFromFolder(filename)
+            data, inttime, hdr = wifisIO.readRampFromAsciiList(filename)
 
             #data, inttime, hdr = wifisIO.readRampFromFile(filename)
             
@@ -143,7 +143,7 @@ if (contProc):
             else:
                 print('Reading non-linearity coefficient file')
                 nlCoeff = wifisIO.readImgsFromFile(savename+'_NLCoeff.fits')[0]
-                zpntImg, rampImg = wifisIO.readImgsFromFile(savename+'_polyCoeff.fits')[0:1]
+                zpntImg, rampImg = wifisIO.readImgsFromFile(savename+'_polyCoeff.fits')[0]
                 
             nlCoeffLst.append(nlCoeff)
             zpntLst.append(zpntImg)
@@ -174,6 +174,11 @@ if (contProc):
 else:
     print('No processing necessary')
 
+
+
+print('EXITING SCRIPT, BAD PIXEL IDENTIFICATION CURRENTLY A WORK IN PROGRESS')
+exit()
+
 #check if analysis of NL coefficients needs to be done
 if(os.path.exists('processed/bad_pixel_mask.fits')):
     cont = wifisIO.userInput('bad pixel mask already exists, do you want to update, replace, skip? ("update"/"replace"/anything else to skip)')
@@ -185,6 +190,7 @@ if(os.path.exists('processed/bad_pixel_mask.fits')):
 else:
     contAnalysis = True
     cont = 'replace'
+
 
 
 
