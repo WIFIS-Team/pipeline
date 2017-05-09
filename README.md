@@ -6,6 +6,8 @@ NumPy	>= 1.11.2
 SciPy 	>= 0.18.0
 pyopencl - for OpenCL accelerated tasks - >= 2015.2
 matplotlib - for plotting >= 1.5.2
+cPickle >= 2.3
+
 The versions provide the release for which the pipeline was tested on. Your mileage may very with earlier versions.
 
 Currently, the following must be copied/linked to the directory where to be run:
