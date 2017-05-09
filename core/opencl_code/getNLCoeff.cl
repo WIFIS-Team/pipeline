@@ -1,6 +1,6 @@
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
 
-__kernel void lsfit(const unsigned int nx, const unsigned int nt, __global float* data, __global float* a0,__global float* a1, __global float* a2, global float* a3, __global unsigned int* sat)
+__kernel void lsfit(const unsigned int nx, const unsigned int nt, __global float* data, __global float* a0,__global float* a1, __global float* a2, global float* a3, __global unsigned int* sat, __global float* zpnt, __global float* ramp)
 {
 // nx is size of 2nd dimension
 // nt is size of 3rd dimension
@@ -178,6 +178,9 @@ __kernel void lsfit(const unsigned int nx, const unsigned int nt, __global float
      pcoef1 = pcoef1 + b21*term1 + b22*term2 + b23*term3 + b24*term4;
      pcoef2 = pcoef2 + b31*term1 + b32*term2 + b33*term3 + b34*term4;
      pcoef3 = pcoef3 + b41*term1 + b42*term2 + b43*term3 + b44*term4;
+
+     zpnt[pos2d] = pcoef0;
+     ramp[pos2d] = pcoef1;
 
      //Up to now we have a polynomial solution to the non-linearity ramp
      //Now we want to repeat this process to determine the non-linearity correction coefficients
