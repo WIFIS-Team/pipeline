@@ -122,8 +122,8 @@ def getNLCorCL(data, satFrame, nSplit):
             np.copyto(nlCoeff[:,n*nx:(n+1)*nx,1],a1_array)
             np.copyto(nlCoeff[:,n*nx:(n+1)*nx,2],a2_array)
             np.copyto(nlCoeff[:,n*nx:(n+1)*nx,3],a3_array)
-            np.copyto(zpntImg[:,n*nx:(n+1)*nx,2],zpnt_array)
-            np.copyto(rampImg[:,n*nx:(n+1)*nx,2],ramp_array)            
+            np.copyto(zpntImg[:,n*nx:(n+1)*nx],zpnt_array)
+            np.copyto(rampImg[:,n*nx:(n+1)*nx],ramp_array)            
     else:
         #set temporary arrays
         
