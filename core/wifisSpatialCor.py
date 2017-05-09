@@ -621,7 +621,7 @@ def extendTraceAll(traceLst, extSlices, zeroTraces,space=5.,method='linear', ncp
 
     return interpLst
 
-def traceZeroPointAll(zeroSlices, nbin=2,winRng=31,smooth=5,bright=False,MP=True, plot=False, mxChange=5, ncpus=None):
+def traceWireFrameAll(zeroSlices, nbin=2,winRng=31,smooth=5,bright=False,MP=True, plot=False, mxChange=5, ncpus=None):
     """
     Routine used to determine/trace zero-point images (e.g. wireframe) of each slice
     Usage: cent = traceZeroPointAll(zeroSlices, nbin=2, winRng=31, smooth=5, bright=False, MP=True, plot=False, mxChange=5, ncpus=None)
@@ -659,7 +659,7 @@ def traceZeroPointAll(zeroSlices, nbin=2,winRng=31,smooth=5,bright=False,MP=True
             
     return cent
 
-def traceZeroPointSlice(input):
+def traceWireFrameSlice(input):
     """
     Routine used to determine/trace zero-point image (e.g. wireframe) of a single slice
     Usage: centSmth = traceZeroPointSlice(input), where input is a list containing: 
@@ -728,11 +728,18 @@ def traceZeroPointSlice(input):
 
         if (xrng.shape[0] > 0):
             yrng = y[xrng]
-            fit = gaussFit(xrng, yrng, plot=plot)
 
-            if (fit[2] >= xrng[0] and fit[2] <= xrng[-1]):
-                cent[m2]= fit[2]
-     
+            #remove NaNs
+            whrFinite = np.where(np.isfinite(yrng))[0]
+            if len(whrFinite)>0:
+                xrng = xrng[whrFinite]
+                yrng = yrng[whrFinite]
+                
+                fit = gaussFit(xrng, yrng, plot=plot)
+                
+                if (fit[2] >= xrng[0] and fit[2] <= xrng[-1]):
+                    cent[m2]= fit[2]
+
     #now go through rest of pixels to find centre as well
     #first work backwards from starting position
 
@@ -763,15 +770,23 @@ def traceZeroPointSlice(input):
         
             if (xrng.shape[0] > 0):
                 yrng = y[xrng]
-        
-                try:
-                    fit = gaussFit(xrng, yrng, plot=plot)
 
-                    if (fit[2] >= xrng[0] and fit[2] <= xrng[-1]):
-                        cent[i] = fit[2]
+                whrFinite = np.where(np.isfinite(yrng))[0]
+
+                if len(whrFinite)>1:
+
+                    xrng = xrng[whrFinite]
+                    yrng = yrng[whrFinite]
+                    
+                    try:
+                        fit = gaussFit(xrng, yrng, plot=plot)
+
+                        if (fit[2] >= xrng[0] and fit[2] <= xrng[-1]):
+                            cent[i] = fit[2]
                         
-                except (RuntimeError):
-                    pass
+                    except (RuntimeError):
+                        pass
+            
                  
     #now work forwards
     mid = midStrt
@@ -847,3 +862,170 @@ def buildWidthMap(traceLst, widthLst, slicesLst):
         vals = np.array(vals)
         mapLst.append(griddata(points, vals, (gY, gX), method='linear'))
     return mapLst
+
+def traceCentreFlatAll(flatSlices, cutoff=0.5,limSmth=10,MP=True, plot=False, ncpus=None):
+    """
+    """
+
+    if (MP):
+        if (ncpus == None):
+            ncpus =mp.cpu_count()
+        pool = mp.Pool(ncpus)
+
+        #build input list
+        lst = []
+        for i in range(len(flatSlices)):
+            lst.append([flatSlices[i],cutoff,limSmth,plot])
+            
+        cent = pool.map(traceCentreFlatSlice, lst)
+        pool.close()
+        
+    else:
+    
+        cent = []
+
+        for i in range(len(flatSlices)):
+            cent.append(traceCentreFlatSlice([flatSlices[i],cutoff, limSmth,plot]))
+            
+    return cent
+
+def traceCentreFlatSlice(input):
+    """
+    """
+
+    #rename input
+    flatSlice = input[0]
+    cutoff = input[1]
+    limSmth = input[2]
+    plot = input[3]
+
+    centre = np.empty(flatSlice.shape[1])
+    centre[:] = np.nan
+    
+    for i in range(flatSlice.shape[1]):
+    
+        #if no threshold is given, use derivatives to identify limits
+        #else, use given threshold
+
+        ytmp = flatSlice[:,i]
+        xtmp = np.arange(flatSlice.shape[0])
+    
+        if cutoff is None:
+            #use gradient to define cutoff
+
+            #search for edges in the first and last 20 useable pixels
+            whr = np.where(np.isfinite(ytmp))[0]
+            if len(whr) > 50:
+                x1 = xtmp[whr[:50]]
+                y1 = ytmp[whr[:50]]
+                x2 = xtmp[whr[-50:]]
+                y2 = ytmp[whr[-50:]]
+            else:
+                x1 = xtmp[whr]
+                x2 = xtmp[whr]
+                y1 = ytmp[whr]
+                y2 = ytmp[whr]
+        
+            #find edges
+            g1 = np.abs(np.gradient(y1))
+            g2 = np.abs(np.gradient(y2))
+
+            m1 = x1[np.nanargmax(g1)]
+            m2 = x2[np.nanargmax(g2)]
+
+        else:
+            #smooth spectrum first to avoid hot pixels, when determining the cutoff threshold
+            gKern = conv.Gaussian1DKernel(10)
+            ysmth = conv.convolve(ytmp, gKern, boundary='extend')
+            yout = ytmp/np.nanmax(ysmth)
+
+            whr = np.where(np.isfinite(yout))[0]
+            if len(whr) > 50:
+                x1 = xtmp[whr[:50]]
+                y1 = yout[whr[:50]]
+                x2 = xtmp[whr[-50:]]
+                y2 = yout[whr[-50:]]
+            else:
+                x1 = xtmp[whr]
+                x2 = xtmp[whr]
+                y1 = yout[whr]
+                y2 = yout[whr]
+
+            whr1 = np.where(y1 < cutoff)[0]
+            if (len(whr1)>0):
+                #good pixel is last bad pixel + 1
+                m1 = np.clip(x1[whr1[-1]]+1, 0, ytmp.shape[0])
+            else:
+                m1 = np.clip(x1[0]-1,0, ytmp.shape[0])
+                
+            whr2 = np.where(y2 < cutoff)[0]
+            if (len(whr2)>0):
+                #good pixel is first bad pixel -1
+                m2 = np.clip(x2[whr2[0]]-1, 0, ytmp.shape[0])
+            else:
+                m2 = np.clip(x2[-1]+1,0,ytmp.shape[0])
+                
+        centre[i] = (m1+m2)/2.
+    
+    gKern = conv.Gaussian1DKernel(limSmth)
+    centSmth = conv.convolve(centre, gKern, boundary='extend')
+
+    if (plot):
+        plt.clf()
+        plt.imshow(flatSlice, aspect='auto')
+        #plt.plot(np.arange(flatSlice.shape[1]), centre)
+        plt.plot(np.arange(flatSlice.shape[1]), centSmth, linewidth=2)
+        plt.show()
+
+    return centSmth
+
+def polyFitRonchiTrace(trace, goodReg):
+    """
+    """
+
+    polyTrace = np.empty(trace.shape)
+    polyTrace[:] = np.nan
+
+    x = np.arange(trace.shape[1])
+    xFit =[]
+
+    if (len(goodReg)>1):
+        #assume different pixels to use for each trace
+        for reg in goodReg:
+            #assume all regions are defined in pairs
+            xTmp = np.asarray([])
+            
+            for j in range(0,len(reg),2):
+                xTmp = np.append(xTmp,x[np.logical_and(x>=reg[j],x<=reg[j+1])])
+            xFit.append(xTmp)
+    else:
+        reg = goodReg[0]
+        
+        for i in range(trace.shape[0]):
+            xTmp = np.asarray([])
+            
+            for j in range(0,len(goodReg),2):
+                xTmp = np.append(xTmp,x[np.logical_and(x>=reg[j],x<=reg[j+1])])
+            xFit.append(xTmp)
+
+    #now carry out the fits
+    for j in range(trace.shape[0]):
+        rng = xFit[j].astype('int')
+        fitRng = np.where(np.isfinite(trace[j,rng]))[0]
+        xfit = x[rng[fitRng]]
+        yfit = trace[j,rng[fitRng]]
+
+        pcoef = np.polyfit(xfit,yfit,3)
+        poly = np.poly1d(pcoef)
+
+        if (xfit.max()-xfit.min() < 1000):
+            xTmp = np.arange(xfit.min(), xfit.max()+1)
+            polyTrace[j,xTmp] = poly(xTmp)
+        else:
+            polyTrace[j,:] = poly(x)
+
+
+    return polyTrace
+
+
+
