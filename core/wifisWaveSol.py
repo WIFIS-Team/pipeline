@@ -142,7 +142,7 @@ def getSolQuick(input):
     #use this offset to determine window range and list of lines to use
     #base on provided dispersion solution from template, which is expected to be close enough
 
-    if (np.isfinite(templateSol[0])):
+    if (np.all(np.isfinite(templateSol))):
         atlasPix = templateSol[0] + pixOffset
 
         for i in range(1,len(templateSol)):
@@ -151,8 +151,13 @@ def getSolQuick(input):
         #atlasPix = (atlas[:,0]-templateSol[0])/templateSol[1] + pixOffset #the linear case where the f(pixels) -> lambda
 
         #exclude NaNs
-        lngth = np.max(np.where(np.isfinite(yRow)))
+        whrFinite = np.where(np.isfinite(yRow))[0]
 
+        if len(whrFinite)>1:
+            lngth = np.max(whrFinite)
+        else:
+            lngth = 0
+            
         if (lngth>0):
             whr = np.where(np.logical_and(atlasPix >0,atlasPix < lngth))[0]
             if (len(whr)>0):
@@ -342,7 +347,7 @@ def getSolQuick(input):
         return np.repeat(np.nan,mxorder+1), [],[], [],np.nan, np.repeat(np.nan,mxorder+1)
     
 
-def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSolution, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None, allowLower=False, sigmaClip=2., lngthConstraint=False):
+def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None, allowLower=False, sigmaClip=2., lngthConstraint=False):
     """
     Computes dispersion solution for each set of pixels along the dispersion axis in the provided image slices.
     Usage: output = getWaveSol(dataSlices, template, mxorder, prevSolution, winRng, mxCcor, weights, buildSol, ncpus, allowLower, sigmaClip, lngthConstraint)
@@ -362,8 +367,6 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSolution, winRng=
 
     #read in line atlas 
     bestLines = wifisIO.readTable(atlas)
-
-    #remove all NaNs to avoid computation issues
 
     dataLst = []
     tmpLst = []
@@ -388,11 +391,56 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSolution, winRng=
     for i in range(len(dataLst)):
         if (templateSlices[i].ndim >1):
             for j in range(dataLst[i].shape[0]):
-                lst.append([dataLst[i][j,:],tmpLst[i][j,:], bestLines, mxorder,prevSolution[i][j],winRng, mxCcor,weights, False, buildSol,allowLower,sigmaClip,lngthConstraint])
-                
+
+                ##check for NaN solutions and exchange with closest non-NaN solution
+                if np.any(~np.isfinite(prevSol[i][j])):
+
+                    #search for closest solution on left
+                    for lowJ in range(j-1,-1,-1):
+                        if (np.all(np.isfinite(prevSol[i][lowJ]))):
+                            lowSol = prevSol[i][lowJ]
+                            lowTemp = tmpLst[i][lowJ,:]
+                            break
+
+                    #search for closest solution on right
+                    for highJ in range(j+1,dataLst[i].shape[0]):
+                        if (np.all(np.isfinite(prevSol[i][highJ]))):
+                            highSol = prevSol[i][highJ]
+                            highTemp = tmpLst[i][highJ,:]
+                            break
+
+                    #just adopt the solution that is closest
+                    if 'lowSol' in locals():
+                        if 'highSol' in locals():
+                            closestJ = np.argmin([j-lowJ, highJ-j])
+                            print(closestJ)
+                            tmpSol = [lowSol, highSol][closestJ]
+                            tmpTemp =[lowTemp, highTemp][closestJ]
+                            del lowSol
+                            del highSol
+                        else:
+                            print(lowJ)
+                            tmpSol = lowSol
+                            tmpTemp = lowTemp
+                            del lowSol
+                    elif 'highSol' in locals():
+                        print(highJ)
+                        tmpSol = highSol
+                        tmpTemp = highTemp
+                        del highSol
+
+                    else:
+                        tmpSol = prevSol[i][j]
+                        tmpTemp = tmpLst[i][j,:]
+                else:
+                    tmpSol = prevSol[i][j]
+                    tmpTemp = tmpLst[i][j,:]
+                        
+                lst.append([dataLst[i][j,:],tmpTemp, bestLines, mxorder,tmpSol,winRng, mxCcor,weights, False, buildSol,allowLower,sigmaClip,lngthConstraint])
+               
         else:
             for j in range(dataLst[i].shape[0]):
-                lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSolution[i],winRng, mxCcor,weights, False, buildSol, allowLower, sigmaClip,lngthConstraint])
+                lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, False, buildSol, allowLower, sigmaClip,lngthConstraint])
 
     #setup multiprocessing routines
     if (ncpus == None):
@@ -429,7 +477,7 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSolution, winRng=
             pixsubLst.append(result[j+strt][5])
 
         strt += dataLst[i].shape[0]
-        dispSolLst.append(np.array(dsubLst))
+        dispSolLst.append(dsubLst)
         fwhmLst.append(fsubLst)
         pixCentLst.append(psubLst)
         waveCentLst.append(wsubLst)
@@ -455,7 +503,7 @@ def buildWaveMap(dispSolLst, npts):
         waveMap = np.zeros((len(dispSol),npts),dtype='float32')
         
         #populate map with solution
-        for i in range(dispSol.shape[0]):
+        for i in range(len(dispSol)):
             wave = 0.
             for j in range(dispSol[i].shape[0]):
                 wave += dispSol[i][j]*x**j
@@ -483,7 +531,8 @@ def buildFWHMMap(pixCentLst,fwhmLst,npts):
         cent = pixCentLst[i]
     
         #initialize fwhm map array
-        fwhmMap = np.zeros((len(fwhm),npts),dtype='float32')
+        fwhmMap = np.empty((len(fwhm),npts),dtype='float32')
+        fwhmMap[:] = np.nan
     
         for j in range(len(fwhm)):
             y = fwhm[j]
