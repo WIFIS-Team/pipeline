@@ -63,8 +63,8 @@ if not (os.path.exists(nlFile) and os.path.exists(satFile) and os.path.exists(li
 wifisIO.createDir('processed')
 
 #open calibration files needed for future processing
-distSlices = wifisIO.readImgsFromFile(distMapFile)[0]
-waveSlices = wifisIO.readImgsFromFile(waveMapfile)[0]
+distSlices = wifisIO.readImgsFromFile(distMapFile)[0][0:17]
+waveSlices = wifisIO.readImgsFromFile(waveMapfile)[0][0:17]
 limits = wifisIO.readImgsFromFile(limitsFile)[0]
 
 #check if grid properties are known, if not, create them
@@ -72,14 +72,14 @@ if ((not os.path.exists(spatGridPropsFile)) or (not os.path.exists(waveGridProps
 
     #open master flat field slices to determine trim limits of distortion corrected image
     if (os.path.exists('processed/master_flat_slices.fits')):
-        flatSlices, sigmaFlat = wifisIO.readImgsFromFile('processed/master_flat_slices.fits')[0]
+        flatSlices = wifisIO.readImgsFromFile('processed/master_flat_slices.fits')[0][0:17]
 
         if (os.path.exists('processed/master_flat_slices_distCor.fits')):
             flatCor = wifisIO.readImgsFromFile('processed/master_flat_slices_distCor.fits')
         else:
             #distortion correct the calibration slices
             flatCor = createCube.distCorAll(flatSlices, distSlices)
-            wifisIO.writeFits('processed/master_flat_slices_distCor.fits')
+            wifisIO.writeFits(flatCor,'processed/master_flat_slices_distCor.fits')
             
         #get trim limits of distortion corrected image
         trimLims = slices.getTrimLimsAll(flatCor,0.75, plot=False)
@@ -91,7 +91,7 @@ if ((not os.path.exists(spatGridPropsFile)) or (not os.path.exists(waveGridProps
             else:
                 distCor = createCube.distCorAll(distSlices, distSlices)
                 distTrim = slices.trimSliceAll(distCor, trimLims)
-                wifisIO.writeFits('processed/distMap_distCorTrim.fits')
+                wifisIO.writeFits(distTrim,'processed/distMap_distCorTrim.fits')
 
             if (os.path.exists(spatGridPropsFile)):
                 spatGridProps = wifisIO.readTable(spatGridPropsFile)
@@ -101,15 +101,15 @@ if ((not os.path.exists(spatGridPropsFile)) or (not os.path.exists(waveGridProps
                 np.savetxt('processed/spatGridProps.dat', spatGridProps)
         else:
             spatGridProps = wifisIO.readTable(spatGridPropsFile)
-            distTrim = wifisIO.readImgsFromFile(distTrimFilee)[0]
+            distTrim = wifisIO.readImgsFromFile(distTrimFile)[0][0:17]
             
         if (not (os.path.exists(waveGridPropsFile)) or (not os.path.exists(waveTrimFile))):
             if (os.path.exists(waveTrimFile)):
-                waveTrim = wifisIO.readImgsFromFile(waveTrimFile)[0]
+                waveTrim = wifisIO.readImgsFromFile(waveTrimFile)[0][0:17]
             else:
                 waveCor = createCube.distCorAll(waveSlices, distSlices)
                 waveTrim = slices.trimSliceAll(wavecor, trimLims)
-                wifisIO.writeFits('processed/waveMap_distCorTrim.fits')
+                wifisIO.writeFits(waveTrim,'processed/waveMap_distCorTrim.fits')
 
             if (os.path.exists(waveGridPropsFile)):
                 waveGridProps = wifisIO.readTable(waveGridPropsFile)
@@ -119,7 +119,7 @@ if ((not os.path.exists(spatGridPropsFile)) or (not os.path.exists(waveGridProps
                 np.savetxt('processed/waveGridProps.dat', waveGridProps)
         else:
             waveGridProps = wifisIO.readTable(waveGridPropsFile)
-            waveTrim = wifisIO.readImgsFromFile(waveTrimFile)
+            waveTrim = wifisIO.readImgsFromFile(waveTrimFile)[0:17]
     else:
         print ('*** ERROR: Cannot continue, file master flat field slices file does not exist. Please process a flat field calibration sequence or provide the necessary file ***')
         raise SystemExit('*** Missing required calibration files, exiting ***')
@@ -127,8 +127,8 @@ if ((not os.path.exists(spatGridPropsFile)) or (not os.path.exists(waveGridProps
 else:
     spatGridProps = wifisIO.readTable(spatGridPropsFile)
     waveGridProps = wifisIO.readTable(waveGridPropsFile)
-    distTrim = wifisIO.readImgsFromFile(distTrimFilee)[0]
-    waveTrim = wifisIO.readImgsFromFile(waveTrimFile)
+    distTrim = wifisIO.readImgsFromFile(distTrimFilee)[0][0:17]
+    waveTrim = wifisIO.readImgsFromFile(waveTrimFile)[0][0:17]
 
 #read file list
 lst= wifisIO.readAsciiList(fileList)
@@ -142,7 +142,7 @@ for folder in lst:
     savename = 'processed/'+folder
     
     #first check if image cube already exists
-    if(os.path.exists(savename+'_calObs_cube.fits')):
+    if(os.path.exists(savename+'_obs_cube.fits')):
         cont = wifisIO.userInput('Image cube already exists for folder' + folder +', do you want to continue processing (y/n)?')
 
         if (cont.lower() == 'y'):
@@ -154,7 +154,7 @@ for folder in lst:
     
     if (contProc):
         #check if processed ramp already exists
-        if (os.path.exists(savename+'_calObs.fits')):
+        if (os.path.exists(savename+'_obs.fits')):
             cont = wifisIO.userInput('Processed image already exists for folder' + folder +', do you want to continue processing (y/n)?')
 
             if (cont.lower() == 'y'):
@@ -186,14 +186,14 @@ for folder in lst:
             #******************************************************************************
             #find if any pixels are saturated to avoid use in future calculations
 
-            satCounts = wifisIO.readImgFromFile(satFile)[0]
+            satCounts = wifisIO.readImgsFromFile(satFile)[0]
             satFrame = satInfo.getSatFrameCL(data, satCounts,32)
             
             #******************************************************************************
             #apply non-linearity correction
             ta = time.time()
             print("Correcting for non-linearity")
-            nlCoeff = wifisIO.readImgFromFile(nlFile)[0]
+            nlCoeff = wifisIO.readImgsFromFile(nlFile)[0]
             NLCor.applyNLCorCL(data, nlCoeff, 32)
             print("time to apply non-linearity corrections ", time.time()-ta, " seconds")
         
@@ -204,17 +204,20 @@ for folder in lst:
 
             #get uncertainties for each pixel
             sigma = wifisUncertainties.getUTR(inttime, fluxImg, satFrame)
+
+            #******************************************************************************
+            #deal with bad pixels here
             
             #write image to a file
             
             #add additional header information here
 
             #save initial ramp
-            wifisIO.writeFits([fluxImg, sigma, satFrame], savename+'_calObs.fits', hdr=hdr)
+            wifisIO.writeFits([fluxImg, sigma, satFrame], savename+'_obs.fits', hdr=hdr)
  
         else:
             #read processed ramp from file
-            fluxImg, sigma, satFrame = wifisIO.readImgsFromFile(savename+'_calObs.fits')[0]
+            fluxImg, sigma, satFrame = wifisIO.readImgsFromFile(savename+'_obs.fits')[0]
             
         #Correct for dark current
         #Identify appropriate dark image for subtraction
@@ -229,7 +232,7 @@ for folder in lst:
             #modify header to include comment about dark subtraction
                 
             #save dark subtracted image
-            wifisIO.writeFits([fluxImg, sigma, satFrame], savename+'_calObs_darkCor.fits', hdr=hdr)
+            wifisIO.writeFits([fluxImg, sigma, satFrame], savename+'_obs_darkCor.fits', hdr=hdr)
 
         else:
             cont = wifisIO.userInput('No corresponding master dark image could be found, do you want to proceed without dark subtraction (y/n)?')
@@ -244,7 +247,10 @@ for folder in lst:
         #flat-field correct the slices
         if not 'flatSlices' in locals():
             if (os.path.exists('processed/master_flat_slices.fits')):
-                flatSlices, sigmaFlat, satFlat = wifisIO.readImgsFromFile()[0][0,1] #get the first two extensions
+                #get the first two extensions
+                tmp = = wifisIO.readImgsFromFile()[0]
+                flatSlices = tmp[0:17]
+                sigmaFlat = tmp[18:35]
             else:
                 cont = wifisIO.userInput('No corresponding master dark image could be found, do you want to proceed without dark subtraction (y/n)?')
             if (cont.lower() == 'n'):
@@ -267,10 +273,10 @@ for folder in lst:
         #modify header to include comment about flat-field correction
 
         #save slices
-        wifisIO.writeFits([dataSlices, sigmaSlices, satSlices], savename+'_calObs_slices.fits', hdr=hdr)
+        wifisIO.writeFits(dataSlices+sigmaSlices+satSlices, savename+'_obs_slices.fits', hdr=hdr)
         
         #check if gridded slices already exists, if not, create them
-        if (os.path.exists(savename+'_calObs_grid_slices.fits')):
+        if (os.path.exists(savename+'_obs_grid_slices.fits')):
             cont = wifisIO.userInput('Gridded image slices already exists for folder' + folder +', do you want to continue processing (y/n)?')
 
             if (cont.lower() == 'y'):
@@ -286,15 +292,15 @@ for folder in lst:
             dataGrid = createCube.mkWaveSpatGridAll(dataSlices,waveTrim,distTrim, waveGridProps, spatGridProps)
             
             #save gridded data image
-            wifisIO.writeFits(dataGrid, savename+'_calObs_grid_slices.fits')
+            wifisIO.writeFits(dataGrid, savename+'_obs_grid_slices.fits')
         else:
-            dataGrid = wifisIO.readImgsFromFile(savename+'_calObs_grid_slices.fits')[0]
+            dataGrid = wifisIO.readImgsFromFile(savename+'_obs_grid_slices.fits')[0]
             
         #create data cube!
 
         dataCube = createCube.mkCube(dataGrid, ndiv=1)
 
         #save data cube
-        wifisIO.writeFits(dataCube, savename+'_calObs_cube.fits')
+        wifisIO.writeFits(dataCube, savename+'_obs_cube.fits')
 
                 
