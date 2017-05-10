@@ -70,7 +70,7 @@ iTime = iTime1 - iTime0
 
 masterSave = 'processed/master_dark_I'+str(iTime)+'.fits'
 
-#first check master flat and limits exists
+#first check if master dark exists
 if(os.path.exists(masterSave)):
     cont = wifisIO.userInput('Master dark file already exists for integration time (s)' + str(iTime)+', do you want to replace (y/n)?')
     if (cont.lower() == 'y'):
@@ -97,7 +97,7 @@ if (contProc):
             cont = wifisIO.userInput('Processed dark file already exists for ' +folder+', do you want to continue processing (y/n)?')
             if (cont.lower() == 'n'):
                 print('Reading image'+savename+'_dark.fits instead')
-                fluxImg = wifisIO.readImgFromFile(savename+'_dark.fits')
+                fluxImg = wifisIO.readImgsFromFile(savename+'_dark.fits')
                 contProc2 = False
             else:
                 contProc2 = True
@@ -107,7 +107,7 @@ if (contProc):
         if (contProc2):
             #Read in data
             ta = time.time()
-            data, inttime, hdr = wifisIO.readImgsFromFolder(folder)
+            data, inttime, hdr = wifisIO.readRampFromFolder(folder)
             print("time to read all files took", time.time()-ta, " seconds")
         
             nFrames = inttime.shape[0]
@@ -120,13 +120,13 @@ if (contProc):
             print("Subtracting reference pixel channel bias")
             refCor.channelCL(data, nFrames, 32)
             print("Subtracting reference pixel row bias")
-            refCor.rowCL(data, nFrames, 4,1) 
+            refCor.rowCL(data, nFrames, 4,5) 
             print("time to apply reference pixel corrections ", time.time()-ta, " seconds")
         
             #******************************************************************************
             #find if any pixels are saturated to avoid use in future calculations
         
-            satCounts = wifisIO.readImgFromFile(satFile)[0]
+            satCounts = wifisIO.readImgsFromFile(satFile)[0]
             satFrame = satInfo.getSatFrameCL(data, satCounts,32)
         
             #******************************************************************************
@@ -134,7 +134,7 @@ if (contProc):
             ta = time.time()
             print("Correcting for non-linearity")
         
-            nlCoeff = wifisIO.readImgFromFile(nlFile)[0]
+            nlCoeff = wifisIO.readImgsFromFile(nlFile)[0]
             NLCor.applyNLCorCL(data, nlCoeff, 32)
             print("time to apply non-linearity corrections ", time.time()-ta, " seconds")
         
@@ -150,12 +150,12 @@ if (contProc):
 
             #add additional header information here
         
-            wifisIO.writeImgSlices([fluxImg, sigma, satFrame], savename+'_dark.fits', hdr=hdr)
+            wifisIO.writeFits([fluxImg, sigma, satFrame], savename+'_dark.fits', hdr=hdr)
 
             out = 0
         else:
             #read in file instead
-            fluxImg, sigma, satFrame = wifisIO.readImgsFromFile(savename+'_dark.fits')[0:3]
+            fluxImg, sigma, satFrame = wifisIO.readImgsFromFile(savename+'_dark.fits')[0]
             
         procDark.append(fluxImg)
         procSigma.append(sigma)
@@ -172,6 +172,8 @@ if (contProc):
 
     #add/modify header information here
     hdr['INTTIME']=iTime
+
+    #save file
     wifisIO.writeFits([masterDark, masterSigma, masterSatFrame], masterSave)
 
     #extract any information of interest
