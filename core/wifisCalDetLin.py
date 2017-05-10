@@ -96,6 +96,14 @@ if (contProc):
             print("time to read all files took "+str(time.time()-ta) + " seconds")
 
             #**********************************************************************
+            #******************************************************************************
+            #Correct data for reference pixels
+            #ta = time.time()
+            #print("Subtracting reference pixel channel bias")
+            #refCor.channelCL(data, 32)
+            #print("Subtracting reference pixel row bias")
+            #refCor.rowCL(data, 4,5)
+            #print("time to apply reference pixel corrections ", time.time()-ta, " seconds")
             #**********************************************************************
 
             #Get saturation info
