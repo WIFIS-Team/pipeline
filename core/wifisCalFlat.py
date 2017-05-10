@@ -39,9 +39,9 @@ bpmFile = 'processed/bad_pixel_mask.fits'
 #first check if required input exists
 if not (os.path.exists(nlFile) and os.path.exists(satFile)):
     if not (os.path.exists(satFile)):
-        print ('*** ERROR: Cannot continue, file ' + satFile + ' does not exist. Please process the a detector linearity calibration sequence or provide the necessary file ***')
+        print ('*** ERROR: Cannot continue, file ' + satFile + ' does not exist. Please process a detector linearity calibration sequence or provide the necessary file ***')
     if not (os.path.exists(nlFile)):
-        print ('*** ERROR: Cannot continue, file ' + nlFile + ' does not exist. Please process the a detector linearity calibration sequence or provide the necessary file ***')
+        print ('*** ERROR: Cannot continue, file ' + nlFile + ' does not exist. Please process a detector linearity calibration sequence or provide the necessary file ***')
     raise SystemExit('*** Missing required calibration files, exiting ***')
 
 #create processed directory, in case it doesn't exist
@@ -61,7 +61,6 @@ procSatFrame = []
 
 #first check master flat and limits exists
 if(os.path.exists('processed/master_flat.fits') and os.path.exists('processed/master_flat_limits.fits') and os.path.exists('processed/master_flat_slices.fits')):
-
     cont = wifisIO.userInput('Master flat, slices and limits files already exists, do you want to continue processing (y/n)?')
 
     if (cont.lower() == 'y'):
