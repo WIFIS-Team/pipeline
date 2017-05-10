@@ -23,8 +23,8 @@ import wifisUncertainties
 import wifisBadPixels as badPixels
 import astropy.io.fits as fits
 
-os.environ['PYOPENCL_COMPILER_OUTPUT'] = '1' # Used to show compile errors for debugging, can be removed
-os.environ['PYOPENCL_CTX'] = ':1' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
+os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
+os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
 
 t0 = time.time()
 
@@ -146,7 +146,7 @@ if (contProc):
             out = 0
         else:
             #read in file instead
-            fluxImg,sigmaImg, satFrame = wifisReadImgsFromFile(savename+'_flat.fits')[0:3]
+            fluxImg,sigmaImg, satFrame = wifisIO.readImgsFromFile(savename+'_flat.fits')[0]
 
         procFlux.append(fluxImg)
         procSigma.append(sigmaImg)
@@ -169,8 +169,8 @@ if (contProc):
 
     #check for BPM and read, if exists
     if(os.path.exists(bpmFile)):
-        masterFlatCor = badPixels.corBadPixelsAll(masterFlat, BPM, dispAxis=1, mxRng=2, MP=True)
-        masterSigmaCor = badPixels.corBadPixelsAll(mastSigma, BPM, dispAxis=1, mxRng=2, MP=True, sigma=True)
+        masterFlatCor = badPixels.corBadPixelsAll(masterFlat, BPM, dispAxis=0, mxRng=2, MP=True)
+        masterSigmaCor = badPixels.corBadPixelsAll(mastSigma, BPM, dispAxis=0, mxRng=2, MP=True, sigma=True)
     else:
         masterFlatCor = masterFlat
         masterSigmaCor = masterSigma
@@ -179,22 +179,22 @@ if (contProc):
     #******************************************************************************
     
     #find limits of each slice
-    limits = slices.findLimits(masterFlatCor, dispAxis=1, winRng=51, imgSmth=5, limSmth=10)
+    limits = slices.findLimits(masterFlatCor, dispAxis=0, winRng=51, imgSmth=5, limSmth=10)
 
     #write limits to file
     wifisIO.writeFits(limits,'processed/master_flat_limits.fits')
 
     #now extract the individual slices
-    fluxSlices = slices.extSlices(masterFlatCor, limits, dispAxis=1)
+    fluxSlices = slices.extSlices(masterFlatCor, limits, dispAxis=0)
 
     #extract uncertainty slices
-    sigmaSlices = slices.extSlices(masterSigmaCor, limits, dispAxis=1)
+    sigmaSlices = slices.extSlices(masterSigmaCor, limits, dispAxis=0)
 
     #extract saturation slices
-    satSlices = slices.extSlices(masterSatFrame, limits, dispAxis=1)
+    satSlices = slices.extSlices(masterSatFrame, limits, dispAxis=0)
 
     #now get smoothed and normalized response function
-    masterRes = slices.getResponseAll(extSlices, 0, 0.1)
+    masterRes = slices.getResponseAll(fluxSlices, 0, 0.1)
     masterSig = slices.ffCorrectAll(sigmaSlices, masterRes)
         
     #write master image to file
