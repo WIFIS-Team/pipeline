@@ -193,7 +193,7 @@ def readRampFromAsciiList(filename, sort=True):
 
 def writeFits_old(data, filename, hdr=None):
     """
-    Write a data file to a FITS file.
+    Write a data file to a FITS file. 
     Usage writeFits(data, filename)
     data is the input data (can be more than 2 dimensions). Assumes data is stored as follows: [y-coordinates,x-coordinates,lamba-coordinates]
     filename is the name of the file to write the FITS file to.
@@ -392,6 +392,8 @@ def writeFits(data, filename, hdr=None, ask=True):
             if (hdr is not None):
                 if (type(hdr) is list):
                     allHDU.append(fits.ImageHDU(d, header=hdr[i]))
+                else:
+                    allHDU.append(fits.ImageHDU(d))
             else:
                 allHDU.append(fits.ImageHDU(d))
     else:
