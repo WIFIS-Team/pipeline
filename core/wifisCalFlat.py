@@ -30,18 +30,18 @@ t0 = time.time()
 
 #*****************************************************************************
 #******************************* Required input ******************************
-fileList = 'list' 
-nlFile = 'processed/master_detLin_NLCoeff.fits'        
-satFile = 'processed/master_detLin_satCounts.fits'
+fileList = 'flat.lst' 
+nlFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_NLCoeff.fits'        
+satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits'
 bpmFile = 'processed/bad_pixel_mask.fits'
 #*****************************************************************************
 
 #first check if required input exists
 if not (os.path.exists(nlFile) and os.path.exists(satFile)):
     if not (os.path.exists(satFile)):
-        print ('*** ERROR: Cannot continue, file ' + satFile + ' does not exist. Please process a detector linearity calibration sequence or provide the necessary file ***')
+        print ('*** ERROR: Cannot continue, file ' + satFile + ' does not exist. Please process the a detector linearity calibration sequence or provide the necessary file ***')
     if not (os.path.exists(nlFile)):
-        print ('*** ERROR: Cannot continue, file ' + nlFile + ' does not exist. Please process a detector linearity calibration sequence or provide the necessary file ***')
+        print ('*** ERROR: Cannot continue, file ' + nlFile + ' does not exist. Please process the a detector linearity calibration sequence or provide the necessary file ***')
     raise SystemExit('*** Missing required calibration files, exiting ***')
 
 #create processed directory, in case it doesn't exist
@@ -61,6 +61,7 @@ procSatFrame = []
 
 #first check master flat and limits exists
 if(os.path.exists('processed/master_flat.fits') and os.path.exists('processed/master_flat_limits.fits') and os.path.exists('processed/master_flat_slices.fits')):
+
     cont = wifisIO.userInput('Master flat, slices and limits files already exists, do you want to continue processing (y/n)?')
 
     if (cont.lower() == 'y'):
@@ -81,7 +82,7 @@ if (contProc):
             cont = wifisIO.userInput('Processed flat field file already exists for ' +folder+', do you want to continue processing (y/n)?')
             if (cont.lower() == 'n'):
                 print('Reading image'+savename+'_flat.fits instead')
-                 fluxImg, sigmaImg, satFrame= wifisIO.readRampFromFile(savename+'_flat.fits')
+                fluxImg, sigmaImg, satFrame= wifisIO.readImgsFromFile(savename+'_flat.fits')[0]
                 
                 contProc2 = False
             else:
@@ -94,10 +95,9 @@ if (contProc):
             ta = time.time()
             data, inttime, hdr = wifisIO.readRampFromFolder(folder)
             print("time to read all files took", time.time()-ta, " seconds")
-            
-            nFrames = inttime.shape[0]
-            nx = data.shape[1]
-            ny = data.shape[0]
+
+            #convert data to float32 for future processing
+            data = data.astype('float32')
             
             #******************************************************************************
             #Correct data for reference pixels
@@ -131,7 +131,7 @@ if (contProc):
             data = 0
             
             #get uncertainties for each pixel
-            sigmaImg = wifisUncertainties.getUTR(inttime, fluxImg, satFrame)
+            sigmaImg = wifisUncertainties.compUTR(inttime, fluxImg, satFrame)
             
             #write image to a file, saving saturation info as additional extension
 
@@ -140,7 +140,7 @@ if (contProc):
 
             #****************************************************************************
             
-            wifisIO.writeFits([fluxImg, sigma, satFrame], savename+'_flat.fits', hdr=hdr)
+            wifisIO.writeFits([fluxImg, sigmaImg, satFrame], savename+'_flat.fits', hdr=hdr)
             
             out = 0
         else:
@@ -197,10 +197,10 @@ if (contProc):
     masterSig = slices.ffCorrectAll(sigmaSlices, masterRes)
         
     #write master image to file
-    wifisIO.writeFits([masterFlatCor,masterSigmaCor, masterSatFrame],'processed/'+'master_flat.fits')
+    wifisIO.writeFits([masterFlatCor,masterSigmaCor, masterSatFrame],'processed/master_flat.fits')
 
     #write master image slices to file
-    wifisIO.writeFits([masterRes, masterSig, satSlices]
+    wifisIO.writeFits(masterRes + masterSig + satSlices,'processed/master_flat_slices.fits')
 else:
     print('No processing necessary')
     
