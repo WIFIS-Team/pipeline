@@ -166,7 +166,27 @@ def mkCube(corSlices, ndiv=1, MP=True, ncpus=None):
 
     tmpCube = np.empty((len(corSlices), corSlices[0].shape[0],corSlices[0].shape[1]))
     tmpCube[:] = np.nan
-    
+
+    #place slices in correct order!
+    tmpCube[0,:,:] = corSlices[16]
+    tmpCube[1,:,:] = corSlices[14]
+    tmpCube[2,:,:] = corSlices[12]
+    tmpCube[3,:,:] = corSlices[10]
+    tmpCube[4,:,:] = corSlices[8]
+    tmpCube[5,:,:] = corSlices[6]
+    tmpCube[6,:,:] = corSlices[4]
+    tmpCube[7,:,:] = corSlices[2]
+    tmpCube[8,:,:] = corSlices[0]
+    tmpCube[9,:,:] = corSlices[17]
+    tmpCube[10,:,:] = corSlices[15]
+    tmpCube[11,:,:] = corSlices[13]
+    tmpCube[12,:,:] = corSlices[11]
+    tmpCube[13,:,:] = corSlices[9]
+    tmpCube[14,:,:] = corSlices[7]
+    tmpCube[15,:,:] = corSlices[5]
+    tmpCube[16,:,:] = corSlices[3]
+    tmpCube[17,:,:] = corSlices[1]
+
     for i in range(tmpCube.shape[0]):
         tmpCube[i,:,:] = corSlices[i]
         
