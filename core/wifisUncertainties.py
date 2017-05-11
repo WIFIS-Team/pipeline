@@ -12,7 +12,7 @@ def compFowler(inttime, fluxImg, satFrame, gain = 1., ron=1.):
     ron = read out noise, in units of electrons
     """
 
-    DeltaT = inttime[-1] - inttime[int(inttime.shape[0]/2)-1] #integration time
+    deltaT = inttime[-1] - inttime[int(inttime.shape[0]/2)-1] #integration time
     dT = inttime[1]-inttime[0] # readout time per frame
     nReads = satFrame - int(data.shape[2]/2)
     eff_ron = np.sqrt(2)*ron/np.sqrt(nReads) #effect read noise, assuming no co-additions
@@ -36,7 +36,7 @@ def compUTR(inttime, fluxImg, satFrame, gain = 1., ron=1.):
     """
 
     dT = np.mean(np.gradient(inttime)) # mean readout time per frame
-    DeltaT = (satFrame - 1)*dT 
+    deltaT = (satFrame - 1)*dT 
     nReads = satFrame
     eff_ron = np.sqrt(2)*ron/np.sqrt(nReads) #effect read noise, assuming no co-additions
 
