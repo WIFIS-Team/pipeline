@@ -7,6 +7,10 @@ Tools to process a sequence of exposures to create a single image
 import numpy as np
 import matplotlib.pyplot as plt
 import pyopencl as cl
+import os
+
+path = os.path.dirname(__file__)
+clCodePath = path+'/opencl_code'
 
 def upTheRampCRRejectCL(intTime, data, satFrame, nSplit):
     """Routine to process a sequence of up-the-ramp exposures using OpenCL code with the ability to reject influence of non-saturated cosmic ray hits
@@ -33,7 +37,7 @@ def upTheRampCRRejectCL(intTime, data, satFrame, nSplit):
     ctx = cl.create_some_context(interactive=True)
     queue = cl.CommandQueue(ctx)
     
-    filename = 'opencl_code/compgradient.cl'
+    filename = clCodePath+'/compgradient.cl'
     f = open(filename, 'r')
     fstr = "".join(f.readlines())
     program = cl.Program(ctx, fstr).build()
@@ -108,7 +112,7 @@ def upTheRampCL(intTime, data, satFrame, nSplit):
     ctx = cl.create_some_context(interactive=True)
     queue = cl.CommandQueue(ctx)
     
-    filename = 'opencl_code/getlinfit.cl'
+    filename =  clCodePath+'/getlinfit.cl'
     f = open(filename, 'r')
     fstr = "".join(f.readlines())
     program = cl.Program(ctx, fstr).build()
@@ -242,7 +246,7 @@ def fowlerSamplingCL(intTime, data, satFrame, nSplit):
     ctx = cl.create_some_context(interactive=True)
     queue = cl.CommandQueue(ctx)
     
-    filename = 'opencl_code/getfowler.cl'
+    filename =  clCodePath+'/getfowler.cl'
     f = open(filename, 'r')
     fstr = "".join(f.readlines())
     program = cl.Program(ctx, fstr).build()
