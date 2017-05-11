@@ -25,7 +25,7 @@ def getNLCorNumpy(data, satFrame):
     nx = data.shape[1]
 
     #initialize the array
-    nlCoeff = np.zeros((ny,nx,4)) # holds the non-linearity coefficients
+    nlCoeff = np.zeros((ny,nx,4), dtype='float32') # holds the non-linearity coefficients
 
     # cycle through each pixel in the data array and determine non-linearity corrections
     for x in range(ny):
