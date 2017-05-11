@@ -7,6 +7,9 @@ tools to carry out the measurement and correction for non-linearity behaviour of
 import numpy as np
 import pyopencl as cl
 
+path = os.path.dirname(__file__)
+clCodePath = path+'/opencl_code'
+
 def getNLCorNumpy(data, satFrame):
     """
     Routine to determine non-linearity correction coefficients using built-in python methods
@@ -75,7 +78,7 @@ def getNLCorCL(data, satFrame, nSplit):
     queue = cl.CommandQueue(ctx)
 
     #read in OpenCL code
-    filename = 'opencl_code/getNLCoeff.cl'
+    filename = clCodePath+'/getNLCoeff.cl'
     f = open(filename, 'r')
     fstr = "".join(f.readlines())
     
@@ -184,7 +187,7 @@ def applyNLCorCL(data, nlCoeff, nSplit):
     queue = cl.CommandQueue(ctx)
 
     #read in OpenCL code
-    filename = 'opencl_code/applyNLCor.cl'
+    filename = clCodePath+'/applyNLCor.cl'
     f = open(filename, 'r')
     fstr = "".join(f.readlines())
 
