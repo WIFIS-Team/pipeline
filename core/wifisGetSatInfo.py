@@ -6,6 +6,10 @@ Tools to determine saturation information of a given data cube
 
 import numpy as np
 import pyopencl as cl
+import os
+
+path = os.path.dirname(__file__)
+clCodePath = path+'/opencl_code'
 
 def getSatInfo(data, thresh):
     """
@@ -115,7 +119,7 @@ def getSatCountsCL(data, thresh, nSplit):
     satCounts = np.zeros((ny,data.shape[1]), dtype='float32') # specifies saturation level
 
     #read OpenCL kernel code
-    filename = 'opencl_code/getsatlev.cl'
+    filename = clCodePath+'/getsatlev.cl'
     f = open(filename, 'r')
     fstr = "".join(f.readlines())
 
@@ -209,7 +213,7 @@ def getSatFrameCL(data,satCounts, nSplit):
     
     #First run code to determine maximum counts
     #read OpenCL kernel code
-    filename = 'opencl_code/getsatlev.cl'
+    filename = clCodePath+'/getsatlev.cl'
     f = open(filename, 'r')
     fstr = "".join(f.readlines())
 
