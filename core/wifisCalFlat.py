@@ -33,7 +33,7 @@ t0 = time.time()
 fileList = 'flat.lst' 
 nlFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_NLCoeff.fits'        
 satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits'
-bpmFile = 'processed/bad_pixel_mask.fits'
+bpmFile = 'bpm_noref.fits'
 #*****************************************************************************
 
 #first check if required input exists
@@ -156,7 +156,8 @@ if (contProc):
     #*************************************************************************************
     #*************************************************************************************
     #DONE PROCESSING INDIVIDUAL FLAT FIELD RAMPS, NOW CREATE MASTER IMAGES
-    
+
+    print('Median Combining images into master')
     #now combine all flatfield images into master flat, propagating uncertainties as needed
     masterFlat, masterSigma = wifisUncertainties.compMedian(np.array(procFlux), np.array(procSigma),axis=0)
 
@@ -164,19 +165,27 @@ if (contProc):
     masterSatFrame = np.median(np.array(procSatFrame), axis=0).astype('int')
     
     #******************************************************************************
+    #******************************************************************************#remove reference pixels
+    masterFlat = masterFlat[4:2044,4:2044]
+    masterSigma = masterSigma[4:2044,4:2044]
+    masterSatFrame = masterSatFrame[4:2044,4:2044]
+    
     # CORRECT BAD PIXELS
-
+    print('Correcting for bad pixels')
     #check for BPM and read, if exists
     if(os.path.exists(bpmFile)):
-        masterFlatCor = badPixels.corBadPixelsAll(masterFlat, BPM, dispAxis=0, mxRng=2, MP=True)
-        masterSigmaCor = badPixels.corBadPixelsAll(mastSigma, BPM, dispAxis=0, mxRng=2, MP=True, sigma=True)
+        BPM = wifisIO.readImgsFromFile(bpmFile)[0]
+        
+        masterFlatCor = badPixels.corBadPixelsAll(masterFlat, BPM, dispAxis=0, mxRng=15, MP=True)
+        masterSigmaCor = badPixels.corBadPixelsAll(masterSigma, BPM, dispAxis=0, mxRng=15, MP=True, sigma=True)
     else:
         masterFlatCor = masterFlat
         masterSigmaCor = masterSigma
         
         print('*** WARNING: No bad pixel mask provided ***')
     #******************************************************************************
-    
+
+    print('Finding slice limits and extracting slices')
     #find limits of each slice
     limits = slices.findLimits(masterFlatCor, dispAxis=0, winRng=51, imgSmth=5, limSmth=10)
 
@@ -192,6 +201,7 @@ if (contProc):
     #extract saturation slices
     satSlices = slices.extSlices(masterSatFrame, limits, dispAxis=0)
 
+    print('Getting normalized flat field')
     #now get smoothed and normalized response function
     masterRes = slices.getResponseAll(fluxSlices, 0, 0.1)
     masterSig = slices.ffCorrectAll(sigmaSlices, masterRes)
