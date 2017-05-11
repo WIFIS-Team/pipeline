@@ -134,7 +134,7 @@ def extSlices(data, limits, dispAxis=0):
         mn = np.floor(np.min(limits[i,:])).astype('int')
         mx = np.ceil(np.max(limits[i+1,:])).astype('int')
 
-        slice = np.empty((mx-mn,n))
+        slice = np.empty((mx-mn,n), dtype=data.dtype)
         slice[:] = np.nan
         
         for j in range(mn,mx):
@@ -412,7 +412,7 @@ def trimSlice(input):
     
     #create output array
 
-    out = np.empty((ny,slc.shape[1]))
+    out = np.empty((ny,slc.shape[1]), dtype=slc.dtype)
     out[:] = np.nan
     np.copyto(out, slc[ylim[0]:ylim[1]+1,:])
 
