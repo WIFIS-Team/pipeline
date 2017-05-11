@@ -378,17 +378,23 @@ def getTrimLimsSlice(input):
         #y2 = np.argmax(d1[whr[-1]:])+whr[-1]
         y1 = np.nanargmax(d1[0:n/2])
         y2 = np.nanargmax(d1[n/2:])+n/2
-
+        ysmth = ytmp
     else:
+        ytmp = np.nanmedian(slc, axis=1)
 
-        ytmp = np.nansum(slc, axis=1)/float(slc.shape[1])
-        whr = np.where(ytmp >= threshold*np.nanmax(ytmp))[0]
+        #smooth spectrum first to avoid hot/cold pixels
+        gKern = conv.Gaussian1DKernel(10)
+        ysmth = conv.convolve(ytmp, gKern, boundary='extend')
+        yout = ytmp/np.nanmax(ysmth)
+       
+        whr = np.where(yout >= threshold)[0]
         y1 = whr[0]
         y2 = whr[-1]
 
     if(plot):
         plt.figure()
         plt.plot(ytmp)
+        plt.plot(ysmth, '--')
         plt.plot([y1,y1],[np.nanmin(ytmp),np.nanmax(ytmp)],'r--')
         plt.plot([y2,y2],[np.nanmin(ytmp),np.nanmax(ytmp)],'r--')
         plt.show()
