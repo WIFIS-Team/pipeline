@@ -14,7 +14,7 @@ def compFowler(inttime, fluxImg, satFrame, gain = 1., ron=1.):
 
     deltaT = inttime[-1] - inttime[int(inttime.shape[0]/2)-1] #integration time
     dT = inttime[1]-inttime[0] # readout time per frame
-    nReads = satFrame - int(data.shape[2]/2)
+    nReads = satFrame - int(fluxImg.shape[2]/2)
     eff_ron = np.sqrt(2)*ron/np.sqrt(nReads) #effect read noise, assuming no co-additions
 
     #compute variance, assuming no co-adds
