@@ -390,54 +390,67 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
 
     for i in range(len(dataLst)):
         if (templateSlices[i].ndim >1):
+
             for j in range(dataLst[i].shape[0]):
 
-                ##check for NaN solutions and exchange with closest non-NaN solution
-                if np.any(~np.isfinite(prevSol[i][j])):
-
+                #check if slice sizes the same
+                if(j >= len(prevSol[i])):
+                    #find last good solution
                     #search for closest solution on left
-                    for lowJ in range(j-1,-1,-1):
+                    for lowJ in range(len(prevSol[i])-1,-1,-1):
                         if (np.all(np.isfinite(prevSol[i][lowJ]))):
-                            lowSol = prevSol[i][lowJ]
-                            lowTemp = tmpLst[i][lowJ,:]
+                            tmpSol = prevSol[i][lowJ]
+                            tmpTemp = tmpLst[i][lowJ,:]
                             break
 
-                    #search for closest solution on right
-                    for highJ in range(j+1,dataLst[i].shape[0]):
-                        if (np.all(np.isfinite(prevSol[i][highJ]))):
-                            highSol = prevSol[i][highJ]
-                            highTemp = tmpLst[i][highJ,:]
-                            break
+                else:
+                    ##check for NaN solutions and exchange with closest non-NaN solution
+                    if np.any(~np.isfinite(prevSol[i][j])):
 
-                    #just adopt the solution that is closest
-                    if 'lowSol' in locals():
-                        if 'highSol' in locals():
-                            closestJ = np.argmin([j-lowJ, highJ-j])
-                            tmpSol = [lowSol, highSol][closestJ]
-                            tmpTemp =[lowTemp, highTemp][closestJ]
-                            del lowSol
+                        #search for closest solution on left
+                        for lowJ in range(j-1,-1,-1):
+                            if (np.all(np.isfinite(prevSol[i][lowJ]))):
+                                lowSol = prevSol[i][lowJ]
+                                lowTemp = tmpLst[i][lowJ,:]
+                                break
+
+                        #search for closest solution on right
+                        for highJ in range(j+1,dataLst[i].shape[0]):
+                            if (np.all(np.isfinite(prevSol[i][highJ]))):
+                                highSol = prevSol[i][highJ]
+                                highTemp = tmpLst[i][highJ,:]
+                                break
+
+                        #just adopt the solution that is closest
+                        if 'lowSol' in locals():
+                            if 'highSol' in locals():
+                                closestJ = np.argmin([j-lowJ, highJ-j])
+                                tmpSol = [lowSol, highSol][closestJ]
+                                tmpTemp =[lowTemp, highTemp][closestJ]
+                                del lowSol
+                                del highSol
+                            else:
+                                tmpSol = lowSol
+                                tmpTemp = lowTemp
+                                del lowSol
+                        elif 'highSol' in locals():
+                            tmpSol = highSol
+                            tmpTemp = highTemp
                             del highSol
+                        
                         else:
-                            tmpSol = lowSol
-                            tmpTemp = lowTemp
-                            del lowSol
-                    elif 'highSol' in locals():
-                        tmpSol = highSol
-                        tmpTemp = highTemp
-                        del highSol
-
+                            tmpSol = prevSol[i][j]
+                            tmpTemp = tmpLst[i][j,:]
                     else:
                         tmpSol = prevSol[i][j]
                         tmpTemp = tmpLst[i][j,:]
-                else:
-                    tmpSol = prevSol[i][j]
-                    tmpTemp = tmpLst[i][j,:]
+
+            
+            lst.append([dataLst[i][j,:],tmpTemp, bestLines, mxorder,tmpSol,winRng, mxCcor,weights, False, buildSol,allowLower,sigmaClip,lngthConstraint])
                         
-                lst.append([dataLst[i][j,:],tmpTemp, bestLines, mxorder,tmpSol,winRng, mxCcor,weights, False, buildSol,allowLower,sigmaClip,lngthConstraint])
-               
         else:
             for j in range(dataLst[i].shape[0]):
-                lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, False, buildSol, allowLower, sigmaClip,lngthConstraint])
+                    lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, False, buildSol, allowLower, sigmaClip,lngthConstraint])
 
     #setup multiprocessing routines
     if (ncpus == None):
