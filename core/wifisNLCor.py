@@ -6,6 +6,7 @@ tools to carry out the measurement and correction for non-linearity behaviour of
 
 import numpy as np
 import pyopencl as cl
+import os
 
 path = os.path.dirname(__file__)
 clCodePath = path+'/opencl_code'
