@@ -26,7 +26,7 @@ def corBadPixelsAll(data, BPM, dispAxis=0,mxRng=2,MP=True, ncpus=None, sigma=Fal
         tmpData = tmpData.T
            
     #create list of bad pixels
-    bad = np.where(tmpBPM == 1)
+    bad = np.where(tmpBPM != 1)
 
     if (MP == False):
         corrections=[]
