@@ -7,6 +7,10 @@ Tools to correct images for channel and row bias
 import numpy as np
 import matplotlib.pyplot as plt
 import pyopencl as cl
+import os
+
+path = os.path.dirname(__file__)
+clCodePath = path+'/opencl_code'
 
 # Channel Correct
 def channel(data,nChannel):
@@ -121,7 +125,7 @@ def channelCL(data,nChannel):
     else:
         nFrames = 1
 
-    filename = 'opencl_code/refcorrect.cl'
+    filename = clCodePath+'/refcorrect.cl'
     f = open(filename, 'r')
     fstr = "".join(f.readlines())
 
@@ -197,7 +201,7 @@ def rowCL(data,winSize,nSplit):
     else:
         nFrames = 1
 
-    filename = 'opencl_code/refcorrect.cl'
+    filename = clCodePath+'/refcorrect.cl'
     f = open(filename, 'r')
     fstr = "".join(f.readlines())
 
