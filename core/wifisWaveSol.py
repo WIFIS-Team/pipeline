@@ -413,18 +413,15 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
                     if 'lowSol' in locals():
                         if 'highSol' in locals():
                             closestJ = np.argmin([j-lowJ, highJ-j])
-                            print(closestJ)
                             tmpSol = [lowSol, highSol][closestJ]
                             tmpTemp =[lowTemp, highTemp][closestJ]
                             del lowSol
                             del highSol
                         else:
-                            print(lowJ)
                             tmpSol = lowSol
                             tmpTemp = lowTemp
                             del lowSol
                     elif 'highSol' in locals():
-                        print(highJ)
                         tmpSol = highSol
                         tmpTemp = highTemp
                         del highSol
