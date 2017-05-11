@@ -389,10 +389,9 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
     lst = []
 
     for i in range(len(dataLst)):
-        if (templateSlices[i].ndim >1):
+        if (tmpLst[i].ndim >1):
 
             for j in range(dataLst[i].shape[0]):
-
                 #check if slice sizes the same
                 if(j >= len(prevSol[i])):
                     #find last good solution
@@ -415,7 +414,7 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
                                 break
 
                         #search for closest solution on right
-                        for highJ in range(j+1,dataLst[i].shape[0]):
+                        for highJ in range(j+1,tmpLst[i].shape[0]):
                             if (np.all(np.isfinite(prevSol[i][highJ]))):
                                 highSol = prevSol[i][highJ]
                                 highTemp = tmpLst[i][highJ,:]
