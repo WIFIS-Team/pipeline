@@ -38,7 +38,7 @@ def compSpatGrid(distTrimSlices):
         
     spatMin = np.min(dMin)
     spatMax = np.max(dMax)
-    dSpat = np.mean(deltaD)
+    dSpat = np.median(deltaD)
     return([spatMin,spatMax,dSpat])
 
 def distCorAll(dataSlices, distMapSlices, method='linear', ncpus=None):
@@ -131,12 +131,12 @@ def compWaveGrid(waveTrimSlices):
         wMin.append(wmin)
         wMax.append(wmax)
 
-        n = w.shape[0]
+        n = w.shape[1]
         deltaW.append((wmax-wmin)/(n-1))
         
     waveMin = np.min(wMin)
     waveMax = np.max(wMax)
-    waveDisp = np.mean(deltaW)
+    waveDisp = np.median(deltaW)
     
     return waveMin, waveMax, np.abs(waveDisp)
 
