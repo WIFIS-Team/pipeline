@@ -162,6 +162,6 @@ def corBadPixelSigma(input):
         corr = np.nan
 
     #restore pixx to input value, in case it modifies the input
-    pixx -= 1
+    badPix -= 1
     
     return corr
