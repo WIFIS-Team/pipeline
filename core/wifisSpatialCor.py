@@ -514,7 +514,8 @@ def extendTraceSlice(input):
     space = input[2]
     zero = input[3]
     method=input[4]
-
+    order =input[5]
+    
     #setup grid points for interpolation
     gridY, gridX = np.mgrid[:slc.shape[0], :trace.shape[1]]
 
@@ -570,7 +571,7 @@ def extendTraceSlice(input):
     ybad = gridY[whr]
 
     #use simple polynomial fit to interpolated Ronchi grid to extrapolate outside of grid
-    pinit = models.Polynomial2D(degree=4)
+    pinit = models.Polynomial2D(degree=order)
     fitP = fitting.LinearLSQFitter()
     p = fitP(pinit, xgood, ygood, zgood)
     zbad = p(xbad, ybad)
@@ -579,7 +580,7 @@ def extendTraceSlice(input):
     
     return z
 
-def extendTraceAll(traceLst, extSlices, zeroTraces,space=5.,method='linear', ncpus=None, MP=True):
+def extendTraceAll(traceLst, extSlices, zeroTraces,space=5.,order=4,method='linear', ncpus=None, MP=True):
     """
     Routine to interpolate the Ronchi traces onto the provided pixel grid and extrapolate the fit towards regions that fall outside the Ronchi traces for all slices
     Usage: interpLst = extendTraceAll(traceLst, extSlices, zeroTraces, space=5., method='linear', ncpus=None, MP=True)
@@ -601,16 +602,16 @@ def extendTraceAll(traceLst, extSlices, zeroTraces,space=5.,method='linear', ncp
         for i in range(len(traceLst)):
 
             if (zeroTraces is None):
-                interpLst.append(extendTraceSlice([traceLst[i], extSlices[i], space, None, method]))
+                interpLst.append(extendTraceSlice([traceLst[i], extSlices[i], space, None, method,order]))
             else:
-                interpLst.append(extendTraceSlice([traceLst[i], extSlices[i], space, zeroTraces[i], method]))
+                interpLst.append(extendTraceSlice([traceLst[i], extSlices[i], space, zeroTraces[i], method,order]))
     else:
         lst = []
         for i in range(len(traceLst)):
             if (zeroTraces is None):
-                lst.append([traceLst[i], extSlices[i], space, None, method])
+                lst.append([traceLst[i], extSlices[i], space, None, method, order])
             else:        
-                lst.append([traceLst[i], extSlices[i], space, zeroTraces[i],method])
+                lst.append([traceLst[i], extSlices[i], space, zeroTraces[i],method,order])
 
         if (ncpus == None):
             ncpus =mp.cpu_count()
