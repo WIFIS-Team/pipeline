@@ -131,8 +131,6 @@ def corBadPixelSigma(input):
     badPix = input[1]
     mxRng = input[2]
 
-    print(type(data))
-    print(data.shape)
     nx = data.shape[0]
     #zero pad current vector
     ytmp = np.zeros(nx+2)
@@ -157,8 +155,8 @@ def corBadPixelSigma(input):
 
     #interpolate between values, if useable, else put in a NaN
     if (keepxa and keepxb):
-        ia = (xb-pixx)/float(xb-xa)*ytmp[xa]*keepxa
-        ib = (pixx-xa)/float(xb-xa)*ytmp[xb]*keepxa
+        ia = (xb-badPix)/float(xb-xa)*ytmp[xa]*keepxa
+        ib = (badPix-xa)/float(xb-xa)*ytmp[xb]*keepxa
         corr = np.sqrt(ia**2 + ib**2)
     else:
         corr = np.nan
