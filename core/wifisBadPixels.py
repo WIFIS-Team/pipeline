@@ -131,6 +131,8 @@ def corBadPixelSigma(input):
     badPix = input[1]
     mxRng = input[2]
 
+    print(type(data))
+    print(data.shape)
     nx = data.shape[0]
     #zero pad current vector
     ytmp = np.zeros(nx+2)
