@@ -127,36 +127,29 @@ def corBadPixelSigma(input):
     """
     Interpolate only along dispersion axis and only if pixels available within specified, progagating uncertainties.
     """
-
     data = input[0]
-    BPM = input[1]
-    pixy = input[2]
-    pixx = input[3]
-    mxRng = input[4]
+    badPix = input[1]
+    mxRng = input[2]
 
-    nx = BPM.shape[1]
-    ny = BPM.shape[0]
-    
-    #zero pad current row
+    nx = data.shape[0]
+    #zero pad current vector
     ytmp = np.zeros(nx+2)
-    np.copyto(ytmp[1:-1],data[pixy,:])
-    bpmTmp = np.zeros((nx+2), dtype='int')
-    np.copyto(bpmTmp[1:-1],BPM[pixy,:])
+    np.copyto(ytmp[1:-1],data)
 
-    pixx += 1
+    badPix += 1
 
     #determine if any good pixels within range
-    xa = pixx
+    xa = badPix
     keepxa = False
-    for xa in xrange(pixx-1,pixx-mxRng-1,-1):
-        if(bpmTmp[xa] == 0):
+    for xa in xrange(badPix-1,badPix-mxRng-1,-1):
+        if(np.isfinite(ytmp[xa])):
             keepxa = True
             break
 
-    xb = pixx
+    xb = badPix
     keepxb = False
-    for xb in xrange(pixx+1,pixx+mxRng+1,1):
-        if (bpmTmp[xb] == 0):
+    for xb in xrange(badPix+1,badPix+mxRng+1,1):
+        if (np.isfinite(ytmp[xb])):
             keepxb = True
             break
 
