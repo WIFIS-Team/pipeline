@@ -9,7 +9,7 @@ import wifisIO
 import matplotlib.pyplot as plt
 
 
-def corBadPixelsAll(data, BPM, dispAxis=0,mxRng=2,MP=True, ncpus=None, sigma=False):
+def corBadPixelsAll(data,dispAxis=0,mxRng=2,MP=True, ncpus=None, sigma=False):
     """
     """
 
@@ -26,7 +26,7 @@ def corBadPixelsAll(data, BPM, dispAxis=0,mxRng=2,MP=True, ncpus=None, sigma=Fal
     #    tmpData = tmpData.T
            
     #create list of bad pixels
-    bad = np.where(BPM != 0)
+    bad = np.where(~np.isfinite(data))
 
     if (MP == False):
         corrections=[]
@@ -36,25 +36,25 @@ def corBadPixelsAll(data, BPM, dispAxis=0,mxRng=2,MP=True, ncpus=None, sigma=Fal
             for i in range(bad[0].shape[0]):
                 if (dispAxis==0):
                     #only provide the correction routine with the disperion vector for that particular bad pixel
-                    corrections.append(corBadPixelSigma([data[:,bad[1][i]], BPM[:,bad[1][i]], bad[0][i], mxRng]))
+                    corrections.append(corBadPixelSigma([data[:,bad[1][i]],  bad[0][i], mxRng]))
                 else:
-                    corrections.append(corBadPixelSigma([data[bad[0][i],:], BPM[bad[0][i],:], bad[1][i], mxRng]))
+                    corrections.append(corBadPixelSigma([data[bad[0][i],:], bad[1][i], mxRng]))
         else:
             for i in range(bad[0].shape[0]):
                 #only provide the correction routine with the disperion vector for that particular bad pixel
                 if (dispAxis==0):
-                    corrections.append(corBadPixel([data[:,bad[1][i]], BPM[:,bad[1][i]], bad[0][i], mxRng]))
+                    corrections.append(corBadPixel([data[:,bad[1][i]], bad[0][i], mxRng]))
                 else:
-                    corrections.append(corBadPixel([data[bad[0][i],:], BPM[bad[0][i],:], bad[1][i], mxRng]))
+                    corrections.append(corBadPixel([data[bad[0][i],:], bad[1][i], mxRng]))
     else:
         #setup input list to feed MP routine
         lst = []
         
         for i in range(bad[0].shape[0]):
             if (dispAxis==0):
-                lst.append([data[:,bad[1][i]], BPM[:,bad[1][i]], bad[0][i], mxRng])
+                lst.append([data[:,bad[1][i]], bad[0][i], mxRng])
             else:
-                lst.append([data[bad[0][i],:], BPM[bad[0][i],:], bad[1][i], mxRng])
+                lst.append([data[bad[0][i],:], bad[1][i], mxRng])
 
         #run MP routine
         if (ncpus == None):
@@ -85,16 +85,13 @@ def corBadPixel(input):
     """
 
     data = input[0]
-    BPM = input[1]
-    badPix = input[2]
-    mxRng = input[3]
+    badPix = input[1]
+    mxRng = input[2]
 
     nx = data.shape[0]
     #zero pad current vector
     ytmp = np.zeros(nx+2)
     np.copyto(ytmp[1:-1],data)
-    bpmTmp = np.zeros((nx+2), dtype='int')
-    np.copyto(bpmTmp[1:-1],BPM)
 
     badPix += 1
 
@@ -102,14 +99,14 @@ def corBadPixel(input):
     xa = badPix
     keepxa = False
     for xa in xrange(badPix-1,badPix-mxRng-1,-1):
-        if(bpmTmp[xa] == 0):
+        if(np.isfinite(ytmp[xa])):
             keepxa = True
             break
 
     xb = badPix
     keepxb = False
     for xb in xrange(badPix+1,badPix+mxRng+1,1):
-        if (bpmTmp[xb] == 0):
+        if (np.isfinite(ytmp[xb])):
             keepxb = True
             break
 
