@@ -351,7 +351,6 @@ def traceRonchiSlice(input):
         traceWidth.append(fitTmp[1])
         
         if (plot):
-            print(xtmp, mxPix)
             plt.figure()
             plt.plot(y)
             plt.plot([whr[0]-1, mxPix], [0.5*mx, 0.5*mx], 'g--')
@@ -647,7 +646,7 @@ def traceWireFrameAll(zeroSlices, nbin=2,winRng=31,smooth=5,bright=False,MP=True
         for i in range(len(zeroSlices)):
             lst.append([zeroSlices[i],nbin,winRng,plot,smooth,bright,mxChange])
             
-        cent = pool.map(traceZeroPointSlice, lst)
+        cent = pool.map(traceWireFrameSlice, lst)
         pool.close()
         
     else:
@@ -655,7 +654,7 @@ def traceWireFrameAll(zeroSlices, nbin=2,winRng=31,smooth=5,bright=False,MP=True
         cent = []
 
         for i in range(len(zeroSlices)):
-            cent.append(traceZeroPointSlice([zeroSlices[i],nbin,winRng,plot,smooth,bright,mxChange]))
+            cent.append(traceWireFrameSlice([zeroSlices[i],nbin,winRng,plot,smooth,bright,mxChange]))
             
     return cent
 
@@ -686,11 +685,10 @@ def traceWireFrameSlice(input):
     #first bin the image, if requested
     if (nbin > 1):
         
-        #tmp = np.zeros((img.shape[0], img.shape[1])) #*** THIS IS THE PROPER CODE ***
-        tmp = np.zeros((img.shape[0], maxPix/nbin))
+        tmp = np.zeros((img.shape[0], img.shape[1]/nbin))
 
         for i in range(tmp.shape[1]-1):
-            tmp[:,i] = img[:,nbin*i]+img[:,nbin*(i+1)]
+            tmp[:,i] = np.nansum(img[:,nbin*i:nbin*(i+1)],axis=1)
     else:
         tmp = img
 
@@ -818,10 +816,15 @@ def traceWireFrameSlice(input):
                 yrng = y[xrng]
         
                 try:
-                    fit = gaussFit(xrng, yrng, plot=plot)
-
-                    if (fit[2] >= 0 and fit[2] < len(y)):
-                        cent[i] = fit[2]
+                    whrFinite = np.where(np.isfinite(yrng))[0]
+                    if len(whrFinite)>0:
+                        xrng = xrng[whrFinite]
+                        yrng = yrng[whrFinite]
+                        
+                        fit = gaussFit(xrng, yrng, plot=plot)
+                        
+                        if (fit[2] >= 0 and fit[2] < len(y)):
+                            cent[i] = fit[2]
 
                 except (RuntimeError):
                     pass
@@ -979,7 +982,7 @@ def traceCentreFlatSlice(input):
 
     return centSmth
 
-def polyFitRonchiTrace(trace, goodReg):
+def polyFitRonchiTrace(trace, goodReg, order=3):
     """
     """
 
@@ -1015,7 +1018,7 @@ def polyFitRonchiTrace(trace, goodReg):
         xfit = x[rng[fitRng]]
         yfit = trace[j,rng[fitRng]]
 
-        pcoef = np.polyfit(xfit,yfit,3)
+        pcoef = np.polyfit(xfit,yfit,order)
         poly = np.poly1d(pcoef)
 
         if (xfit.max()-xfit.min() < 1000):
