@@ -16,6 +16,7 @@ def getWCS(data, telRA, telDEC, RAscale, DECscale, waveGridProps):
     w.wcs.crpix = [data.shape[1]/2., data.shape[0]/2., 0]
     w.wcs.crval=[telRA,telDEC, waveGridProps[0]]
     w.wcs.ctype=["RA---TAN","DEC--TAN","WAVE"]
+    w.wcs.cunit=["deg","deg","nm"]
     header = w.to_header()
 
     return header
