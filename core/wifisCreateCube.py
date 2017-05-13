@@ -188,9 +188,6 @@ def mkCube(corSlices, ndiv=1, MP=True, ncpus=None):
     tmpCube[16,:,:] = corSlices[15]   
     tmpCube[17,:,:] = corSlices[17]   
 
-    for i in range(tmpCube.shape[0]):
-        tmpCube[i,:,:] = corSlices[i]
-        
     #interpolate cube onto different y-grid (x-grid already done in previous step)
     out = interpCube(tmpCube, ndiv=ndiv, ncpus=ncpus)
 
