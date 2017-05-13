@@ -463,7 +463,7 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
     else:
         result = []
         for i in range(len(lst)):
-            result.append(getsolQuick(lst[i]))
+            result.append(getSolQuick(lst[i]))
             
     #extract results and organize them
     dispSolLst = []
