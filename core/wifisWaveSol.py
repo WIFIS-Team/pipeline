@@ -347,7 +347,7 @@ def getSolQuick(input):
         return np.repeat(np.nan,mxorder+1), [],[], [],np.nan, np.repeat(np.nan,mxorder+1)
     
 
-def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None, allowLower=False, sigmaClip=2., lngthConstraint=False):
+def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None, allowLower=False, sigmaClip=2., lngthConstraint=False, MP=True):
     """
     Computes dispersion solution for each set of pixels along the dispersion axis in the provided image slices.
     Usage: output = getWaveSol(dataSlices, template, mxorder, prevSolution, winRng, mxCcor, weights, buildSol, ncpus, allowLower, sigmaClip, lngthConstraint)
@@ -451,15 +451,20 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
             for j in range(dataLst[i].shape[0]):
                     lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, False, buildSol, allowLower, sigmaClip,lngthConstraint])
 
-    #setup multiprocessing routines
-    if (ncpus == None):
-        ncpus =mp.cpu_count()
-    pool = mp.Pool(ncpus)
+    if (MP):
+        #setup multiprocessing routines
+        if (ncpus == None):
+            ncpus =mp.cpu_count()
+        pool = mp.Pool(ncpus)
 
-    #run code
-    result = pool.map(getSolQuick, lst)
-    pool.close()
-
+        #run code
+        result = pool.map(getSolQuick, lst)
+        pool.close()
+    else:
+        result = []
+        for i in range(len(lst)):
+            result.append(getsolQuick(lst[i]))
+            
     #extract results and organize them
     dispSolLst = []
     fwhmLst = []
