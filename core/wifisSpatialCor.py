@@ -418,7 +418,7 @@ def traceRonchiSlice(input):
             ytmp[:] = np.nan
             ytmp[xTrace] = yTrace
             gKern = conv.Gaussian1DKernel(smth)
-            outTrace[j,:] = conv.convolve(ytmp, gKern, boundary='extend')
+            outTrace[j,:] = conv.convolve(ytmp, gKern, boundary='extend', normalize_kernel=True)
 
             #remove badly fit regions and replace with linear interpolation
             wtmp = np.empty(xOut.shape)
@@ -839,7 +839,7 @@ def traceWireFrameSlice(input):
 
     if (smth > 0):
         gKern = conv.Gaussian1DKernel(smth)
-        centSmth = conv.convolve(centOut, gKern, boundary='extend')
+        centSmth = conv.convolve(centOut, gKern, boundary='extend',normalize_kernel=True)
     else:
         centSmth = centOut
         
@@ -940,7 +940,7 @@ def traceCentreFlatSlice(input):
         else:
             #smooth spectrum first to avoid hot pixels, when determining the cutoff threshold
             gKern = conv.Gaussian1DKernel(10)
-            ysmth = conv.convolve(ytmp, gKern, boundary='extend')
+            ysmth = conv.convolve(ytmp, gKern, boundary='extend',normalize_kernel=True)
             yout = ytmp/np.nanmax(ysmth)
 
             whr = np.where(np.isfinite(yout))[0]
@@ -972,7 +972,7 @@ def traceCentreFlatSlice(input):
         centre[i] = (m1+m2)/2.
     
     gKern = conv.Gaussian1DKernel(limSmth)
-    centSmth = conv.convolve(centre, gKern, boundary='extend')
+    centSmth = conv.convolve(centre, gKern, boundary='extend',normalize_kernel=True)
 
     if (plot):
         plt.clf()
@@ -983,7 +983,7 @@ def traceCentreFlatSlice(input):
 
     return centSmth
 
-def polyFitRonchiTrace(trace, goodReg, order=3):
+def polyFitRonchiTrace(trace, goodReg, order=3, lngthConstraint=False):
     """
     """
 
@@ -1022,9 +1022,12 @@ def polyFitRonchiTrace(trace, goodReg, order=3):
         pcoef = np.polyfit(xfit,yfit,order)
         poly = np.poly1d(pcoef)
 
-        if (xfit.max()-xfit.min() < 1000):
-            xTmp = np.arange(xfit.min(), xfit.max()+1)
-            polyTrace[j,xTmp] = poly(xTmp)
+        if(lngthConstraint):
+            if (xfit.max()-xfit.min() < 1000):
+                xTmp = np.arange(xfit.min(), xfit.max()+1)
+                polyTrace[j,xTmp] = poly(xTmp)
+            else:
+                polyTrace[j,:] = poly(x)
         else:
             polyTrace[j,:] = poly(x)
 
