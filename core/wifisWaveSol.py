@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import multiprocessing as mp
 import wifisIO
 from scipy.interpolate import interp1d
+from astropy import convolution as conv
 
 import warnings
 warnings.simplefilter('ignore', np.RankWarning)
@@ -50,7 +51,7 @@ def gaussian(x,amp,cen,wid):
     z = (x-cen)/wid    
     return amp*np.exp(-z**2/2.)
 
-def gaussFit(x, y, guessWidth, plot=False):
+def gaussFit(x, y, guessWidth, plot=False,title=''):
     """
     Routine to fit a Gaussian to provided x and y data points and return the fitted coefficients.
     Usage: params = gaussFit(x, y, guessWidth, plot=True/False)
@@ -72,6 +73,7 @@ def gaussFit(x, y, guessWidth, plot=False):
         plt.plot(x, gaussian(x, popt[0], popt[1], popt[2]))
         plt.xlabel('Pixel')
         plt.ylabel('Value')
+        plt.title(title)
         plt.show()
         
     return popt
@@ -154,17 +156,18 @@ def getSolQuick(input):
         whrFinite = np.where(np.isfinite(yRow))[0]
 
         if len(whrFinite)>1:
-            lngth = np.max(whrFinite)
+            mnLngth = np.min(whrFinite)
+            mxLngth = np.max(whrFinite)
         else:
-            lngth = 0
+            mxLngth = 0
             
-        if (lngth>0):
-            whr = np.where(np.logical_and(atlasPix >0,atlasPix < lngth))[0]
+        if (mxLngth>0):
+            whr = np.where(np.logical_and(atlasPix >mnLngth,atlasPix < mxLngth))[0]
             if (len(whr)>0):
                 atlas = atlas[whr,:]
                 atlasPix = atlasPix[whr]
         
-                #now find lines, taking only lines with strength >= 1*noise level, based on the predicted line strength
+                #now find lines, taking only lines with strength >= 3*noise level, based on the predicted line strength
                 atlas[:,1] = atlas[:,1]/np.max(atlas[:,1])
                 whr = np.where(atlas[:,1] >= 3.*nse)[0]
                 atlas = atlas[whr,:]
@@ -178,11 +181,12 @@ def getSolQuick(input):
         plt.ioff()
         plt.close('all')
         plt.figure()
+        print('Pixel offset of ' + str(pixOffset))
         plt.plot(yRow)
         plt.plot(np.arange(totPix)+pixOffset,template)
         plt.plot([0,len(yRow)],[nse, nse],'--')
         plt.show()
-
+        
     goodFit = False
 
     #check to make sure that there are any lines to fit and if so continue with routine
@@ -199,7 +203,8 @@ def getSolQuick(input):
         widthFit = []#np.zeros(nlines)
         ampFit = []
         atlasFit = []
-
+        atlasPixFit = []
+        
         #print(pixOffset)
         #print('Going to fit', nlines)
         #print(best)
@@ -208,23 +213,31 @@ def getSolQuick(input):
         for i in range(nlines):
             try:
                 pixRng = (np.arange(winRng)-winRng2 + atlasPix[i]).astype('int') #Centre window on predicted line centre
+                
+                yRng = yRow[pixRng]
 
-                if (np.max(pixRng) < totPix):
+                #find location of maximum signal
+                mx = np.argmax(yRng)
+                mxPos = pixRng[mx]
+                prevMx = -1
+                if plot:
+                    print('*********')
+                    
+                while (mxPos != prevMx):
+                    #update the search range to centre on peak
+                    if (plot):
+                        print(pixRng)
+                    prevMx = mxPos
+                    pixRng = (np.arange(winRng)-winRng2 + pixRng[mx]).astype('int')
                     yRng = yRow[pixRng]
-
-                    #find location of maximum signal
                     mx = np.argmax(yRng)
                     mxPos = pixRng[mx]
-                    prevMx = -1
-                    
-                    while (mxPos != prevMx):
-                        #update the search range to centre on peak
-                        prevMx = mxPos
-                        pixRng = (np.arange(winRng)-winRng2 + pixRng[mx]).astype('int')
-                        yRng = yRow[pixRng]
-                        mx = np.argmax(yRng)
-                        mxPos = pixRng[mx]
 
+                pixRng = pixRng[np.logical_and(pixRng >=0, pixRng<totPix)]
+                if(plot):
+                    print(pixRng)
+                if len(pixRng)>winRng/2:
+                    
                     #check if S/N of range is sufficient for fitting
                     #requires at least two consecutive pixels > noise criteria
                     if (yRng[mx] >= 3.*nse):
@@ -232,15 +245,19 @@ def getSolQuick(input):
                         #fit guassian to region to determine central location
                         #print('Trying to fit line', bestPix[i])
                             try:
-                                amp,cent,wid = gaussFit(pixRng,yRng, winRng/3.,plot=plot)
+                                amp,cent,wid = gaussFit(pixRng,yRng, winRng/3.,plot=plot,title=str(atlasPix[i]))
                                 
-                                #only keep line if amplitude of fit >3*noise level
-                                if (amp/nse >= 3.):
+                                #only keep line if amplitude of fit >3*noise level #and width of fit <1/3 of winRng
+                                if (amp/nse >= 3. and np.abs(wid) < winRng):
                                     centFit.append(cent)
                                     widthFit.append(wid)
                                     ampFit.append(amp)
                                     atlasFit.append(atlas[i,0])
-
+                                    atlasPixFit.append(atlasPix[i])
+                                else:
+                                    if (plot):
+                                        print('badly fit line, excluding')
+                                        
                                 if (len(centFit)>mxorder and buildSol):
                                     #update "guessed" dispersion solution to get better line centres
                                     tmpCoef = np.polyfit(centFit, atlasFit,1, w=ampFit)
@@ -252,13 +269,19 @@ def getSolQuick(input):
                 pass
 
         #exclude poorly fit lines based on width of line
-        widthFit = np.abs(widthFit)
-        whr = np.where(widthFit <= winRng/3.) 
-        ln = len(whr[0])
-
+        #widthFit = np.abs(widthFit)
+        #whr = np.where(widthFit <= winRng) 
+        
+        #exclude poorly fit lines based on the deviation from prediction
+        dev = np.abs(np.array(atlasPixFit)-np.array(centFit))
+        #whr = np.where(dev < 1.*np.std(dev))
+        ln = len(centFit)
+        #ln = len(whr[0])
+        
+                        
         if ((ln < mxorder) and allowLower and (ln>1)):
             #find the highest order polynomial that could fit the data
-
+            
             while ((ln <= mxorder) and (mxorder>1)):
                 mxorder = mxorder - 1
                 
@@ -271,15 +294,16 @@ def getSolQuick(input):
             widthFit = np.array(widthFit)
             ampFit = np.array(ampFit)
                 
-            centFit = centFit[whr[0]]
-            atlasFit = atlasFit[whr[0]]
-            widthFit = widthFit[whr[0]]
-            ampFit = ampFit[whr[0]]
+            #centFit = centFit[whr[0]]
+            #atlasFit = atlasFit[whr[0]]
+            #widthFit = widthFit[whr[0]]
+            #ampFit = ampFit[whr[0]]
 
             if (plot):
-                plt.subplot(211)
+                fig = plt.figure()
+                ax = fig.add_subplot(211)
                 plt.plot(centFit, atlasFit, 'bo')
-
+                
             if (useWeights):        
                 fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
             else:
@@ -301,8 +325,24 @@ def getSolQuick(input):
             if (len(centFit) > mxorder):
                 #constrain fit to a line if line separation is <1000
                 if (lngthConstraint):
-                    if ((np.nanmax(centFit)-np.nanmin(centFit)) < 500):
+                    if ((np.nanmax(centFit)-np.nanmin(centFit)) < 1000):
                         mxorder=1
+                        
+                        if (useWeights):        
+                            fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
+                        else:
+                            fitCoef = np.polyfit(centFit, atlasFit,mxorder) # returns polynomial coefficients in reverse order
+
+                        poly = np.poly1d(fitCoef)
+                        dev = atlasFit-poly(centFit)
+                        whr = np.where(np.abs(dev) < sigmaClip*np.std(dev))
+                        if (plot):
+                            print('std dev for round',i, 'is',np.std(dev), ' in wavelength')
+                
+                        centFit = centFit[whr[0]]
+                        atlasFit = atlasFit[whr[0]]
+                        widthFit = widthFit[whr[0]]
+                        ampFit = ampFit[whr[0]]
                         
                 if (useWeights):
                     fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
@@ -328,16 +368,28 @@ def getSolQuick(input):
                 
                 #for testing purposes only
                 if (plot):
+                    ax.set_xlim(0, yRow.shape[0])
                     plt.plot(centFit, atlasFit, 'ro')
                     plt.xlabel('Pixel #')
                     plt.ylabel('Wavelength')
                     plt.plot(np.arange(len(yRow)), poly(np.arange(len(yRow))))
-                    plt.subplot(212)
+                    ax = fig.add_subplot(212)
+                    ax.set_xlim(0, yRow.shape[0])
                     plt.plot(centFit, polyPix(atlasFit) - centFit, 'ro')
                     plt.xlabel('Pixel #')
                     plt.ylabel('Residuals (pixels)')
                     plt.plot([0, len(atlasFit)],[0,0],'--')
                     print('final std dev:',np.std(atlasFit - poly(centFit)), ' in wavelength')
+
+                    fig2 = plt.figure()
+                    ax =fig2.add_subplot(111)
+                    ax.set_xlim(0, yRow.shape[0])
+                    plt.plot(yRow,'k')
+                    plt.xlabel('Pixel')
+                    plt.ylabel('Normalized signal')
+                    for lne in range(centFit.shape[0]):
+                        plt.plot([centFit[lne],centFit[lne]], [0,ampFit[lne]], 'r--')
+                        
                     plt.show()
         
     
@@ -622,3 +674,164 @@ def trimWaveSlice(input):
         slc[whr,i] = np.nan
 
     return slc
+
+def polyFitDispSolution(dispIn,plot=False, degree=2):
+    """
+    """
+
+    nTerms = 0
+    #determine maximum degree of polynomial
+    for d in dispIn:
+        for i in range(len(d)):
+            if (len(d[i])>nTerms):
+                nTerms = len(d[i])
+   
+    polySol = []
+    for i in range(len(dispIn)):
+        #organize the coefficients into separates arrays/lists
+        c = []
+        for j in range(nTerms):
+            c.append([])
+            
+        d = dispIn[i]
+        
+        for j in range(len(d)):
+            for k in range(len(d[j])):
+                c[k].append([j,d[j][k]])
+
+        #determine polynomial fits for each coefficient
+        f=[]
+        for k in range(nTerms):
+            cTmp = np.asarray(c[k])
+            whr = np.where(np.isfinite(cTmp[:,1]))[0]
+            for j in range(2):
+                fc =np.polyfit(cTmp[whr,0].flatten(),cTmp[whr,1].flatten(),degree)
+                ff = np.poly1d(fc)
+                dev = np.abs(ff(cTmp[whr,0])-cTmp[whr,1])
+                whr = whr[np.where(dev <1.*np.std(dev))[0]]
+            f.append(ff)
+
+        #create output list that matches structure of input list
+        tmpSol = []
+        for j in range(len(d)):
+            tmpLst = []
+            for k in range(nTerms):
+                tmpLst.append(f[k](j))
+            tmpSol.append(np.asarray(tmpLst))
+        
+        polySol.append(tmpSol)
+
+        if (plot):
+            print(i)
+            fig,ax = plt.subplots(1,nTerms, figsize=(19,6))
+            for k in range(nTerms):
+                tmp = np.asarray(c[k])
+                ax[k].plot(tmp[:,0], tmp[:,1], 'o')
+                ax[k].plot(f[k](np.arange(len(c[k]))),'--')
+            plt.show()
+            
+        
+    return polySol
+
+def medSmoothDispSolution(dispIn, nPix=5, plot=False):
+    """
+    """
+
+    nTerms = 0
+    #determine maximum degree of polynomial
+    for d in dispIn:
+        for i in range(len(d)):
+            if (len(d[i])>nTerms):
+                nTerms = len(d[i])
+
+
+    smoothSol = []
+    for d in dispIn:
+        c = []
+        for j in range(nTerms):
+            c.append([])
+
+        for j in range(len(d)):
+            for k in range(nTerms):
+                xrng = np.arange(nPix)-int(nPix/2)+j
+                xrng = xrng[np.logical_and(xrng>=0,xrng<len(d))]
+                yrng = []
+                
+                for l in range(len(xrng)):
+                    if len(d[xrng[l]])>k:
+                        yrng.append(d[xrng[l]][k])
+                    else:
+                        yrng.append(np.nan)
+                c[k].append(np.nanmedian(yrng))
+
+        tmpSol = []
+        for j in range(len(d)):
+            tmpLst = []
+            for k in range(nTerms):
+                tmpLst.append(c[k][j])
+            tmpSol.append(np.asarray(tmpLst))
+        smoothSol.append(tmpSol)
+
+        if (plot):
+            fig,ax = plt.subplots(1,nTerms, figsize=(19,6))
+            for k in range(nTerms):
+                for j in range(len(d)):
+                    if len(d[j])>k:
+                        ax[k].plot(j, d[j][k],'bo')
+                ax[k].plot(c[k])
+            plt.show()
+
+    return smoothSol
+
+def gaussSmoothDispSolution(dispIn, nPix=5, plot=False):
+    """
+    """
+
+    gKern = conv.Gaussian1DKernel(nPix)
+    
+    nTerms = 0
+    #determine maximum degree of polynomial
+    for d in dispIn:
+        for i in range(len(d)):
+            if (len(d[i])>nTerms):
+                nTerms = len(d[i])
+
+
+    smoothSol = []
+    for d in dispIn:
+        c = []
+        smth=[]
+        for j in range(nTerms):
+            c.append([])
+            smth.append([])
+            
+        for j in range(len(d)):
+            for k in range(nTerms):
+                if len(d[j])>k:
+                    c[k].append(d[j][k])
+                else:
+                    c[k].append(np.nan)
+
+        #smoothing time!
+        for k in range(nTerms):
+            smth[k] = conv.convolve(c[k],gKern,boundary='extend', normalize_kernel=True)
+            
+        tmpSol = []
+        for j in range(len(d)):
+            tmpLst = []
+            for k in range(nTerms):
+                tmpLst.append(smth[k][j])
+            tmpSol.append(np.asarray(tmpLst))
+        smoothSol.append(tmpSol)
+
+        if (plot):
+            fig,ax = plt.subplots(1,nTerms, figsize=(19,6))
+            for k in range(nTerms):
+                for j in range(len(d)):
+                    if len(d[j])>k:
+                        ax[k].plot(j, d[j][k],'bo')
+                ax[k].plot(smth[k])
+            plt.show()
+
+    return smoothSol
+
