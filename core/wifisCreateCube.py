@@ -40,9 +40,10 @@ def compSpatGrid(distTrimSlices):
     spatMin = np.min(dMin)
     spatMax = np.max(dMax)
     dSpat = np.median(deltaD)
-    return([spatMin,spatMax,dSpat])
+    N = int((spatMax-spatMin)/dSpat)
+    return([spatMin,spatMax,N])
 
-def distCorAll(dataSlices, distMapSlices, method='linear', ncpus=None):
+def distCorAll(dataSlices, distMapSlices, method='linear', ncpus=None, spatGridProps=None):
     """
     Routine to distortion correct a list of slices.
     Usage: outLst = distCorAll(dataSlices, distMapSlices, method='linear', ncpus=None)
@@ -56,7 +57,7 @@ def distCorAll(dataSlices, distMapSlices, method='linear', ncpus=None):
     lst = []
     # setup input list
     for i in range(len(dataSlices)):
-        lst.append([dataSlices[i], distMapSlices[i],method])
+        lst.append([dataSlices[i], distMapSlices[i],method,spatGridProps])
 
     #setup multiprocessing
     if (ncpus==None):
@@ -85,12 +86,19 @@ def distCorSlice(input):
     dataSlc = input[0]
     distSlc = input[1]
     method = input[2]
+    spatGridProps = input[3]
     
-    #get spatial grid properties
-    nSpat = dataSlc.shape[0]
-    dSpat = (np.max(distSlc) - np.min(distSlc))/(nSpat-1)
-    minSpat = np.min(distSlc)
-    maxSpat = np.max(distSlc)
+    #get spatial grid properties if not provided
+    if (spatGridProps is not None):
+        minSpat = spatGridProps[0]
+        maxSpat = spatGridProps[1]
+        nSpat = spatGridProps[2]
+        dSpat = (maxSpat-minSpat)/(nSpat-1)
+    else:
+        nSpat = dataSlc.shape[0]
+        dSpat = (np.max(distSlc) - np.min(distSlc))/(nSpat-1)
+        minSpat = np.min(distSlc)
+        maxSpat = np.max(distSlc)
 
     #setup linearized output grid
     gX, gY = np.mgrid[minSpat:maxSpat+dSpat:dSpat, :dataSlc.shape[1]]
@@ -101,7 +109,7 @@ def distCorSlice(input):
 
     for i in range(dataSlc.shape[0]):
         for j in range(dataSlc.shape[1]):
-            if (~np.isnan(distSlc[i,j])):
+            if (np.isfinite(distSlc[i,j])):
                 points.append([distSlc[i,j],j])
                 vals.append(dataSlc[i,j])
 
@@ -137,9 +145,10 @@ def compWaveGrid(waveTrimSlices):
         
     waveMin = np.min(wMin)
     waveMax = np.max(wMax)
-    waveDisp = np.median(deltaW)
+    waveDisp = np.abs(np.median(deltaW))
+    N = int((waveMax-waveMin)/waveDisp)
     
-    return waveMin, waveMax, np.abs(waveDisp)
+    return waveMin, waveMax, N#np.abs(waveDisp)
 
 def collapseCube(cube):
     """
@@ -259,8 +268,8 @@ def interpFrame(input):
         
         ia = np.floor(y[i]).astype('int')
         ib = np.clip(ia+1,0,img.shape[0]-1)
-        whrA = np.where(~np.isnan(img[ia,:]))[0]
-        whrB = np.where(~np.isnan(img[ib,:]))[0]
+        whrA = np.where(np.isfinite(img[ia,:]))[0]
+        whrB = np.where(np.isfinite(img[ib,:]))[0]
         out[i,whrA] = (ib-y[i])*img[ia,whrA]
         out[i,whrB] += (y[i]-ia)*img[ib,whrB]
 
@@ -335,8 +344,84 @@ def mkWaveSpatGridSlice(input):
 
     for i in range(dataSlc.shape[0]):
         for j in range(dataSlc.shape[1]):
-            if (~np.isnan(waveSlc[i,j]) and waveSlc[i,j]!=0 and ~np.isnan(distSlc[i,j])):
+            if (np.isfinite(waveSlc[i,j]) and waveSlc[i,j]!=0 and np.isfinite(distSlc[i,j])):
                 points.append([distSlc[i,j],waveSlc[i,j]])
+                vals.append(dataSlc[i,j])
+
+    vals = np.array(vals)
+    
+    out = griddata(points, vals, (gX, gY), method=method)
+
+    return out
+
+def waveCorAll(dataSlices, waveMapSlices, method='linear', ncpus=None, waveGridProps=None):
+    """
+    Routine to place slices on uniform wavelength grid
+    Usage: outLst = waveCorAll(dataSlices, waveMapSlices, method='linear', ncpus=None)
+    dataSlices is the list of the data slices to be distortion corrected
+    waveMapSlices is the list of slices containing the wavelength mapping
+    method is a keyword to control how the interpolation is carried out (default is using bilinear interpolation)
+    ncpus is a keyword that allows to control the number of multi-processesing processes
+    returned is a list of distortion corrected slices.
+    """
+
+    lst = []
+    # setup input list
+    for i in range(len(dataSlices)):
+        lst.append([dataSlices[i], waveMapSlices[i],method,waveGridProps])
+
+    #setup multiprocessing
+    if (ncpus==None):
+        ncpus =mp.cpu_count()
+
+    pool = mp.Pool(ncpus)
+    
+    #run multiprocessing of the code
+    outLst = pool.map(waveCorSlice, lst)
+    pool.close()
+
+    return outLst
+
+def waveCorSlice(input):
+    """
+    Routine to place individual slices on uniform wavelength grid.
+    Usage out = waveCorSlice(input)
+    input is a list that contains:
+    dataSlc - is the image slice of the input data to be distortion corrected,
+    waveSlc - is the wavelength mapping for the specific slice
+    method - is a string indicating the interpolation method to use ("linear", "cubic", or "nearest")
+    Returned is a list of distortion corrected images.
+    """
+
+    #rename input
+    dataSlc = input[0]
+    waveSlc = input[1]
+    method = input[2]
+    waveGridProps = input[3]
+    
+    if waveGridProps is not None:
+        minWave = waveGridProps[0]
+        maxWave = waveGridProps[1]
+        nWave = waveGridProps[2]
+        dWave = (maxWave-minWave)/(nWave-1)
+    else:
+        #get spatial grid properties
+        nWave = dataSlc.shape[1]
+        dWave = (np.nanmax(waveSlc) - np.nanmin(waveSlc))/(nWave-1)
+        minWave = np.nanmin(waveSlc)
+        maxWave = np.nanmax(waveSlc)
+    
+    #setup linearized output grid
+    gX, gY = np.mgrid[:dataSlc.shape[0], minWave:maxWave+dWave:dWave]
+
+    #use wavelength and desired spatial grid size to map onto new grid
+    points = []
+    vals = []
+
+    for i in range(dataSlc.shape[0]):
+        for j in range(dataSlc.shape[1]):
+            if (np.isfinite(waveSlc[i,j])):
+                points.append([i,waveSlc[i,j]])
                 vals.append(dataSlc[i,j])
 
     vals = np.array(vals)
