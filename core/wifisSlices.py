@@ -10,7 +10,7 @@ import wifisIO
 import astropy.convolution as conv
 from astropy.modeling import models, fitting
 import matplotlib.pyplot as plt
-
+from scipy.ndimage.interpolation import shift 
 def limFit1(input):
     """
     Used to determine slice edges for a single column, assuming dispersion axis is aligned along rows.
@@ -90,7 +90,7 @@ def findLimits(data, dispAxis=0, winRng=51, imgSmth=5, limSmth=10, ncpus=None):
 
     #next smooth the image and add to input list
     for i in range(ny):
-        y = conv.convolve(dTmp[:,i],gKern)
+        y = conv.convolve(dTmp[:,i],gKern, boundary='extend', normalize_kernel=True)
         inpLst.append([y, winRng])
 
     #setup and run the MP code for finding the limits
@@ -107,46 +107,46 @@ def findLimits(data, dispAxis=0, winRng=51, imgSmth=5, limSmth=10, ncpus=None):
     limSmth = np.zeros(result.shape)
 
     for i in range(result.shape[0]):
-        y = conv.convolve(result[i,:], gKern, boundary='extend')
+        y = conv.convolve(result[i,:], gKern, boundary='extend', normalize_kernel=True)
         limSmth[i,:] = y
     
     return limSmth
 
-def extSlices(data, limits, dispAxis=0):
-    """
-    Extract a list of slices (sub-images) from the given image.
-    Usage: slices = extSlices(data, limits, dispAxis=)
-    data is the input data image from which the slices will be extracted
-    limits is an array specifying the slice-edge limits of each slice
-    dispAxis is a keyword specifying the dispersion direction (0-> along the y-axis, 1-> along the x-axis)
-    """
-
-    if (dispAxis == 0):
-        dTmp = data.T
-    else:
-        dTmp = data
-
-    slices = []
-    n=limits.shape[1]
-    nSlices = limits.shape[0]
-    
-    for i in range(0,nSlices-1):
-        mn = np.floor(np.min(limits[i,:])).astype('int')
-        mx = np.ceil(np.max(limits[i+1,:])).astype('int')
-
-        slice = np.empty((mx-mn,n), dtype=data.dtype)
-        slice[:] = np.nan
-        
-        for j in range(mn,mx):
-            keep = np.ones(n, dtype=bool)
-            whr = np.where(np.floor(limits[i,:]) > j)[0]
-            keep[whr] = False
-            whr = np.where(np.ceil(limits[i+1,:]) < j)[0]
-            keep[whr] = False
-            slice[j-mn,keep] = dTmp[j,keep] 
-  
-        slices.append(slice)
-    return slices
+#def extSlices(data, limits, dispAxis=0):
+#    """
+#    Extract a list of slices (sub-images) from the given image.
+#    Usage: slices = extSlices(data, limits, dispAxis=)
+#    data is the input data image from which the slices will be extracted
+#    limits is an array specifying the slice-edge limits of each slice
+#    dispAxis is a keyword specifying the dispersion direction (0-> along the y-axis, 1-> along the x-axis)
+#    """
+#
+#    if (dispAxis == 0):
+#        dTmp = data.T
+#    else:
+#        dTmp = data
+#
+#    slices = []
+#    n=limits.shape[1]
+#    nSlices = limits.shape[0]
+#    
+#    for i in range(0,nSlices-1):
+#        mn = np.floor(np.min(limits[i,:])).astype('int')
+#        mx = np.ceil(np.max(limits[i+1,:])).astype('int')
+#
+#        slice = np.empty((mx-mn,n), dtype=data.dtype)
+#        slice[:] = np.nan
+#        
+#        for j in range(mn,mx):
+#            keep = np.ones(n, dtype=bool)
+#            whr = np.where(np.floor(limits[i,:]) > j)[0]
+#            keep[whr] = False
+#            whr = np.where(np.ceil(limits[i+1,:]) < j)[0]
+#            keep[whr] = False
+#            slice[j-mn,keep] = dTmp[j,keep] 
+#  
+#        slices.append(slice)
+#    return slices
 
 
 def getResponseFuncPoly(input):
@@ -177,7 +177,7 @@ def getResponse2D(input):
 
     if (sigma>0):
         gKern = conv.Gaussian2DKernel(stddev=sigma) 
-        sliceSmth=conv.convolve(slice,gKern,boundary='extend')
+        sliceSmth=conv.convolve(slice,gKern,boundary='extend',normalize_kernel=True)
     else:
         sliceSmth = slice
 
@@ -371,7 +371,7 @@ def getTrimLimsSlice(input):
         n = ytmp.shape[0]
         
         gKern = conv.Gaussian1DKernel(stddev=1) #needs to be optimized, possibly read in
-        y = conv.convolve(ytmp,gKern)
+        y = conv.convolve(ytmp,gKern, boundary='extend', normalize_kernel=True)
         d1 = np.abs(np.gradient(y))
         #whr = np.where(y > 0.5*np.max(y))[0]
         #y1 = np.argmax(d1[0:whr[0]])
@@ -384,7 +384,7 @@ def getTrimLimsSlice(input):
 
         #smooth spectrum first to avoid hot/cold pixels
         gKern = conv.Gaussian1DKernel(10)
-        ysmth = conv.convolve(ytmp, gKern, boundary='extend')
+        ysmth = conv.convolve(ytmp, gKern, boundary='extend', normalize_kernel=True)
         yout = ytmp/np.nanmax(ysmth)
        
         whr = np.where(yout >= threshold)[0]
@@ -457,4 +457,148 @@ def trimSliceAll(extSlices, limits, MP=False, ncpus=None):
             outSlices.append(trimSlice([extSlices[i],limits[i]]))
             
     return outSlices
+
+def extSlices(data, limits,shft=0, dispAxis=0):
+    """
+    Extract a list of slices (sub-images) from the given image based on relative slice limits
+    Usage: slices = extSlices(data, limits, shft,dispAxis=)
+    data is the input data image from which the slices will be extracted
+    limits is an array specifying the slice-edge limits of each slice
+    shft is the shift needed to apply to the limits to match the current image
+    dispAxis is a keyword specifying the dispersion direction (0-> along the y-axis, 1-> along the x-axis)
+    """
+
+    #modify dispersion direction to fit with routine
+    if (dispAxis == 0):
+        dTmp = data.T
+    else:
+        dTmp = data
+
+    #compute the relative limits based on the provided shift
+    limNew = np.clip(limits + shft, 0, dTmp.shape[0])
     
+    #initialize slice list
+    slices = []
+    n=limits.shape[1]
+    nSlices = limits.shape[0]
+    
+    for i in range(0,nSlices-1):
+        #initialize output slices
+        mnOut = np.floor(np.min(limits[i,:])).astype('int')
+        mxOut = np.ceil(np.max(limits[i+1,:])).astype('int')
+        slice = np.empty((mxOut-mnOut,n), dtype=data.dtype)
+        slice[:] = np.nan
+
+        #now go through input image and copy into output slices
+        mnIn = int(mnOut + shft)
+        mxIn= int(mxOut + shft)
+
+        for j in range(mnIn,mxIn):
+            keep = np.ones(n, dtype=bool)
+            whr = np.where(np.floor(limNew[i,:]) > j)[0]
+            keep[whr] = False
+            whr = np.where(np.ceil(limNew[i+1,:]) < j)[0]
+            keep[whr] = False
+            slice[j-mnIn,keep] = dTmp[j,keep] 
+  
+        slices.append(slice)
+    return slices
+
+def polyFitLimits(limits, degree=2):
+    """
+    """
+
+    polyLimits = []
+
+    x = np.arange(limits.shape[1])
+    for i in range(limits.shape[0]):
+        y = limits[i,:]
+        polyCoef = np.polyfit(x,y, degree)
+        poly = np.poly1d(polyCoef)
+        polyFit = poly(x)
+        polyLimits.append(polyFit)
+    return np.asarray(polyLimits)
+        
+#def extSlice(input):
+#    """
+#    """
+#
+#    dTmp = input[0]
+#    limits = input[1]
+#    shft = input[2]
+#    reverse = input[3]
+#    n = limits.shape[1]
+#        
+#    #compute the relative limits based on the provided shift
+#    limNew = np.clip(limits + shft, 0, dTmp.shape[0])
+#        
+#    #initialize output slices
+#    mnOut = np.floor(np.min(limits[0,:])).astype('int')
+#    mxOut = np.ceil(np.max(limits[1,:])).astype('int')
+#    slice = np.empty((mxOut-mnOut,n), dtype=data.dtype)
+#    slice[:] = np.nan
+#
+#    #now go through input image and copy into output slices
+#    mnIn = int(mnOut + shft)
+#    mxIn= int(mxOut + shft)
+#
+#    if (reverse):
+#        for j in range(mxIn-1,mnIn-1,-1):
+#            keep = np.ones(n, dtype=bool)
+#            whr = np.where(np.floor(limNew[0,:]) > j)[0]
+#            keep[whr] = False
+#            whr = np.where(np.ceil(limNew[1,:]) < j)[0]
+#            keep[whr] = False
+#            slice[j-mnIn,keep] = dTmp[j,keep] 
+#    else:
+#        for j in range(mnIn,mxIn):
+#            keep = np.ones(n, dtype=bool)
+#            whr = np.where(np.floor(limNew[0,:]) > j)[0]
+#            keep[whr] = False
+#            whr = np.where(np.ceil(limNew[1,:]) < j)[0]
+#            keep[whr] = False
+#            slice[j-mnIn,keep] = dTmp[j,keep] 
+#  
+#    return slice
+#
+#def extSlicesNew(data, limits, ncpus=None, MP=True,shft=0, dispAxis=0):
+#    """
+#    Extract a list of slices (sub-images) from the given image based on relative slice limits
+#    Usage: slices = extSlices(data, limits, shft,dispAxis=)
+#    data is the input data image from which the slices will be extracted
+#    limits is an array specifying the slice-edge limits of each slice
+#    shft is the shift needed to apply to the limits to match the current image
+#    dispAxis is a keyword specifying the dispersion direction (0-> along the y-axis, 1-> along the x-axis)
+#    """
+#
+#    #modify dispersion direction to fit with routine
+#    if (dispAxis == 0):
+#        dTmp = data.T
+#    else:
+#        dTmp = data
+#
+#
+#    #create input list for feeding
+#    #start with first entry for first (left-most) slice
+#    inpLst = [[dTmp, limits[0:2, :], shft, True]]
+#
+#    #now fill in remaining slices
+#    strt=1
+#    for i in range(1,limits.shape[0]):
+#        inpLst.append([dTmp, limits[strt:strt+2,:], shft, False])
+#        strt+=1
+#
+#    if (MP):
+#        #setup and run the MP code for finding the limits
+#        if (ncpus == None):
+#            ncpus =mp.cpu_count()
+#
+#        pool = mp.Pool(ncpus)
+#        slices = pool.map(extSlice, inpLst)
+#        pool.close()
+#    else:
+#        slices = []
+#        for inp in inpLst:
+#            slices.append(extSlice(inp))
+#
+#    return slices
