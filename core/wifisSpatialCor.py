@@ -304,9 +304,16 @@ def traceRonchiSlice(input):
     else:
         tmp  = img
 
+    #find column with maximum signal in median along column
+    medArray = np.zeros(tmp.shape[1])
+    for i in range(medArray.shape[1]):
+        y = tmp[:,i]
+        medArray[i] = np.nanmedian(y[y>0.05*np.nanmax(y)])
+        
     #find column with the maximum signal to identify position and number of Ronchi dips
-    m1, m2 = np.unravel_index(np.nanargmax(tmp), tmp.shape)
-
+    #m1, m2 = np.unravel_index(np.nanargmax(tmp), tmp.shape)
+    m2 = np.nanargmax(medArray)
+    
     #extract signal from this column
     y=tmp[:,m2]
     x=np.arange(len(y))
