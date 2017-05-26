@@ -79,13 +79,13 @@ def findLimits(data, dispAxis=0, winRng=51, imgSmth=5, limSmth=10, ncpus=None, r
     else:
         dTmp = data
 
-    nx = dTmp.shape[0]
-    ny = dTmp.shape[1]
-
     #first cutoff limits along the dispersion direction
     if (rmRef):
         dTmp = dTmp[:, 4:dTmp.shape[1]-4]
-        
+
+    nx = dTmp.shape[0]
+    ny = dTmp.shape[1]
+
     #go through and identify slice limits
     inpLst = []
 
@@ -116,7 +116,7 @@ def findLimits(data, dispAxis=0, winRng=51, imgSmth=5, limSmth=10, ncpus=None, r
 
     #now go through and shift all limits along the spatial direction to account for reference removed image
     if (rmRef):
-        limSmth = np.clip(limits-4,0, dTmp.shape[0]-1)
+        limSmth = np.clip(limSmth-4,0, dTmp.shape[1]-1)
         
     return limSmth
 
@@ -206,7 +206,7 @@ def getResponseAll(flatSlices, sigma, cutoff, MP=True, ncpus=None):
     """
 
     #first determine the normalization weight, based on the maximum median value along each slice
-    medSlice = getMedLevelAll(slices, MP=True, ncpus=None):
+    medSlice = getMedLevelAll(flatSlices, MP=True, ncpus=None)
     nrmValue = np.nanmax(medSlice)
     
     #multiprocessing may improve performance
@@ -214,7 +214,7 @@ def getResponseAll(flatSlices, sigma, cutoff, MP=True, ncpus=None):
         #set up the input list
 
         lst = []
-        for s in slices:
+        for s in flatSlices:
             lst.append([s, sigma, cutoff, nrmValue])
 
         #setup and run the MP code for finding the limits
