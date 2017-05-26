@@ -60,7 +60,7 @@ def limFit1(input):
 
     return limMeas
 
-def findLimits(data, dispAxis=0, winRng=51, imgSmth=5, limSmth=10, ncpus=None):
+def findLimits(data, dispAxis=0, winRng=51, imgSmth=5, limSmth=10, ncpus=None, rmRef=True):
     """
     Used to determine slice limits from a full flat-field image
     Usage: limits = findLimits(data, dispAxis=,winRng=,imgSmth=,limSmth= )
@@ -70,6 +70,7 @@ def findLimits(data, dispAxis=0, winRng=51, imgSmth=5, limSmth=10, ncpus=None):
     imgSmth is a keyword specifying the Gaussian width of the smoothing kernel for finding the slice-edge limits
     limSmth is a keyword specigying the Gaussian width of the smoothing kernel for smoothing the found limits
     ncpus is a keyword indicating the number of processes to spawn
+    rmRef is a keyword indicating if the image includes the reference pixels and if they should be removed from the limits
     returns an array containing the pixel limits for each slice edge along the dispersion axis
     """
 
@@ -80,9 +81,12 @@ def findLimits(data, dispAxis=0, winRng=51, imgSmth=5, limSmth=10, ncpus=None):
 
     nx = dTmp.shape[0]
     ny = dTmp.shape[1]
-    
-    #go through and identify slice limits
 
+    #first cutoff limits along the dispersion direction
+    if (rmRef):
+        dTmp = dTmp[:, 4:dTmp.shape[1]-4]
+        
+    #go through and identify slice limits
     inpLst = []
 
     #create kernel for smoothing along the spatial direction
@@ -109,7 +113,11 @@ def findLimits(data, dispAxis=0, winRng=51, imgSmth=5, limSmth=10, ncpus=None):
     for i in range(result.shape[0]):
         y = conv.convolve(result[i,:], gKern, boundary='extend', normalize_kernel=True)
         limSmth[i,:] = y
-    
+
+    #now go through and shift all limits along the spatial direction to account for reference removed image
+    if (rmRef):
+        limSmth = np.clip(limits-4,0, dTmp.shape[0]-1)
+        
     return limSmth
 
 #def extSlices(data, limits, dispAxis=0):
@@ -174,19 +182,20 @@ def getResponse2D(input):
     slice = input[0]
     sigma = input[1]
     cutoff = input[2]
-
+    nrmValue = input[3]
+    
     if (sigma>0):
         gKern = conv.Gaussian2DKernel(stddev=sigma) 
         sliceSmth=conv.convolve(slice,gKern,boundary='extend',normalize_kernel=True)
     else:
         sliceSmth = slice
 
-    norm = sliceSmth/np.nanmax(sliceSmth)
-    norm[np.where(norm < cutoff)] = 1.
+    norm = sliceSmth/nrmValue
+    norm[np.where(norm < cutoff)] = np.nan
 
     return norm
 
-def getResponseAll(slices, sigma, cutoff, MP=True, ncpus=None):
+def getResponseAll(flatSlices, sigma, cutoff, MP=True, ncpus=None):
     """
     Returns a possibly smoothed and normalized response function for all slices in the provided list
     Usage: result = getResponseAll(slices, sigma, cutoff, MP=)
@@ -196,13 +205,17 @@ def getResponseAll(slices, sigma, cutoff, MP=True, ncpus=None):
     MP is a keyword used to enable multiprocessing routines that may improve performance
     """
 
+    #first determine the normalization weight, based on the maximum median value along each slice
+    medSlice = getMedLevelAll(slices, MP=True, ncpus=None):
+    nrmValue = np.nanmax(medSlice)
+    
     #multiprocessing may improve performance
     if (MP):
         #set up the input list
 
         lst = []
         for s in slices:
-            lst.append([s, sigma, cutoff])
+            lst.append([s, sigma, cutoff, nrmValue])
 
         #setup and run the MP code for finding the limits
         if (ncpus == None):
@@ -213,7 +226,7 @@ def getResponseAll(slices, sigma, cutoff, MP=True, ncpus=None):
     else:
         result=[]
         for s in slices:
-            result.append(getResponse2D([s,sigma, cutoff]))
+            result.append(getResponse2D([s,sigma, cutoff,nrmValue]))
             
     return result
 
@@ -519,86 +532,77 @@ def polyFitLimits(limits, degree=2):
         polyLimits.append(polyFit)
     return np.asarray(polyLimits)
         
-#def extSlice(input):
-#    """
-#    """
-#
-#    dTmp = input[0]
-#    limits = input[1]
-#    shft = input[2]
-#    reverse = input[3]
-#    n = limits.shape[1]
-#        
-#    #compute the relative limits based on the provided shift
-#    limNew = np.clip(limits + shft, 0, dTmp.shape[0])
-#        
-#    #initialize output slices
-#    mnOut = np.floor(np.min(limits[0,:])).astype('int')
-#    mxOut = np.ceil(np.max(limits[1,:])).astype('int')
-#    slice = np.empty((mxOut-mnOut,n), dtype=data.dtype)
-#    slice[:] = np.nan
-#
-#    #now go through input image and copy into output slices
-#    mnIn = int(mnOut + shft)
-#    mxIn= int(mxOut + shft)
-#
-#    if (reverse):
-#        for j in range(mxIn-1,mnIn-1,-1):
-#            keep = np.ones(n, dtype=bool)
-#            whr = np.where(np.floor(limNew[0,:]) > j)[0]
-#            keep[whr] = False
-#            whr = np.where(np.ceil(limNew[1,:]) < j)[0]
-#            keep[whr] = False
-#            slice[j-mnIn,keep] = dTmp[j,keep] 
-#    else:
-#        for j in range(mnIn,mxIn):
-#            keep = np.ones(n, dtype=bool)
-#            whr = np.where(np.floor(limNew[0,:]) > j)[0]
-#            keep[whr] = False
-#            whr = np.where(np.ceil(limNew[1,:]) < j)[0]
-#            keep[whr] = False
-#            slice[j-mnIn,keep] = dTmp[j,keep] 
-#  
-#    return slice
-#
-#def extSlicesNew(data, limits, ncpus=None, MP=True,shft=0, dispAxis=0):
-#    """
-#    Extract a list of slices (sub-images) from the given image based on relative slice limits
-#    Usage: slices = extSlices(data, limits, shft,dispAxis=)
-#    data is the input data image from which the slices will be extracted
-#    limits is an array specifying the slice-edge limits of each slice
-#    shft is the shift needed to apply to the limits to match the current image
-#    dispAxis is a keyword specifying the dispersion direction (0-> along the y-axis, 1-> along the x-axis)
-#    """
-#
-#    #modify dispersion direction to fit with routine
-#    if (dispAxis == 0):
-#        dTmp = data.T
-#    else:
-#        dTmp = data
-#
-#
-#    #create input list for feeding
-#    #start with first entry for first (left-most) slice
-#    inpLst = [[dTmp, limits[0:2, :], shft, True]]
-#
-#    #now fill in remaining slices
-#    strt=1
-#    for i in range(1,limits.shape[0]):
-#        inpLst.append([dTmp, limits[strt:strt+2,:], shft, False])
-#        strt+=1
-#
-#    if (MP):
-#        #setup and run the MP code for finding the limits
-#        if (ncpus == None):
-#            ncpus =mp.cpu_count()
-#
-#        pool = mp.Pool(ncpus)
-#        slices = pool.map(extSlice, inpLst)
-#        pool.close()
-#    else:
-#        slices = []
-#        for inp in inpLst:
-#            slices.append(extSlice(inp))
-#
-#    return slices
+def medSmoothSlices(extSlices, nPix, MP=True, ncpus=None):
+    """
+    """
+    
+    
+    if (MP):
+        #set up input list
+        lst = []
+
+        for slc in extSlices:
+            lst.append([slc, nPix])
+            
+        if (ncpus == None):
+            ncpus = mp.cpu_count()
+        pool = mp.Pool(ncpus)
+        result = pool.map(medSmoothSlice,lst)
+        pool.close()
+    else:
+        result = []
+        for slc in extSlices:
+            result.append(medSmoothSlice(slc, nPix))
+
+    return result
+
+def medSmoothSlice(input):
+    """
+    """
+
+    slc = input[0]
+    nPix = input[1]
+    win = np.arange(nPix) - int(nPix/2)
+
+    out = np.empty(slc.shape)
+    for i in range(slc.shape[0]):
+        xrng = win + i
+        xrng = xrng[np.logical_and(xrng>0,xrng<slc.shape[0])]
+
+        out[i,:] = np.nanmedian(slc[xrng,:], axis=0)
+
+    return out
+
+def getMedLevelAll(extSlices, MP=True, ncpus=None):
+    """
+    """
+    
+    
+    if (MP):
+        #set up input list
+        lst = []
+
+        if (ncpus == None):
+            ncpus = mp.cpu_count()
+        pool = mp.Pool(ncpus)
+        result = pool.map(getMedLevelSlice,extSlices)
+        pool.close()
+    else:
+        result = []
+        for slc in extSlices:
+            result.append(getMedLevelSlice(slc))
+
+    return result
+
+def getMedLevelSlice(slc):
+    """
+    """
+
+    out = np.empty(slc.shape[1])
+
+    for i in range(slc.shape[1]):
+        y = slc[:,i]
+        out[i] = np.nanmedian(y)
+
+    return out
+
