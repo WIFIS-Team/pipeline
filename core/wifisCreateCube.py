@@ -90,9 +90,9 @@ def distCorSlice(input):
     
     #get spatial grid properties if not provided
     if (spatGridProps is not None):
-        minSpat = spatGridProps[0]
-        maxSpat = spatGridProps[1]
-        nSpat = spatGridProps[2]
+        minSpat = float(spatGridProps[0])
+        maxSpat = float(spatGridProps[1])
+        nSpat = float(spatGridProps[2])
         dSpat = (maxSpat-minSpat)/(nSpat-1)
     else:
         nSpat = dataSlc.shape[0]
@@ -354,7 +354,7 @@ def mkWaveSpatGridSlice(input):
 
     return out
 
-def waveCorAll(dataSlices, waveMapSlices, method='linear', ncpus=None, waveGridProps=None):
+def waveCorAll(dataSlices, waveMapSlices, method='linear', ncpus=None, waveGridProps=None, MP=True):
     """
     Routine to place slices on uniform wavelength grid
     Usage: outLst = waveCorAll(dataSlices, waveMapSlices, method='linear', ncpus=None)
@@ -370,16 +370,21 @@ def waveCorAll(dataSlices, waveMapSlices, method='linear', ncpus=None, waveGridP
     for i in range(len(dataSlices)):
         lst.append([dataSlices[i], waveMapSlices[i],method,waveGridProps])
 
-    #setup multiprocessing
-    if (ncpus==None):
-        ncpus =mp.cpu_count()
+    if (MP):
+        #setup multiprocessing
+        if (ncpus==None):
+            ncpus =mp.cpu_count()
 
-    pool = mp.Pool(ncpus)
+        pool = mp.Pool(ncpus)
     
-    #run multiprocessing of the code
-    outLst = pool.map(waveCorSlice, lst)
-    pool.close()
-
+        #run multiprocessing of the code
+        outLst = pool.map(waveCorSlice, lst)
+        pool.close()
+    else:
+        outLst = []
+        for l in lst:
+            outLst.append(waveCorSlice(l))
+            
     return outLst
 
 def waveCorSlice(input):
@@ -400,12 +405,12 @@ def waveCorSlice(input):
     waveGridProps = input[3]
     
     if waveGridProps is not None:
-        minWave = waveGridProps[0]
-        maxWave = waveGridProps[1]
-        nWave = waveGridProps[2]
+        minWave = float(waveGridProps[0])
+        maxWave = float(waveGridProps[1])
+        nWave = float(waveGridProps[2])
         dWave = (maxWave-minWave)/(nWave-1)
     else:
-        #get spatial grid properties
+        #get wave grid properties
         nWave = dataSlc.shape[1]
         dWave = (np.nanmax(waveSlc) - np.nanmin(waveSlc))/(nWave-1)
         minWave = np.nanmin(waveSlc)
