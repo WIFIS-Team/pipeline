@@ -452,7 +452,7 @@ def waveCorSlice1D(input):
         maxWave = np.nanmax(waveSlc)
 
     xout = np.linspace(minWave,maxWave, num=int(nWave))
-    out = np.empty((xout.shape[1], dataSlc.shape[0]), dtype=dataSlc.dtype)
+    out = np.empty((xout.shape[0], dataSlc.shape[0]), dtype=dataSlc.dtype)
     out[:] = np.nan
 
     for i in range(dataSlc.shape[0]):
