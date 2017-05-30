@@ -43,7 +43,7 @@ def compSpatGrid(distTrimSlices):
     N = int((spatMax-spatMin)/dSpat)
     return([spatMin,spatMax,N])
 
-def distCorAll(dataSlices, distMapSlices, method='linear', ncpus=None, spatGridProps=None):
+def distCorAll(dataSlices, distMapSlices, method='linear', ncpus=None, spatGridProps=None, MP=True):
     """
     Routine to distortion correct a list of slices.
     Usage: outLst = distCorAll(dataSlices, distMapSlices, method='linear', ncpus=None)
@@ -59,17 +59,54 @@ def distCorAll(dataSlices, distMapSlices, method='linear', ncpus=None, spatGridP
     for i in range(len(dataSlices)):
         lst.append([dataSlices[i], distMapSlices[i],method,spatGridProps])
 
-    #setup multiprocessing
-    if (ncpus==None):
-        ncpus =mp.cpu_count()
-
-    pool = mp.Pool(ncpus)
+    if (MP):
+        
+        #setup multiprocessing
+        if (ncpus==None):
+            ncpus =mp.cpu_count()
+            
+        pool = mp.Pool(ncpus)
     
-    #run multiprocessing of the code
-    outLst = pool.map(distCorSlice, lst)
-    pool.close()
+        #run multiprocessing of the code
+        outLst = pool.map(distCorSlice1D, lst)
+        pool.close()
+    else:
+        outLst = []
 
+        for l in lst:
+            outLst.append(distCorSlice1D(l))
+            
     return outLst
+
+def distCorSlice1D(input):
+    """
+    """
+
+    dataSlc = input[0]
+    distSlc = input[1]
+    method = input[2] #only needed to keep input consistent with distCorSlice function
+    spatGridProps = input[3]
+
+    #get spatial grid properties if not provided
+    if (spatGridProps is not None):
+        minSpat = float(spatGridProps[0])
+        maxSpat = float(spatGridProps[1])
+        nSpat = float(spatGridProps[2])
+    else:
+        nSpat = dataSlc.shape[0]
+        minSpat = np.min(distSlc)
+        maxSpat = np.max(distSlc)
+
+    xout = np.linspace(minSpat,maxSpat, num=int(nSpat))
+    
+    out = np.empty((xout.shape[0], dataSlc.shape[1]), dtype=dataSlc.dtype)
+    out[:] = np.nan
+
+    for i in range(dataSlc.shape[1]):
+        out[:,i] = np.interp(xout,distSlc[:,i],dataSlc[:,i], right=np.nan,left=np.nan)
+
+    return out    
+       
 
 def distCorSlice(input):
     """
@@ -378,14 +415,51 @@ def waveCorAll(dataSlices, waveMapSlices, method='linear', ncpus=None, waveGridP
         pool = mp.Pool(ncpus)
     
         #run multiprocessing of the code
-        outLst = pool.map(waveCorSlice, lst)
+        outLst = pool.map(waveCorSlice1D, lst)
         pool.close()
     else:
         outLst = []
         for l in lst:
-            outLst.append(waveCorSlice(l))
+            outLst.append(waveCorSlice1D(l))
             
     return outLst
+
+def waveCorSlice1D(input):
+    """
+    Routine to place individual slices on uniform wavelength grid.
+    Usage out = waveCorSlice(input)
+    input is a list that contains:
+    dataSlc - is the image slice of the input data to be distortion corrected,
+    waveSlc - is the wavelength mapping for the specific slice
+    method - is a string indicating the interpolation method to use ("linear", "cubic", or "nearest")
+    Returned is a list of distortion corrected images.
+    """
+
+    #rename input
+    dataSlc = input[0]
+    waveSlc = input[1]
+    method = input[2]
+    waveGridProps = input[3]
+    
+    if waveGridProps is not None:
+        minWave = float(waveGridProps[0])
+        maxWave = float(waveGridProps[1])
+        nWave = float(waveGridProps[2])
+    else:
+        #get wave grid properties
+        nWave = dataSlc.shape[1]
+        minWave = np.nanmin(waveSlc)
+        maxWave = np.nanmax(waveSlc)
+
+    xout = np.linspace(minWave,maxWave, num=int(nWave))
+    out = np.empty((xout.shape[1], dataSlc.shape[0]), dtype=dataSlc.dtype)
+    out[:] = np.nan
+
+    for i in range(dataSlc.shape[0]):
+        out[i,:] = np.interp(xout,distSlc[i,:],dataSlc[i,:], right=np.nan,left=np.nan)
+
+    return out    
+           
 
 def waveCorSlice(input):
     """
