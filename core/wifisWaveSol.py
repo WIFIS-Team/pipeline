@@ -552,7 +552,7 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
         
     return [dispSolLst, fwhmLst, pixCentLst, waveCentLst, rmsLst, pixSolLst]
     
-def buildWaveMap(dispSolLst, npts):
+def buildWaveMap(dispSolLst, npts, fill_missing=True, extrapolate=False):
     """
     Routine to build a wavelength map from the provided dispersion solution list for each image slice
     Usage: waveMapLst = buildWaveMap(dispSolLst, npts)
@@ -571,10 +571,37 @@ def buildWaveMap(dispSolLst, npts):
         #populate map with solution
         for i in range(len(dispSol)):
             wave = 0.
+
             for j in range(dispSol[i].shape[0]):
                 wave += dispSol[i][j]*x**j
                 
             waveMap[i,:] = wave
+
+        #now fill in rows with missing solutions
+        if (fill_missing):
+            good = []
+            bad = []
+            
+            for i in range(waveMap.shape[0]):
+                #assume that either all points are NaN or none
+                if np.any(np.isfinite(waveMap[i,:])):
+                    good.append(i)
+                else:
+                    bad.append(i)
+                    
+            xint = np.asarray(good)
+            bad = np.asarray(bad)
+            
+            if (bad.shape[0]>0) :
+                #get values
+                if (extrapolate):
+                    finter = interp1d(xint,waveMap[good,:],kind='linear', bounds_error=False,axis=0,fill_value='extrapolate')
+                else:
+                    finter = interp1d(xint,waveMap[good,:],kind='linear', bounds_error=False,axis=0)
+
+                waveMap[bad,:] = finter(bad)
+                                      
+  
         waveMapLst.append(waveMap)
 
     return waveMapLst
