@@ -80,6 +80,13 @@ def distCorAll(dataSlices, distMapSlices, method='linear', ncpus=None, spatGridP
 
 def distCorSlice1D(input):
     """
+    Routine to distortion correct individual slices.
+    Usage out = distCorSlice1D(input)
+    input is a list that contains:
+    dataSlc - is the image slice of the input data to be distortion corrected,
+    distSlc - is the distortion mapping for the specific slice
+    method - is a string indicating the interpolation method to use ("linear", "cubic", or "nearest"). Not used for anything other than compatability with older function.
+    Returned is a distortion corrected image.
     """
 
     dataSlc = input[0]
@@ -106,7 +113,6 @@ def distCorSlice1D(input):
         out[:,i] = np.interp(xout,distSlc[:,i],dataSlc[:,i], right=np.nan,left=np.nan)
 
     return out    
-       
 
 def distCorSlice(input):
     """
@@ -116,7 +122,7 @@ def distCorSlice(input):
     dataSlc - is the image slice of the input data to be distortion corrected,
     distSlc - is the distortion mapping for the specific slice
     method - is a string indicating the interpolation method to use ("linear", "cubic", or "nearest")
-    Returned is a list of distortion corrected images.
+    Returned is a distortion corrected image.
     """
 
     #rename input
