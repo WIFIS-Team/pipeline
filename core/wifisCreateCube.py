@@ -438,7 +438,7 @@ def waveCorSlice1D(input):
     #rename input
     dataSlc = input[0]
     waveSlc = input[1]
-    method = input[2]
+    method = input[2] #only present for compatability with older version
     waveGridProps = input[3]
     
     if waveGridProps is not None:
@@ -452,11 +452,12 @@ def waveCorSlice1D(input):
         maxWave = np.nanmax(waveSlc)
 
     xout = np.linspace(minWave,maxWave, num=int(nWave))
-    out = np.empty((xout.shape[0], dataSlc.shape[0]), dtype=dataSlc.dtype)
+    out = np.empty((dataSlc.shape[0], xout.shape[0]),dtype=dataSlc.dtype)
     out[:] = np.nan
 
     for i in range(dataSlc.shape[0]):
-        out[i,:] = np.interp(xout,waveSlc[i,:],dataSlc[i,:], right=np.nan,left=np.nan)
+        srt = np.argsort(waveSlc[i,:])
+        out[i,:] = np.interp(xout,waveSlc[i,srt],dataSlc[i,srt], right=np.nan,left=np.nan)
 
     return out    
            
