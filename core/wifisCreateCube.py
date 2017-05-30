@@ -456,7 +456,7 @@ def waveCorSlice1D(input):
     out[:] = np.nan
 
     for i in range(dataSlc.shape[0]):
-        out[i,:] = np.interp(xout,distSlc[i,:],dataSlc[i,:], right=np.nan,left=np.nan)
+        out[i,:] = np.interp(xout,waveSlc[i,:],dataSlc[i,:], right=np.nan,left=np.nan)
 
     return out    
            
