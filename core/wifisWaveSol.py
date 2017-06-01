@@ -247,8 +247,8 @@ def getSolQuick(input):
                             try:
                                 amp,cent,wid = gaussFit(pixRng,yRng, winRng/3.,plot=plot,title=str(atlasPix[i]))
                                 
-                                #only keep line if amplitude of fit >3*noise level #and width of fit <1/3 of winRng
-                                if (amp/nse >= 3. and np.abs(wid) < winRng):
+                                #only keep line if amplitude of fit >3*noise level #and width of fit <1/2 of winRng
+                                if (amp/nse >= 3. and np.abs(wid) < winRng/2.):
                                     centFit.append(cent)
                                     widthFit.append(wid)
                                     ampFit.append(amp)
