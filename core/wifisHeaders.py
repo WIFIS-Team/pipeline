@@ -31,7 +31,7 @@ def getWCSCube(data, hdr, xScale, yScale, waveGridProps):
     #rotAngle of 90 corresponds to N-S alignment
     #rotAngle of 180 corresponds to W-E alignment
     
-    w.wcs.cdelt = [xScale/3600., -yScale/3600., dWave]
+    w.wcs.cdelt = [xScale/3600., yScale/3600., dWave]
     w.wcs.crpix = [data.shape[1]/2., data.shape[0]/2., 1]
     w.wcs.crval=[telRA,telDEC, waveGridProps[0]]
     w.wcs.crota=[float(rotAngle), float(rotAngle),0.]
@@ -68,7 +68,7 @@ def getWCSImg(data, hdr, xScale, yScale):
     #rotAngle of 180 corresponds to W-E alignment 
     #convert input strings to degrees
     
-    w.wcs.cdelt = [xScale/3600., -yScale/3600.]
+    w.wcs.cdelt = [xScale/3600., yScale/3600.]
     w.wcs.crpix = [data.shape[1]/2., data.shape[0]/2.]
     w.wcs.crval=[telRA,telDEC]
     w.wcs.crota=[float(rotAngle), float(rotAngle)]
@@ -135,8 +135,8 @@ def addTelInfo(hdr, obsinfoFile):
     hdr.set('OBJECT', dct['Source'], 'Object name')
     hdr.set('OBSCLASS', dct['Obs Type'], 'Observe class')
     hdr.set('OBSERVAT', dct['ID'], 'Name of telescope')
-    hdr.set('EPOCH', 2000., 'Target coordinate system')
-    hdr.set('EQUINOX', 2000., 'Equinox of coordinate system')
+    hdr.set('EPOCH', 2000, 'Target coordinate system')
+    hdr.set('EQUINOX', 2000, 'Equinox of coordinate system')
 
     #convert target RA and DEC into degrees
     RA_deg = float(dct['RA'][0:2])*15. + float(dct['RA'][2:4])*15/60. + float(dct['RA'][4:])*15/3600.
@@ -154,7 +154,7 @@ def addTelInfo(hdr, obsinfoFile):
     try:
         crpa = float(dct['IIS'])
     except ValueError:
-        print('***WARNING. ROTATOR POSITION ANGLE FORMAT INCORRECT, ASSUMING 90 DEG')
+        print('***WARNING. ROTATOR POSITION ANGLE FORMAT INCORRECT, ASSUMING 90 DEG***')
         crpa = 90.
     
     hdr.set('CRPA', crpa, 'Cass Rotator Position Angle at end')
