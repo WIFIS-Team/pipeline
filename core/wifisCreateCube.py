@@ -27,9 +27,9 @@ def compSpatGrid(distTrimSlices):
     dMax = []
     deltaD = []
     for d in distTrimSlices:
-        for i in range(d.shape[0]):
-            dmin=np.nanmax(d[0,:])
-        dmax= np.nanmin(d[-1,:])
+        #all pixels should have the same coordinate, but just in case
+        dmin=np.nanmedian(d[0,:]) 
+        dmax= np.nanmedian(d[-1,:])
 
         dMin.append(dmin)
         dMax.append(dmax)
