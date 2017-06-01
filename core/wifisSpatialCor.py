@@ -587,7 +587,7 @@ def extendTraceSlice(input):
     
     return z
 
-def extendTraceAll(traceLst, extSlices, zeroTraces,space=5.,order=4,method='linear', ncpus=None, MP=True):
+def extendTraceAll(traceLst, extSlices, zeroTraces,space=1/3.,order=4,method='linear', ncpus=None, MP=True):
     """
     Routine to interpolate the Ronchi traces onto the provided pixel grid and extrapolate the fit towards regions that fall outside the Ronchi traces for all slices
     Usage: interpLst = extendTraceAll(traceLst, extSlices, zeroTraces, space=5., method='linear', ncpus=None, MP=True)
