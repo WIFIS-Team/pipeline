@@ -529,6 +529,7 @@ def polyFitLimits(limits, degree=2):
         polyCoef = np.polyfit(x,y, degree)
         poly = np.poly1d(polyCoef)
         polyFit = poly(x)
+        np.clip(polyFit, 0, x.shape[0]-1, out = polyFit)
         polyLimits.append(polyFit)
     return np.asarray(polyLimits)
         
