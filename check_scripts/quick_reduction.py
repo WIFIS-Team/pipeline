@@ -6,7 +6,7 @@ import wifisCreateCube as createCube
 import wifisCombineData as combData
 import wifisHeaders as headers
 import wifisGetSatInfo as satInfo
-from astropy import wcs
+from astropy import wcs 
 import os
 
 os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
