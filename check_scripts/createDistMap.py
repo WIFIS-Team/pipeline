@@ -3,15 +3,19 @@
 
 import wifisIO
 import numpy as np
+import wifisSpatialCor as spatialCor
 
-flatSliceFile = ''
+flatSliceFile = 'processed/master_flat_slices.fits'
 
+print('reading flat')
 #read in flat-field slices file
-flatSlices = wifisIO.readImgsFromFile(flatSliceFile)[0][0]
+flatSlices = wifisIO.readImgsFromFile(flatSliceFile)[0]
 
+print('tracing centre of flat')
 #trace centre, assuming all slices are aligned
-trace = spatialCor.traceCentreFlatAll(flatSlices,cutoff=0.5, limSmth=20,MP=True, plot=False)
+trace = spatialCor.traceCentreFlatAll(flatSlices,cutoff=0.8, limSmth=20,MP=False, plot=False)
 
+print('Creating artificial distortion map')
 #create fake ronchi maps
 ronchiMaps = []
 #create ronchi maps
