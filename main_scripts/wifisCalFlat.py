@@ -32,12 +32,13 @@ t0 = time.time()
 
 #*****************************************************************************
 #******************************* Required input ******************************
-fileList = 'flat.lst' 
-nlFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_NLCoeff.fits'        
-satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits'
-bpmFile = 'bpm.fits'
-plot = True
+fileList = 'flat.lst' # a simple ascii file containing a list of the folder names that contain the ramp data
+nlFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_NLCoeff.fits' # the non-linearity correction coefficients file        
+satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits' # the saturation limits file
+bpmFile = 'bpm.fits' # the bad pixel mask
+plot = True #whether to plot the traces
 #*****************************************************************************
+
 #NOTES
 #file list can be a 2D table: where all files to be coadded are on the same row and files to be processed separately are on different rows. *** NOT YET IMPLEMENTED
 
@@ -187,8 +188,8 @@ for lstNum in range(len(lst)):
             plt.imshow(flatCor[4:2044,4:2044], aspect='auto', cmap='jet', clim=[0,2.*med1], origin='lower')
             plt.colorbar()
             for l in range(limits.shape[0]):
-                plt.plot(limits[l]-0.5, np.arange(limits.shape[1]),'k', linewidth=1)
-                plt.plot(polyLimits[l]-0.5, np.arange(limits.shape[1]),'r--', linewidth=1)
+                plt.plot(limits[l]+0.5, np.arange(limits.shape[1]),'k', linewidth=1)
+                plt.plot(polyLimits[l]+0.5, np.arange(limits.shape[1]),'r--', linewidth=1)
             plt.savefig('quality_control/'+folder+'_flat_slices_traces.png', dpi=300)
             plt.close(fig)
                     
