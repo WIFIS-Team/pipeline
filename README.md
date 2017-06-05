@@ -8,12 +8,13 @@ pyopencl - for OpenCL accelerated tasks - >= 2015.2
 matplotlib - for plotting >= 1.5.2
 cPickle >= 2.3
 
-The versions provide the release for which the pipeline was tested on. Your mileage may very with earlier versions.
+The versions provided are the releases for which the pipeline was tested on. Your mileage may very with earlier versions.
 
-Currently, the following must be copied/linked to the directory where to be run:
-- all python scripts found under ~base~/core
-- the opencl_code directory found under ~base~/core
-- the external_data directory found under ~base~
+To setup:
+add the core directory containing the core modules to your PYTHONPATH environment variable.
+
+The code is largely designed such that: the main scripts are copied/linked to the directory where to be run:
+- the python scripts found under ~base~/scripts
 where ~base~ is the folder where the pipeline is installed.
 
 Main scripts to edit and run:
