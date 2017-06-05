@@ -32,6 +32,7 @@ os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target
 
 #*****************************************************************************
 #************************** Required input ***********************************
+
 fileList = ''
 templateFile = '/data/pipeline/external_data/templateSlices.fits'
 prevResultsFile = '/data/pipeline/external_data/prevSol.pkl'
@@ -41,8 +42,9 @@ bpmFile = 'bpm.fits'
 flatName = ''
 atlasname = '/data/pipeline/external_data/best_lines2.dat'
 distMapFile = ''
-distMapLimitsFile = ''
+spatGridPropsFile = ''
 plot = True
+
 #*****************************************************************************
 #*****************************************************************************
 
@@ -91,7 +93,7 @@ for lstNum = in range(len(lst)):
 
     savename = 'processed/'+folder
     
-    if(os.path.exists(savename+'_wave.fits') and (os.path.exists(savename+'_waveMap.fits')) and (os.path.exists(savename+'_waveFitResuls.pkl'))):
+    if(os.path.exists(savename+'_wave.fits') and os.path.exists(savename+'_waveMap.fits') and os.path.exists(savename+'_waveFitResuls.pkl') and os.path.exists(savename+'_wave_distCor.fits')):
         cont = wifisIO.userInput('Processed wavelength calibration files already exists for ' +foldername+', do you want to continue processing (y/n)?')
         if (cont.lower() == 'y'):
             contProc = True
@@ -115,21 +117,31 @@ for lstNum = in range(len(lst)):
             contProc2 = True
         
         if (contProc2):
-            waveCor, sigmaCor, satFrame = processRamp.fromUTR(folder, savename+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2)
-
+            wave, sigmaImg, satFrame = processRamp.fromUTR(folder, savename+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2)
 
         print('Extracting slices')
         #first get rid of reference pixels
-        waveCor = waveCor[4:2044,4:2044]
+        wave = wave[4:2044,4:2044]
+        sigmaImg = sigmaImg[4:2044, 4:0244]
+        satFrame = satFrame[4:2044, 4:2044]
+        
         limits = wifisIO.readImgsFromFile(flatName+'_limits.fits')[0]
-        waveSlices = slices.extSlices(waveCor, limits, dispAxis=0)
+        waveSlices = slices.extSlices(wave, limits, dispAxis=0)
+        sigmaSlices = slices.extSlices(sigmaImg, limits, dispAxis=0)
+        satSlices = slices.extSlices(satFrame, limits, dispAxis=0)
 
-
+        print('Flat fielding slices')
+        flatNorm = wifisIO.readImgsFromFile(flatName+'_slices_norm.fits')[0][0:18]
+        waveFlat = slices.ffCorrectAll(waveSlices, flatNorm)
+        sigmaFlat = slices.ffCorrectAll(sigmaSlices,flatNorm)
         
         print('Distortion correcting slices')
-        
+        distMap = wifisIO.readImgsFromFile(distMapFile)[0]
+        spatGridProps = wifisIO.readTable(spatGridPropsFile)
+        waveCor = createCube.distCorAll(waveFlat, distMap, spatGridProps=spatGridProps)
 
-
+        #save distortion corrected arc image
+        wifisIO.writeFits(waveCor, savename+'_wave_distCor.fits')
         
         #Determine dispersion solution
         print('Determining dispersion solution')
@@ -142,40 +154,47 @@ for lstNum = in range(len(lst)):
         #check if solution already exists.
         if(os.path.exists(savename+'_waveFitResults.pkl') and (os.path.exists(savename+'_waveMap.fits'))):
             cont = wifisIO.userInput('Dispersion solution and wavemap already exists for ' +foldername+', do you want to continue and replace (y/n)?')
-            if (cont.lower() == 'n'):
-                exit()
-
-        results = waveSol.getWaveSol(waveSlices, template, atlasname, 3, prevSol, winRng=9, mxCcor=30, weights=False, buildSol=False, sigmaClip=1, allowLower=True, lngthConstraint=True)
+            if (cont.lower() == ''):
+                cont3 = True
+            else:
+                cont3 = False
+        else:
+            cont3 = True
+                
+        if cont3:
+            results = waveSol.getWaveSol(waveSlices, template, atlasname, 3, prevSol, winRng=9, mxCcor=30, weights=False, buildSol=False, sigmaClip=1, allowLower=True, lngthConstraint=True)
     
-        dispSolLst = results[0]
-        #Save all results
-        wifisIO.writePickle(savename+'_waveFitResults.pkl', results)
+            dispSolLst = results[0]
+            #Save all results
+            wifisIO.writePickle(savename+'_waveFitResults.pkl', results)
 
-        
-        print('Creating wavelength map')
-        #Create wavemap
-        waveMapLst = waveSol.buildWaveMap(dispSolLst, waveSlices[0].shape[1])
+            print('Getting smoothed dispersion solutions')
+            
+            
+            print('Creating wavelength map')
+            #Create wavemap
+            waveMapLst = waveSol.buildWaveMap(dispSolLst, waveSlices[0].shape[1])
 
-        #save wavemap solution
-        wifisIO.writeFits(waveMapLst, savename+'_waveMap.fits')
+            #save wavemap solution
+            wifisIO.writeFits(waveMapLst, savename+'_waveMap.fits')
 
-        if (plot):
-            #save some output for quality control purposes
-            plt.ioff()
+            if (plot):
+                #save some output for quality control purposes
+                plt.ioff()
 
-            #first save RMS results
-            rms = results[4]
+                #first save RMS results
+                rms = results[4]
 
-            with PdfPages('quality_control/'+folder+'_wave_RMS.pdf') as pdf:
-                for r in rms:
-                    plt.plot(r)
-                    plt.xlabel('Column #')
-                    plt.ylabel('RMS in pixels')
-                    pdf.savefig(dpi=300)
-                    plt.close()
+                with PdfPages('quality_control/'+folder+'_wave_RMS.pdf') as pdf:
+                    for r in rms:
+                        plt.plot(r)
+                        plt.xlabel('Column #')
+                        plt.ylabel('RMS in pixels')
+                        pdf.savefig(dpi=300)
+                        plt.close()
 
-            #now save FWHM map
-            fwhmMapLst = waveSol.buildFWHMMap(results[2], results[3], npts)
+                    #now save FWHM map
+                fwhmMapLst = waveSol.buildFWHMMap(results[2], results[3], npts)
 
 print ("Total time to run entire script: ",time.time()-t0)
 
