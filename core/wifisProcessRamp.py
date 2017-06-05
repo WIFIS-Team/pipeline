@@ -80,9 +80,9 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, s
         cont = wifisIO.userInput('*** WARNING: No bad pixel mask provided. Do you want to continue? *** (y/n)?')
         if (cont.lower()!='y'):
             raise SystemExit('*** Missing bad pixel mask. Exiting ***')
-    else:
-        imgCor = fluxImg
-        sigmaCor = sigmaImg
+        else:
+            imgCor = fluxImg
+            sigmaCor = sigmaImg
    
     return imgCor, sigmaCor, satFrame
 
