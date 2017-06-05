@@ -62,7 +62,7 @@ if (plot):
 nlCoeff = wifisIO.readImgsFromFile(nlFile)[0]
 satCounts = wifisIO.readImgsFromFile(satFile)[0]
 
-if (os.exists.path(bpmFile)):
+if (os.path.exists(bpmFile)):
     BPM = wifisIO.readImgsFromFile(bpmFile)[0]
 else:
     BPM = None
