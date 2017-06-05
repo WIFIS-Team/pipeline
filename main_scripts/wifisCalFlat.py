@@ -37,6 +37,7 @@ fileList = 'flat.lst' # a simple ascii file containing a list of the folder name
 nlFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_NLCoeff.fits' # the non-linearity correction coefficients file        
 satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits' # the saturation limits file
 bpmFile = 'bpm.fits' # the bad pixel mask
+distMapLimitsFile = ''
 plot = True #whether to plot the traces
 #*****************************************************************************
 
@@ -57,7 +58,7 @@ wifisIO.createDir('processed')
 if (plot):
     wifisIO.createDir('quality_control')
 
-
+print('Reading in calibration files')
 #open calibration files
 nlCoeff = wifisIO.readImgsFromFile(nlFile)[0]
 satCounts = wifisIO.readImgsFromFile(satFile)[0]
@@ -101,15 +102,32 @@ for lstNum in range(len(lst)):
     if (cont.lower() == 'y'):
         print('*** Working on folder ' + folder + ' ***')
 
-        flatCor, sigmaCor, satFrame = processRamp.fromUTR(folder, savename+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=20)
+        if (os.path.exists(savename+'_flat.fits')):
+            cont = wifisIO.userInput('Processed flat field file already exists for ' +folder+', do you want to continue processing (y/n)?')
+            if (cont.lower() == 'n'):
+                print('Reading image'+savename+'_flat.fits instead')
+                flatCor, sigmaImg, satFrame= wifisIO.readImgsFromFile(savename+'_flat.fits')[0]
+                contProc2 = False
+            else:
+                contProc2 = True
+        else:
+            contProc2 = True
+        
+        if (contProc2):
+            flatCor, sigmaCor, satFrame = processRamp.fromUTR(folder, savename+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=20)
 
         print('Finding slice limits and extracting slices')
         #find limits of each slice with the reference pixels, but the returned limits exclude them
         limits = slices.findLimits(flatCor, dispAxis=0, winRng=51, imgSmth=5, limSmth=20, rmRef=True)
 
         #get smoother limits, if desired, using polynomial fitting
-        polyLimits = slices.polyFitLimits(limits, degree=2)
+        polyLimits = slices.polyFitLimits(limits, degree=3)
 
+        if os.path.exists(distMapLimitsFile):
+            distMapLimits = wifisIO.readImgsFromFile(distMapLimitsFile)[0]
+            shft = np.nanmedian(polyLimits[1:-1,:] - distMapLimits[1:-1,:])
+            polyLimits = distMapLimits + shft
+            
         #save figures of tracing results for quality control purposes
         if (plot):
             print('Plotting results')
