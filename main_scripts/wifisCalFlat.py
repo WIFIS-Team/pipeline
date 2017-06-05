@@ -23,6 +23,7 @@ import wifisUncertainties
 import wifisBadPixels as badPixels
 import astropy.io.fits as fits
 import wifisHeaders as headers
+import wifisProcessRamp as processRamp
 from matplotlib.backends.backend_pdf import PdfPages
 
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
@@ -55,7 +56,17 @@ wifisIO.createDir('processed')
 
 if (plot):
     wifisIO.createDir('quality_control')
-    
+
+
+#open calibration files
+nlCoeff = wifisIO.readImgsFromFile(nlFile)[0]
+satCounts = wifisIO.readImgsFromFile(satFile)[0]
+
+if (os.exists.path(bpmFile)):
+    BPM = wifisIO.readImgsFromFile(bpmFile)[0]
+else:
+    BPM = None
+
 #read file list
 lst= wifisIO.readAsciiList(fileList)
 
@@ -89,86 +100,10 @@ for lstNum in range(len(lst)):
         
     if (cont.lower() == 'y'):
         print('*** Working on folder ' + folder + ' ***')
-        #Read in data
-        t1 = time.time()
-        ta = time.time()
-        data, inttime, hdr = wifisIO.readRampFromFolder(folder)
-        #print("time to read all files took "+str(time.time()-ta)+ " seconds")
 
-        #convert data to float32 for future processing
-        data = data.astype('float32')
-            
-        #******************************************************************************
-        #Correct data for reference pixels
-        ta = time.time()
-        print("Subtracting reference pixel channel bias")
-        refCor.channelCL(data, 32)
-        print("Subtracting reference pixel row bias")
-        refCor.rowCL(data, 4,1)
-        #print("time to apply reference pixel corrections " +str(time.time()-ta) + " seconds")       
-        #******************************************************************************
-        #find if any pixels are saturated to avoid use in future calculations
-        
-        satCounts = wifisIO.readImgsFromFile(satFile)[0]
-        satFrame = satInfo.getSatFrameCL(data, satCounts,32)
-                
-        #******************************************************************************
-        #apply non-linearity correction
-        ta = time.time()
-        print("Correcting for non-linearity")
-            
-        #find NL coefficient file
-        nlCoeff = wifisIO.readImgsFromFile(nlFile)[0]
-        NLCor.applyNLCorCL(data, nlCoeff, 32)
-        #print("time to apply non-linearity corrections " +str(time.time()-ta) + " seconds")
-        
-        #******************************************************************************
-        #Combine data cube into single image
-        fluxImg = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
-        #fluxImg = combData.upTheRampCRRejectCL(inttime, data, satFrame, 32)
+        flatCor, sigmaCor, satFrame = processRamp.fromUTR(folder, saveName+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCor=20)
 
-        data = 0
-            
-        #get uncertainties for each pixel
-        sigmaImg = wifisUncertainties.compUTR(inttime, fluxImg, satFrame)
-            
-        #write image to a file - first extension is the flux, second is uncertainties, third is saturation info
-
-        #****************************************************************************
-        #add additional header information here
-        headers.addTelInfo(hdr, folder+'/obsinfo.dat')
-        
-        #****************************************************************************
-            
-        wifisIO.writeFits([fluxImg, sigmaImg, satFrame], savename+'_flat.fits', hdr=hdr)
-
-        #if combining files, this it the point to start modifying
-        
-        # CORRECT BAD PIXELS
-        print('Correcting for bad pixels')
-        #check for BPM and read, if exists
-        if(os.path.exists(bpmFile)):
-            BPM = wifisIO.readImgsFromFile(bpmFile)[0]
-            #assumes BPM is same dimensions as raw image file
-            
-            fluxImg[BPM.astype(bool)] = np.nan
-            fluxImg[satFrame < 2] = np.nan
-            sigmaImg[~np.isfinite(fluxImg)] = np.nan
-            fluxImg[fluxImg < 0] = np.nan
-
-            #try and correct all pixels, but not the reference pixels
-            flatCor = np.empty(fluxImg.shape, dtype = fluxImg.dtype)
-            sigmaCor = np.empty(sigmaImg.shape, dtype= sigmaImg.dtype)
-            
-            flatCor[4:2044,4:2044] = badPixels.corBadPixelsAll(fluxImg[4:2044,4:2044], dispAxis=0, mxRng=20, MP=True) 
-            sigmaCor[4:2044, 4:2044]  = badPixels.corBadPixelsAll(sigmaImg[4:2044,4:2044], dispAxis=0, mxRng=20, MP=True, sigma=True)
-        else:
-            cont = wifisIO.userInput('*** WARNING: No bad pixel mask provided. Do you want to continue? *** (y/n)?')
-            if (cont.lower()!='y'):
-                raise SystemExit('*** Missing bad pixel mask. Exiting ***')
-            else:
-                flatCor = fluxImg
-                sigmaCor = sigmaImg
+        print(cheese)
                 
         print('Finding slice limits and extracting slices')
         #find limits of each slice with the reference pixels, but the returned limits exclude them
