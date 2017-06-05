@@ -435,7 +435,6 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
         dataLst.append(dTmp)
         tmpLst.append(tempTemp)
 
-
     #set up input data for running with multiprocessing
     #by extracting all vectors along the dispersion axis
     lst = []
