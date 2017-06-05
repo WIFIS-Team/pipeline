@@ -116,7 +116,7 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1
         
     #******************************************************************************
     #Combine data cube into single image
-    fluxImg = fowlerSamplingCL(intTime, data, satFrame, nSplit):
+    fluxImg = fowlerSamplingCL(intTime, data, satFrame, nSplit)
 
     #free up some memory
     del data
