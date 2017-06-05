@@ -80,9 +80,11 @@ waveMapLst = waveSol.buildWaveMap(dispSolLst,npts)
 fwhmMapLst = waveSol.buildFWHMMap(pixCentLst, fwhmLst, npts)
 
 #get max and min starting wavelength based on median of central slice (slice 8)
+waveMin = np.nanmedian(waveMapLst[:,0])
+waveMax = (np.nanmedian(waveMapLst[:,-1])
 print('********************************************************')
-print('*** Minimum median wavelength for slice 8 is ' + str(np.nanmedian(waveMapLst[:,0]))+ '***')
-print('*** Maximum median wavelength for slice 8 is ' + str(np.nanmedian(waveMapLst[:,-1]))+ '***')
+print('*** Minimum median wavelength for slice 8 is ' + str(waveMin)+ '***')
+print('*** Maximum median wavelength for slice 8 is ' + str(waveMax)+ '***')
 print('********************************************************')
 
 #determine length along spatial direction
@@ -126,6 +128,7 @@ wifisIO.writeFits(fwhmMap, 'quick_reduction/'+waveFolder+'_fwhm_map.fits', ask=F
 
 plt.imshow(fwhmMap, aspect='auto', cmap='jet')
 plt.colorbar()
+plt.title('Mean FWHM is '+str(fwhmMean) +', min wave is '+str(waveMin)+', max wave is '+str(waveMax))
 plt.savefig('quick_reduction/'+waveFolder+'fwhm_map.png', dpi=300)
 plt.close()
 
