@@ -16,9 +16,10 @@ os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target
 rampFolder = '20170511005013' #must point to location of folder containing the ramp
 distMapFile = '/home/jason/wifis/static_processed/ronchi_map_polyfit.fits' #must point to location of distortion map file
 distLimitsFile = '/home/jason/wifis/static_processed/master_flat_limits.fits' #must point to the location of the flat-field associated with the Ronchi mask image
-limitsFile = 'processed/20170510233851_flat_limits.fits' #must point to location of limits file, corresponding to this observation
+limitsFile = 'processed/20170511012453_flat_limits.fits' #must point to location of limits file, corresponding to this observation
 satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits' #must point to location of saturation limits file, from detector linearity measurements
 spatGridProps = wifisIO.readTable('/home/jason/wifis/static_processed/spatGridProps.dat')
+bpmFile = 'bpm.fits'
 #******************************************************************************
 
 #read in data
@@ -30,6 +31,14 @@ satFrame = satInfo.getSatFrameCL(data, satCounts,32)
 
 #get processed ramp
 fluxImg = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
+
+#remove bad pixels
+if os.path.exists(bpmFile):
+    bpm = wifisIO.readImgsFromFile(bpmFile)[0]
+    fluxImg[bpm.astype(bool)] = np.nan
+    fluxImg[fluxImg < 0] = np.nan
+
+fluxImg = fluxImg[4:2044, 4:2044]
 
 #extract slices
 limits = wifisIO.readImgsFromFile(limitsFile)[0]
