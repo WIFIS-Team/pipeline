@@ -84,7 +84,7 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, s
             imgCor = fluxImg
             sigmaCor = sigmaImg
    
-    return imgCor, sigmaCor, satFrame
+    return imgCor, sigmaCor, satFrame, hdr
 
 
 def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2):
@@ -160,6 +160,6 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1
         imgCor = fluxImg
         sigmaCor = sigmaImg
    
-    return imgCor, sigmaCor, satFrame
+    return imgCor, sigmaCor, satFrame, hdr
 
 
