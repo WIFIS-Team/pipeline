@@ -79,6 +79,12 @@ npts = waveSlices[0].shape[1]
 waveMapLst = waveSol.buildWaveMap(dispSolLst,npts)
 fwhmMapLst = waveSol.buildFWHMMap(pixCentLst, fwhmLst, npts)
 
+#get max and min starting wavelength based on median of central slice (slice 8)
+print('********************************************************')
+print('*** Minimum median wavelength for slice 8 is ' + str(np.nanmedian(waveMapLst[:,0]))+ '***')
+print('*** Maximum median wavelength for slice 8 is ' + str(np.nanmedian(waveMapLst[:,-1]))+ '***')
+print('********************************************************')
+
 #determine length along spatial direction
 ntot = 0
 for j in range(len(rmsLst)):
