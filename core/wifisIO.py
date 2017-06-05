@@ -33,14 +33,11 @@ def readRampFromFile(filename):
     outTime = np.zeros((listLen), dtype='float32')
 
     #now populate the array
-    print('Reading FITS images into data cube')
 
     for i in range(0,listLen):
         outTime[i] = tmp[i].header['ACTEXP']
         np.copyto(outImg[:,:,i], tmp[i].data)
         
-    print('Done reading')
-
     #get header of last image only
     hdr = tmp[-1].header
     tmp.close()
@@ -79,7 +76,6 @@ def readImgsFromFile(file):
             #so that it becomes [naxis2, naxis1, naxsi3]
             
             if (nz > 1):
-                print('more than 2 axes')
                 outImg = np.zeros((ny,nx, nz), dtype=tmp[i].data.dtype)
         
                 for j in range(nz):
@@ -157,16 +153,12 @@ def readRampFromList(list):
     outTime = np.zeros((listLen), dtype='float32')
 
     #now populate the array
-    print('Reading FITS images into data cube')
-
     for i in range(0,listLen):
         tmp = fits.open(list[i])
         outTime[i] = tmp[0].header['INTTIME']
         np.copyto(outImg[:,:,i], tmp[0].data)
         tmp.close()
         
-    print('Done reading')
-
     #get header of last image only
     hdr = fits.getheader(list[-1])
     del tmp
