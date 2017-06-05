@@ -101,10 +101,8 @@ for lstNum in range(len(lst)):
     if (cont.lower() == 'y'):
         print('*** Working on folder ' + folder + ' ***')
 
-        flatCor, sigmaCor, satFrame = processRamp.fromUTR(folder, saveName+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCor=20)
+        flatCor, sigmaCor, satFrame = processRamp.fromUTR(folder, savename+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=20)
 
-        print(cheese)
-                
         print('Finding slice limits and extracting slices')
         #find limits of each slice with the reference pixels, but the returned limits exclude them
         limits = slices.findLimits(flatCor, dispAxis=0, winRng=51, imgSmth=5, limSmth=20, rmRef=True)
