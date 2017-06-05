@@ -11,11 +11,13 @@ import wifisCombineData as combData
 
 os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
 
+#*******************************************************************************
 #required input!
 atlasFile = '/data/pipeline/external_data/best_lines2.dat'
 satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits'
 flatFolder = '20170510233851'
 waveFolder = '20170510234217'
+#*******************************************************************************
 
 print('getting ready')
 
@@ -28,7 +30,7 @@ print('Reading input data')
 
 print('Processing arc file')
 #check the type of raw data, only assumes CDS or up-the-ramp
-if (os.path.exists(waveFolder+'/Results')):
+if (os.path.exists(waveFolder+'/Results/CDSResult.fits')):
     #CDS image
     wave = wifisIO.readImgsFromFile(waveFolder+'/Results/CDSResult.fits')[0]
     wave = wave[4:2044, 4:2044] #trim off reference pixels
