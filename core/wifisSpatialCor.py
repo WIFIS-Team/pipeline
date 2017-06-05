@@ -290,6 +290,8 @@ def traceRonchiSlice(input):
     mxWidth = input[5]
     smth = input[6]
     bright = input[7]
+    flatSlc = input[8]
+    threshold=input[9]
     
     # REMOVE once testing complete    
     
@@ -298,32 +300,42 @@ def traceRonchiSlice(input):
         
         #tmp = np.zeros((img.shape[0], img.shape[1])) #*** THIS IS THE PROPER CODE ***
         tmp = np.zeros((img.shape[0], maxPix/nbin))
-
+        
         for i in range(tmp.shape[1]-1):
             tmp[:,i] = np.nansum(img[:,nbin*i:nbin*(i+1)],axis=1)#+img[:,nbin*(i+1)]
     else:
         tmp  = img
 
     #find column with maximum signal in median along column
-    medArray = np.zeros(tmp.shape[1])
-    for i in range(medArray.shape[0]):
-        y = tmp[:,i]
-        medArray[i] = np.nanmedian(y)
-        
+    if (flatSlc is None):
+        medArray = np.zeros(tmp.shape[1])
+        for i in range(medArray.shape[0]):
+            y = tmp[:,i]
+            medArray[i] = np.nanmedian(y)
+    else:
+        medArray = np.zeros(tmp.shape[1])
+        for i in range(medArray.shape[0]):
+            y = flatSlc[:,i]
+            medArray[i] = np.nanmedian(y)
+
     #find column with the maximum signal to identify position and number of Ronchi dips
     #m1, m2 = np.unravel_index(np.nanargmax(tmp), tmp.shape)
     m2 = np.nanargmax(medArray)
-    
+
     #extract signal from this column
     y=tmp[:,m2]
     x=np.arange(len(y))
     d2 = np.gradient(np.gradient(y))
-
-    #only use regions where signal in all pixels > 50% of the median signal (of the max portion)
-    #mx = np.nanmax(y)
-    mx = np.nanmedian(y[y>0.05*np.nanmax(y)])
     
-    whr = np.where(y > 0.5*mx)[0]
+    #only use regions where signal in all pixels > threshold of the median signal (of the max portion)
+    if (flatSlc is None):
+        mx = np.nanmedian(y[y>0.05*np.nanmax(y)])
+        whr = np.where(y > threshold*mx)[0]
+    else:
+        yFlat = flatSlc[:,m2]
+        mx = np.nanmedian(yFlat[yFlat>0.05*np.nanmax(yFlat)])
+        whr = np.where(yFlat > threshold*mx)[0]
+       
     strt = whr[0]
     mxPix = whr[-1]
 
@@ -461,7 +473,7 @@ def traceRonchiSlice(input):
 
     return outTrace, outWidth
 
-def traceRonchiAll(extSlices, nbin=2, winRng=5, mxWidth=1,smth=5,bright=False, MP=True,ncpus=None):
+def traceRonchiAll(extSlices, nbin=2, winRng=5, mxWidth=1,smth=5,bright=False, MP=True,ncpus=None, flatSlices=None, threshold=0.5):
     """
     Routine used to trace all bands for a all Ronchi slices
     Usage: result = traceRonchiAll(extSlices, nbin=2, winRng=5, mxWidth=1, smth=5, bright=False, ncpus=None)
@@ -480,8 +492,13 @@ def traceRonchiAll(extSlices, nbin=2, winRng=5, mxWidth=1,smth=5,bright=False, M
         #set up input list
         lst = []
 
-        for slc in extSlices:
-            lst.append([slc, nbin, winRng, slc.shape[1], False, mxWidth,smth,bright])
+        for i in range(len(extSlices)):
+            if (flatSlices is None):
+                flatSlc = None
+            else:
+                flatSlc = flatSlices[i]
+                
+            lst.append([extSlices[i], nbin, winRng, extSlices[i].shape[1], False, mxWidth,smth,bright, flatSlc])
 
         if (ncpus == None):
             ncpus = mp.cpu_count()
@@ -490,8 +507,13 @@ def traceRonchiAll(extSlices, nbin=2, winRng=5, mxWidth=1,smth=5,bright=False, M
         pool.close()
     else:
         result = []
-        for slc in extSlices:
-            result.append(traceRonchiSlice([slc, nbin, winRng, slc.shape[1],False, mxWidth, smth, bright]))
+        for i in range(len(extSlices)):
+            if (flatSlices is None):
+                flatSlc = None
+            else:
+                flatSlc = flatSlices[i]
+ 
+            result.append(traceRonchiSlice([slc, nbin, winRng, extSlices[i].shape[1],False, mxWidth, smth, bright, flatSlc]))
 
     #now organize results
     traces = []
@@ -587,7 +609,7 @@ def extendTraceSlice(input):
     
     return z
 
-def extendTraceAll(traceLst, extSlices, zeroTraces,space=1/3.,order=4,method='linear', ncpus=None, MP=True):
+def extendTraceAll(traceLst, extSlices, zeroTraces,space=1/15.,order=4,method='linear', ncpus=None, MP=True):
     """
     Routine to interpolate the Ronchi traces onto the provided pixel grid and extrapolate the fit towards regions that fall outside the Ronchi traces for all slices
     Usage: interpLst = extendTraceAll(traceLst, extSlices, zeroTraces, space=5., method='linear', ncpus=None, MP=True)
