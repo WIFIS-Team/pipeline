@@ -147,8 +147,8 @@ def channelCL(data,nChannel):
             data_buf = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=dTmp)
 
             #run the opencl code
-            program.channel.set_scalar_arg_dtypes([np.uintc,np.uintc,np.uintc,None])
-            program.channel(queue,(nFrames,),None,np.uintc(ny), np.uintc(nx),np.uintc(nFrames),data_buf)
+            program.channelEO.set_scalar_arg_dtypes([np.uintc,np.uintc,np.uintc,None])
+            program.channelEO(queue,(nFrames,),None,np.uintc(ny), np.uintc(nx),np.uintc(nFrames),data_buf)
             cl.enqueue_read_buffer(queue, data_buf, dTmp).wait()
 
             #replace the input data with output from OpenCL
@@ -162,8 +162,8 @@ def channelCL(data,nChannel):
         dTmp = np.empty(data.shape, dtype='float32')
         
         #run the opencl code
-        program.channel.set_scalar_arg_dtypes([np.uint32,np.uint32, np.uint32, None])
-        program.channel(queue,(nFrames,),None,np.uint32(ny), np.uint32(nx),np.uint32(nFrames),data_buf)
+        program.channelEO.set_scalar_arg_dtypes([np.uint32,np.uint32, np.uint32, None])
+        program.channelEO(queue,(nFrames,),None,np.uint32(ny), np.uint32(nx),np.uint32(nFrames),data_buf)
         cl.enqueue_read_buffer(queue, data_buf, dTmp).wait()
         data[:] = dTmp[:]
 
