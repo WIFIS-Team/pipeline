@@ -8,19 +8,25 @@ import wifisHeaders as headers
 import wifisGetSatInfo as satInfo
 from astropy import wcs 
 import os
+import wifisBadPixels as badPixels
 
 os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
 
 #******************************************************************************
 #required user input
-rampFolder = '20170511005013' #must point to location of folder containing the ramp
+
+rampFolder = '20170512072416' #must point to location of folder containing the ramp
+flatFolder = '20170512073634' #must point to location flat field folder associated with observation
+
+#(mostly) static input
 distMapFile = '/home/jason/wifis/static_processed/ronchi_map_polyfit.fits' #must point to location of distortion map file
 distLimitsFile = '/home/jason/wifis/static_processed/master_flat_limits.fits' #must point to the location of the flat-field associated with the Ronchi mask image
-limitsFile = 'processed/20170511012453_flat_limits.fits' #must point to location of limits file, corresponding to this observation
 satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits' #must point to location of saturation limits file, from detector linearity measurements
 spatGridProps = wifisIO.readTable('/home/jason/wifis/static_processed/spatGridProps.dat')
 bpmFile = 'bpm.fits'
 #******************************************************************************
+
+wifisIO.createDir('quick_reduction')
 
 #read in data
 data, inttime, hdr = wifisIO.readRampFromFolder(rampFolder)
@@ -37,11 +43,31 @@ if os.path.exists(bpmFile):
     bpm = wifisIO.readImgsFromFile(bpmFile)[0]
     fluxImg[bpm.astype(bool)] = np.nan
     fluxImg[fluxImg < 0] = np.nan
-
+    fluxImg[satFrame < 2] = np.nan
+    
 fluxImg = fluxImg[4:2044, 4:2044]
 
 #extract slices
-limits = wifisIO.readImgsFromFile(limitsFile)[0]
+#first check if limits already exists
+if os.path.exists('quick_reduction/'+flatFolder+'_limits.fits'):
+    limitsFile = 'quick_reduction/'+flatFolder+'_limits.fits'
+    limits = wifisIO.readImgsFromFile(limitsFile)[0]
+else:
+    #read in and process flat to find limits
+    flatData, inttime, hdr = wifisIO.readRampFromFolder(rampFolder)
+    satFrame = satInfo.getSatFrameCL(flatData, satCounts,32)
+    flat= combData.upTheRampCL(inttime, flatData, satFrame, 32)[0]
+    
+    if os.path.exists(bpmFile):
+        flat[bpm.astype(bool)] = np.nan
+        flat[flat < 0] = np.nan
+        flat[satFrame < 2] = np.nan
+        flatCor = np.empty(flat.shape, dtype=flat.dtype)
+        flatCor[4:2044,4:2044] = badPixels.corBadPixelsAll(flat[4:2044,4:2044], mxRng=20)
+
+    limits = slices.findLimits(flatCor, dispAxis=0, rmRef=True)
+    wifisIO.writeFits(limits, 'quick_reduction/'+flatFolder+'_limits.fits')
+    
 distLimits = wifisIO.readImgsFromFile(distLimitsFile)[0]
 
 #determine shift
@@ -70,7 +96,7 @@ yScale = -0.545667026386 #valid for npix=1, i.e. 35 pixels spanning the 18 slice
 headers.getWCSImg(dataImg, hdr, xScale, yScale)
 
 #save image
-wifisIO.writeFits(dataImg, rampFolder+'_quickRedImg.fits', hdr=hdr, ask=False)
+wifisIO.writeFits(dataImg, 'quick_reduction/'+rampFolder+'_quickRedImg.fits', hdr=hdr, ask=False)
 
 #plot the data
 WCS = wcs.WCS(hdr)
