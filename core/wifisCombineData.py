@@ -82,7 +82,7 @@ def upTheRampCRRejectCL(intTime, data, satFrame, nSplit):
     dTmp = 0
     data_buf = 0
     
-    return outImg
+    return outImg, [], [] #add extra output to make it compatible with upTheRampCL
 
 
 def upTheRampCL(intTime, data, satFrame, nSplit):
