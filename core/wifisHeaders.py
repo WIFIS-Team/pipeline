@@ -42,7 +42,7 @@ def getWCSCube(data, hdr, xScale, yScale, waveGridProps):
     #update header or add if keyword doesn't exist
     for h in header.cards:
         hdr.set(h[0],h[1],h[2])
-    
+        
     return
 
 def getWCSImg(data, hdr, xScale, yScale):
@@ -79,7 +79,10 @@ def getWCSImg(data, hdr, xScale, yScale):
     #update header or add if keyword doesn't exist
     for h in header.cards:
         hdr.set(h[0],h[1],h[2])
-    
+
+    #update NAXIS parameters
+    hdr['NAXIS1'] = data.shape[1]
+    hdr['NAXIS2'] = data.shape[0]
     return
 
 def addTelInfo(hdr, obsinfoFile):
