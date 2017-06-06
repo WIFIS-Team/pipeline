@@ -99,12 +99,21 @@ dataImg = createCube.collapseCube(dataCube)
 xScale = 0.532021532706
 yScale = -0.545667026386 #valid for npix=1, i.e. 35 pixels spanning the 18 slices. This value needs to be updated in agreement with the choice of interpolation
 
+print('Computing FWHM')
 #fit 2D Gaussian to image to determine FWHM of star's image
 y,x = np.mgrid[:dataImg.shape[0],:dataImg.shape[1]]
 cent = np.unravel_index(np.nanargmax(dataImg),dataImg.shape)
 gInit = models.Gaussian2D(np.nanmax(dataImg), cent[1],cent[0])
 fitG = fitting.LevMarLSQFitter()
 gFit = fitG(gInit, x,y,dataImg)
+
+#y,x = np.mgrid[0:dataImg.shape[0]:0.1,0:dataImg.shape[1]:0.1]
+#gMod = gFit(x,y)
+#
+#r = np.sqrt((x-cent[1])**2+(y-cent[0])**2)
+#gMod /= np.max(gMod)
+#whr = np.where(gMod < 0.5)
+#fwhm2 = np.min(r[whr[0],whr[1]])
 
 #get average FWHM
 sigPix = (gFit.x_stddev+gFit.y_stddev)/2.
@@ -125,12 +134,13 @@ wifisIO.writeFits(dataImg, 'quick_reduction/'+rampFolder+'_quickRedImg.fits', hd
 #plot the data
 WCS = wcs.WCS(hdr)
 
+print('Plotting data')
 fig = plt.figure()
 fig.add_subplot(111, projection=WCS)
-plt.imshow(dataImg, origin='lower', cmap='viridis')
+plt.imshow(dataImg, origin='lower', cmap='jet')
 r = np.arange(360)*np.pi/180.
 x = fwhmPix*np.cos(r) + gFit.x_mean
 y = fwhmPix*np.sin(r) + gFit.y_mean
 plt.plot(x,y, 'r--')
-plt.title('FWHM of object is '+str(fwhmDeg)+' arcsec')
+plt.title('Average FWHM of object is '+str(fwhmDeg)+' arcsec')
 plt.show()
