@@ -13,17 +13,21 @@ os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target
 
 #*******************************************************************************
 #required input!
-atlasFile = '/data/pipeline/external_data/best_lines2.dat'
-satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits'
 flatFolder = '20170510233851'
 waveFolder = '20170510234217'
+
+#should be (mostly) static
+atlasFile = '/data/pipeline/external_data/best_lines2.dat'
+satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits'
+templateFile = '/data/pipeline/external_data/waveTemplate.fits'
+prevResultsFile = '/data/pipeline/external_data/waveTemplateFittingResults.pkl'
 #*******************************************************************************
 
 print('getting ready')
 
 #read in previous results and template
-template = wifisIO.readImgsFromFile('/data/pipeline/external_data/waveTemplate.fits')[0]
-prevResults = wifisIO.readPickle('/data/pipeline/external_data/waveTemplateFittingResults.pkl')
+template = wifisIO.readImgsFromFile(templateFile)[0]
+prevResults = wifisIO.readPickle(prevResultsFile)
 prevSol = prevResults[5]
 
 print('Reading input data')
@@ -45,7 +49,7 @@ else:
 
 print('Processing flat file')
 #check the type of raw data, only assumes CDS or up-the-ramp
-if (os.path.exists(flatFolder+'/Results')):
+if (os.path.exists(flatFolder+'/Results/CDSResult.fits')):
     #CDS image
     flat = wifisIO.readImgsFromFile(flatFolder+'/Results/CDSResult.fits')[0]
 else:
