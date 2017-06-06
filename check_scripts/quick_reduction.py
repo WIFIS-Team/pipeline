@@ -126,10 +126,14 @@ fwhmDeg = 2.*np.sqrt(2.* np.log(2))*sigDeg
 obsinfoFile = rampFolder+'/obsinfo.dat'
 headers.addTelInfo(hdr, obsinfoFile)
 
+#save distortion corrected slices
+wifisIO.writeFits(dataGrid, 'quick_reduction/'+rampFolder+'_quickRed_slices_grid.fits', hdr=hdr)
+
 headers.getWCSImg(dataImg, hdr, xScale, yScale)
 
 #save image
 wifisIO.writeFits(dataImg, 'quick_reduction/'+rampFolder+'_quickRedImg.fits', hdr=hdr, ask=False)
+
 
 #plot the data
 WCS = wcs.WCS(hdr)
