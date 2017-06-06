@@ -158,8 +158,8 @@ for lstNum in range(len(lst)):
             plt.imshow(flatCor, aspect='auto', cmap='jet', clim=[0,2.*med1], origin='lower')
             plt.colorbar()
             for l in range(limits.shape[0]):
-                plt.plot(limits[l]+0.5, np.arange(limits.shape[1]),'k', linewidth=1)
-                plt.plot(polyLimits[l]+0.5, np.arange(limits.shape[1]),'r--', linewidth=1)
+                plt.plot(limits[l], np.arange(limits.shape[1]),'k', linewidth=1)
+                plt.plot(polyLimits[l], np.arange(limits.shape[1]),'r--', linewidth=1)
             plt.savefig('quality_control/'+folder+'_flat_slices_traces.png', dpi=300)
             plt.close(fig)
                     
