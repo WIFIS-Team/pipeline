@@ -139,11 +139,13 @@ for lstNum in range(len(lst)):
         satFrame = satFrame[4:2044,4:2044]
                 
         if os.path.exists(distMapLimitsFile):
+            print('Using slice limits relative to distortion map file')
             distMapLimits = wifisIO.readImgsFromFile(distMapLimitsFile)[0]
             shft = np.nanmedian(polyLimits[1:-1,:] - distMapLimits[1:-1,:])
             polyLimits = distMapLimits + shft
-            #make sure limits are clipped correctly at boundaries
-            polyLimits = np.clip(polyLimits, 0,flatCor.shape[0]-1)
+
+        #make sure limits are clipped correctly at boundaries
+        polyLimits = np.clip(polyLimits, 0,flatCor.shape[0]-1)
             
         #save figures of tracing results for quality control purposes
         if (plot):
