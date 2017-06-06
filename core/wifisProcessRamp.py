@@ -116,7 +116,7 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1
         
     #******************************************************************************
     #Combine data cube into single image
-    fluxImg = fowlerSamplingCL(intTime, data, satFrame, combSplit)
+    fluxImg = combData.fowlerSamplingCL(inttime, data, satFrame, combSplit)
 
     #free up some memory
     del data
@@ -154,11 +154,11 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1
         sigmaCor[4:2044, 4:2044]  = badPixels.corBadPixelsAll(sigmaImg[4:2044,4:2044], dispAxis=0, mxRng=bpmCorRng, MP=True, sigma=True)
     else:
         cont = wifisIO.userInput('*** WARNING: No bad pixel mask provided. Do you want to continue? *** (y/n)?')
-    if (cont.lower()!='y'):
-        raise SystemExit('*** Missing bad pixel mask. Exiting ***')
-    else:
-        imgCor = fluxImg
-        sigmaCor = sigmaImg
+        if (cont.lower()!='y'):
+            raise SystemExit('*** Missing bad pixel mask. Exiting ***')
+        else:
+            imgCor = fluxImg
+            sigmaCor = sigmaImg
    
     return imgCor, sigmaCor, satFrame, hdr
 
