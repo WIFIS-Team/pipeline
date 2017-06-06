@@ -8,15 +8,15 @@ import wifisHeaders as headers
 import wifisGetSatInfo as satInfo
 from astropy import wcs 
 import os
-import wifisBadPixels as badPixels
+from astropy.modeling import models, fitting
 
 os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
 
 #******************************************************************************
 #required user input
 
-rampFolder = '20170512072416' #must point to location of folder containing the ramp
-flatFolder = '20170512073634' #must point to location flat field folder associated with observation
+rampFolder = '20170510232750' #must point to location of folder containing the ramp
+flatFolder = '20170510233851' #must point to location flat field folder associated with observation
 
 #(mostly) static input
 distMapFile = '/home/jason/wifis/static_processed/ronchi_map_polyfit.fits' #must point to location of distortion map file
@@ -29,6 +29,7 @@ bpmFile = 'bpm.fits'
 wifisIO.createDir('quick_reduction')
 
 #read in data
+print('Processing ramp')
 data, inttime, hdr = wifisIO.readRampFromFolder(rampFolder)
 
 #find if any pixels are saturated and avoid usage
@@ -40,6 +41,7 @@ fluxImg = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
 
 #remove bad pixels
 if os.path.exists(bpmFile):
+    print('Removing bad pixels')
     bpm = wifisIO.readImgsFromFile(bpmFile)[0]
     fluxImg[bpm.astype(bool)] = np.nan
     fluxImg[fluxImg < 0] = np.nan
@@ -53,19 +55,24 @@ if os.path.exists('quick_reduction/'+flatFolder+'_limits.fits'):
     limitsFile = 'quick_reduction/'+flatFolder+'_limits.fits'
     limits = wifisIO.readImgsFromFile(limitsFile)[0]
 else:
+    print('Processing flat')
     #read in and process flat to find limits
     flatData, inttime, hdr = wifisIO.readRampFromFolder(rampFolder)
     satFrame = satInfo.getSatFrameCL(flatData, satCounts,32)
     flat= combData.upTheRampCL(inttime, flatData, satFrame, 32)[0]
     
     if os.path.exists(bpmFile):
+        print('removing bad pixels')
         flat[bpm.astype(bool)] = np.nan
-        flat[flat < 0] = np.nan
         flat[satFrame < 2] = np.nan
-        flatCor = np.empty(flat.shape, dtype=flat.dtype)
-        flatCor[4:2044,4:2044] = badPixels.corBadPixelsAll(flat[4:2044,4:2044], mxRng=20)
+        #flatCor = np.empty(flat.shape, dtype=flat.dtype)
+        #flatCor[4:2044,4:2044] = badPixels.corBadPixelsAll(flat[4:2044,4:2044], mxRng=20)
+        
+        # else:
+        #     flatCor = flat[4:2044, 4:2044]
 
-    limits = slices.findLimits(flatCor, dispAxis=0, rmRef=True)
+    print('Getting slice limits')
+    limits = slices.findLimits(flat, dispAxis=0, rmRef=True)
     wifisIO.writeFits(limits, 'quick_reduction/'+flatFolder+'_limits.fits')
     
 distLimits = wifisIO.readImgsFromFile(distLimitsFile)[0]
@@ -73,25 +80,42 @@ distLimits = wifisIO.readImgsFromFile(distLimitsFile)[0]
 #determine shift
 shft = np.median(limits[1:-1, :] - distLimits[1:-1,:])
 
+print('Extracting slices')
 dataSlices = slices.extSlices(fluxImg, distLimits, dispAxis=0, shft=shft)
 
 #place on uniform spatial grid
+print('Distortion correcting')
 distMap = wifisIO.readImgsFromFile(distMapFile)[0]
 dataGrid = createCube.distCorAll(dataSlices, distMap, spatGridProps=spatGridProps)
 
 #create cube
+print('Creating image')
 dataCube = createCube.mkCube(dataGrid, ndiv=1)
 
 #create output image
 dataImg = createCube.collapseCube(dataCube)
 
-#fill in header info
-obsinfoFile = rampFolder+'/obsinfo.dat'
-headers.addTelInfo(hdr, obsinfoFile)
-
 #set the pixel scale
 xScale = 0.532021532706
 yScale = -0.545667026386 #valid for npix=1, i.e. 35 pixels spanning the 18 slices. This value needs to be updated in agreement with the choice of interpolation
+
+#fit 2D Gaussian to image to determine FWHM of star's image
+y,x = np.mgrid[:dataImg.shape[0],:dataImg.shape[1]]
+cent = np.unravel_index(np.nanargmax(dataImg),dataImg.shape)
+gInit = models.Gaussian2D(np.nanmax(dataImg), cent[1],cent[0])
+fitG = fitting.LevMarLSQFitter()
+gFit = fitG(gInit, x,y,dataImg)
+
+#get average FWHM
+sigPix = (gFit.x_stddev+gFit.y_stddev)/2.
+fwhmPix = 2.*np.sqrt(2.* np.log(2))*sigPix
+
+sigDeg = (np.abs(gFit.x_stddev*xScale)+np.abs(gFit.y_stddev*yScale))/2.
+fwhmDeg = 2.*np.sqrt(2.* np.log(2))*sigDeg
+
+#fill in header info
+obsinfoFile = rampFolder+'/obsinfo.dat'
+headers.addTelInfo(hdr, obsinfoFile)
 
 headers.getWCSImg(dataImg, hdr, xScale, yScale)
 
@@ -104,4 +128,9 @@ WCS = wcs.WCS(hdr)
 fig = plt.figure()
 fig.add_subplot(111, projection=WCS)
 plt.imshow(dataImg, origin='lower', cmap='viridis')
+r = np.arange(360)*np.pi/180.
+x = fwhmPix*np.cos(r) + gFit.x_mean
+y = fwhmPix*np.sin(r) + gFit.y_mean
+plt.plot(x,y, 'r--')
+plt.title('FWHM of object is '+str(fwhmDeg)+' arcsec')
 plt.show()
