@@ -85,7 +85,7 @@ fwhmMapLst = waveSol.buildFWHMMap(pixCentLst, fwhmLst, npts)
 
 #get max and min starting wavelength based on median of central slice (slice 8)
 waveMin = np.nanmedian(waveMapLst[:,0])
-waveMax = (np.nanmedian(waveMapLst[:,-1])
+waveMax = np.nanmedian(waveMapLst[:,-1])
 print('********************************************************')
 print('*** Minimum median wavelength for slice 8 is ' + str(waveMin)+ '***')
 print('*** Maximum median wavelength for slice 8 is ' + str(waveMax)+ '***')
