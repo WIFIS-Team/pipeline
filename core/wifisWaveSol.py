@@ -860,7 +860,7 @@ def gaussSmoothDispSolution(dispIn, nPix=5, plotFile=None):
                 for k in range(nTerms):
                     for j in range(len(d)):
                         if len(d[j])>k:
-                        ax[k].plot(j, d[j][k],'bo')
+                            ax[k].plot(j, d[j][k],'bo')
                     ax[k].plot(smth[k])
                 pdf.savefig(fig)
                 plt.close()
