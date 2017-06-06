@@ -34,11 +34,16 @@ t0 = time.time()
 #*****************************************************************************
 #******************************* Required input ******************************
 fileList = 'flat.lst' # a simple ascii file containing a list of the folder names that contain the ramp data
+
+#mostly static input from here
 nlFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_NLCoeff.fits' # the non-linearity correction coefficients file        
 satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits' # the saturation limits file
 bpmFile = 'bpm.fits' # the bad pixel mask
 distMapLimitsFile = ''
+
+#optional behaviour of pipeline
 plot = True #whether to plot the traces
+crReject = False
 #*****************************************************************************
 
 #NOTES
@@ -114,7 +119,12 @@ for lstNum in range(len(lst)):
             contProc2 = True
         
         if (contProc2):
-            flatCor, sigmaCor, satFrame = processRamp.fromUTR(folder, savename+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=20)
+            if (os.path.exists(folder+'/Result')):
+                #process using Fowler/CDS routines
+                flatCor, sigmaCor, satFrame = processRamp.fromFowler(folder, savename+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=20)
+            else:
+                flatCor, sigmaCor, satFrame = processRamp.fromUTR(folder, savename+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=20)
+
 
         print('Finding slice limits and extracting slices')
         #find limits of each slice with the reference pixels, but the returned limits exclude them
