@@ -57,8 +57,13 @@ else:
 
 #deal with flats first
 print('processing flat')
-#if dealing with a very big ramp, increase rowSplit value below
-flat, sigmaImg, satFrame, hdr = processRamp.fromUTR(flatFolder, 'processed/'+flatFolder+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=20)
+
+#check image type
+if (os.path.exists(flatFolder+'/Result')):
+    flat, sigmaImg, satFrame, hdr = processRamp.fromFowler(flatFolder, 'processed/'+flatFolder+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=20)
+else:
+    #if dealing with a very big ramp, increase rowSplit value below
+    flat, sigmaImg, satFrame, hdr = processRamp.fromUTR(flatFolder, 'processed/'+flatFolder+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=20)
 
 #get limits
 print('Getting limits relative to distortion map')
@@ -81,7 +86,12 @@ distMap = wifisIO.readImgsFromFile(distMapFile)[0]
 spatGridProps = wifisIO.readTable(spatGridPropsFile)
 
 print('processing arc image')
-wave, sigmaImg, satFrame, hdr = processRamp.fromUTR(waveFolder, 'processed/'+waveFolder+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2)
+if (os.path.exists(waveFolder+'/Result')):
+    wave, sigmaImg, satFrame, hdr = processRamp.fromFowler(waveFolder, 'processed/'+waveFolder+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=2)
+else:
+    wave, sigmaImg, satFrame, hdr = processRamp.fromUTR(waveFolder, 'processed/'+waveFolder+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2)
+
+#remove reference pixels
 wave = wave[4:2044,4:2044]
 
 print('extracting wave slices')
@@ -107,6 +117,9 @@ polySol = waveSol.polyFitDispSolution(result[0], plot=False,degree=2)
 
 print('Building wavelegth map')
 waveMap = waveSol.buildWaveMap(polySol, waveCor[0].shape[1])
+
+#now trim wavemap if needed
+
 waveGridProps = createCube.compWaveGrid(waveMap)
 wifisIO.writeTable(waveGridProps, 'processed/'+waveFolder+'_waveGridProps.dat')
 
@@ -130,13 +143,22 @@ for i in range(len(obsLst)):
     print('Working on data folder ' + dataFolder)
 
     print('Processing science data')
-    data, sigmaImg, satFrame, hdr = processRamp.fromUTR(dataFolder, 'processed/'+dataFolder+'_obs.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2)
+    if (os.path.exists(dataFolder+'/Result')):
+        data, sigmaImg, satFrame, hdr = processRamp.fromFowler(dataFolder, 'processed/'+dataFolder+'_obs.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=2)
+    else:
+        data, sigmaImg, satFrame, hdr = processRamp.fromUTR(dataFolder, 'processed/'+dataFolder+'_obs.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2)
+
+    #remove reference pixels
     data = data[4:2044,4:2044]
 
     if skyLst is not None:
         skyFolder = skyLst[i]
         print('Processing sky data')
-        sky, sigmaImg, satFrame, hdrSky = processRamp.fromUTR(skyFolder, 'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2)
+        if (os.path.exists(skyFolder+'/Result')):
+            sky, sigmaImg, satFrame, hdrSky = processRamp.fromFowler(skyFolder, 'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=2)
+        else:
+            sky, sigmaImg, satFrame, hdrSky = processRamp.fromUTR(skyFolder, 'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2)
+        #remove reference pixels
         sky = sky[4:2044,4:2044]
 
         #subtract sky from data at this stage
