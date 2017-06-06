@@ -60,7 +60,7 @@ def limFit1(input):
 
     return limMeas
 
-def findLimits(data, dispAxis=0, winRng=51, imgSmth=5, limSmth=10, ncpus=None, rmRef=True):
+def findLimits(data, dispAxis=0, winRng=51, imgSmth=5, limSmth=10, ncpus=None, rmRef=False):
     """
     Used to determine slice limits from a full flat-field image
     Usage: limits = findLimits(data, dispAxis=,winRng=,imgSmth=,limSmth= )
