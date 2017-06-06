@@ -28,6 +28,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
 os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
+plt.ioff()
 
 t0 = time.time()
 
@@ -38,8 +39,8 @@ fileList = 'flat.lst' # a simple ascii file containing a list of the folder name
 #mostly static input from here
 nlFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_NLCoeff.fits' # the non-linearity correction coefficients file        
 satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits' # the saturation limits file
-bpmFile = 'bpm.fits' # the bad pixel mask
-distMapLimitsFile = ''
+bpmFile = '/data/pipeline/external_data/bpm.fits' # the bad pixel mask
+distMapLimitsFile = '/data/pipeline/external_data/master_flat_limits.fits'
 
 #optional behaviour of pipeline
 plot = True #whether to plot the traces
@@ -88,7 +89,7 @@ procSatFrame = []
 #eventually need to add capability to create master flat from groups
 #************
 for lstNum in range(len(lst)):
-
+    t1 = time.time()
     if (lst.ndim>1):
         folder = lst[lstNum,0]
     else:
@@ -121,10 +122,9 @@ for lstNum in range(len(lst)):
         if (contProc2):
             if (os.path.exists(folder+'/Result')):
                 #process using Fowler/CDS routines
-                flatCor, sigmaCor, satFrame = processRamp.fromFowler(folder, savename+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=20)
+                flatCor, sigmaCor, satFrame, hdr = processRamp.fromFowler(folder, savename+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=20)
             else:
-                flatCor, sigmaCor, satFrame = processRamp.fromUTR(folder, savename+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=20)
-
+                flatCor, sigmaCor, satFrame, hdr = processRamp.fromUTR(folder, savename+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=20)
 
         print('Finding slice limits and extracting slices')
         #find limits of each slice with the reference pixels, but the returned limits exclude them
@@ -133,10 +133,17 @@ for lstNum in range(len(lst)):
         #get smoother limits, if desired, using polynomial fitting
         polyLimits = slices.polyFitLimits(limits, degree=3)
 
+        #get rid of reference pixels
+        flatCor = flatCor[4:2044, 4:2044]
+        sigmaCor = sigmaCor[4:2044, 4:2044]
+        satFrame = satFrame[4:2044,4:2044]
+                
         if os.path.exists(distMapLimitsFile):
             distMapLimits = wifisIO.readImgsFromFile(distMapLimitsFile)[0]
             shft = np.nanmedian(polyLimits[1:-1,:] - distMapLimits[1:-1,:])
             polyLimits = distMapLimits + shft
+            #make sure limits are clipped correctly at boundaries
+            polyLimits = np.clip(polyLimits, 0,flatCor.shape[0]-1)
             
         #save figures of tracing results for quality control purposes
         if (plot):
@@ -146,7 +153,7 @@ for lstNum in range(len(lst)):
             fig = plt.figure()
             med1= np.nanmedian(flatCor)
                 
-            plt.imshow(flatCor[4:2044,4:2044], aspect='auto', cmap='jet', clim=[0,2.*med1], origin='lower')
+            plt.imshow(flatCor, aspect='auto', cmap='jet', clim=[0,2.*med1], origin='lower')
             plt.colorbar()
             for l in range(limits.shape[0]):
                 plt.plot(limits[l]+0.5, np.arange(limits.shape[1]),'k', linewidth=1)
@@ -157,12 +164,7 @@ for lstNum in range(len(lst)):
         limits = polyLimits
 
         #write limits to file
-        wifisIO.writeFits(limits,savename+'_flat_limits.fits')
-
-        #get rid of reference pixels
-        flatCor = flatCor[4:2044, 4:2044]
-        sigmaCor = sigmaCor[4:2044, 4:2044]
-        satFrame = satFrame[4:2044,4:2044]
+        wifisIO.writeFits(limits,savename+'_flat_limits.fits', hdr=hdr)
 
         #now extract the individual slices
         flatSlices = slices.extSlices(flatCor, limits, dispAxis=0)
@@ -179,10 +181,10 @@ for lstNum in range(len(lst)):
         sigmaNorm = slices.ffCorrectAll(sigmaSlices, flatNorm)
         
         #write slices to file
-        wifisIO.writeFits(flatSlices+sigmaSlices+satSlices,savename+'_flat_slices.fits')
+        wifisIO.writeFits(flatSlices+sigmaSlices+satSlices,savename+'_flat_slices.fits',hdr=hdr)
 
         #write normalized images to file
-        wifisIO.writeFits(flatNorm + sigmaNorm + satSlices,savename+'_flat_slices_norm.fits')
+        wifisIO.writeFits(flatNorm + sigmaNorm + satSlices,savename+'_flat_slices_norm.fits',hdr=hdr)
         print('*** Finished processing ' + folder + ' in ' + str(time.time()-t1) + ' seconds ***')
         
 print('Total time to run entire script: ' + str(time.time()-t0) + ' seconds')
