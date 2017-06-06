@@ -37,7 +37,7 @@ satCounts = wifisIO.readImgsFromFile(satFile)[0]
 satFrame = satInfo.getSatFrameCL(data, satCounts,32)
 
 #get processed ramp
-fluxImg = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
+fluxImg = combData.upTheRampCRRejectCL(inttime, data, satFrame, 32)[0]
 
 #remove bad pixels
 if os.path.exists(bpmFile):
@@ -127,7 +127,7 @@ obsinfoFile = rampFolder+'/obsinfo.dat'
 headers.addTelInfo(hdr, obsinfoFile)
 
 #save distortion corrected slices
-wifisIO.writeFits(dataGrid, 'quick_reduction/'+rampFolder+'_quickRed_slices_grid.fits', hdr=hdr)
+wifisIO.writeFits(dataGrid, 'quick_reduction/'+rampFolder+'_quickRed_slices_grid.fits', hdr=hdr, ask=False)
 
 headers.getWCSImg(dataImg, hdr, xScale, yScale)
 
