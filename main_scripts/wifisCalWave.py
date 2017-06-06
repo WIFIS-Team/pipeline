@@ -32,18 +32,23 @@ os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target
 
 #*****************************************************************************
 #************************** Required input ***********************************
-
 fileList = ''
+flatName = ''
+
+#mostly static input
 templateFile = '/data/pipeline/external_data/templateSlices.fits'
 prevResultsFile = '/data/pipeline/external_data/prevSol.pkl'
 nlFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_NLCoeff.fits'        
 satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits'
 bpmFile = 'bpm.fits'
-flatName = ''
 atlasname = '/data/pipeline/external_data/best_lines2.dat'
 distMapFile = ''
 spatGridPropsFile = ''
+
+#optional behaviour
 plot = True
+crReject = False
+rmsThresh = 0.3
 
 #*****************************************************************************
 #*****************************************************************************
@@ -66,6 +71,7 @@ if not (os.path.exists(nlFile) and os.path.exists(satFile) and os.path.exists(fl
 
 #create processed directory, in case it doesn't exist
 wifisIO.createDir('processed')
+wifisIO.createDir('quality_control')
 
 print('Reading in calibration files')
 #open calibration files
@@ -117,7 +123,12 @@ for lstNum = in range(len(lst)):
             contProc2 = True
         
         if (contProc2):
-            wave, sigmaImg, satFrame = processRamp.fromUTR(folder, savename+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2)
+            if (os.path.exists(folder+'/Result')):
+                #process CDS/Fowler ramps
+                wave, sigmaImg, satFrame = processRamp.fromFowler(folder, savename+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=2)
+            else:
+                #process UTR
+                wave, sigmaImg, satFrame = processRamp.fromUTR(folder, savename+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=2)
 
         print('Extracting slices')
         #first get rid of reference pixels
@@ -164,12 +175,28 @@ for lstNum = in range(len(lst)):
         if cont3:
             results = waveSol.getWaveSol(waveSlices, template, atlasname, 3, prevSol, winRng=9, mxCcor=30, weights=False, buildSol=False, sigmaClip=1, allowLower=True, lngthConstraint=True)
     
-            dispSolLst = results[0]
             #Save all results
             wifisIO.writePickle(savename+'_waveFitResults.pkl', results)
 
+            dispSolLst = results[0]
+
             print('Getting smoothed dispersion solutions')
-            
+
+            #remove solution with rms > 0.3
+            if (rmsThresh is not None):
+                rms = results[4]
+                for i in range(len(rms)):
+                    whr = np.where(r > rmsThresh)[0]
+                    dispSolLst[i][whr] = np.asarray([np.nan])
+
+            if (plot):
+                polySol = waveSol.polyFitDispSolution(dispSolLst, plot=False,degree=2, plot='quality_control/'+folder+'_polyFit_dispSol.pdf')
+                #gaussSol =waveSol.gaussSmoothDispSolution(result[0],nPix=3,plot='quality_control/'+folder+'_polyFit_dispSol.pdf')
+            else:
+                polySol = waveSol.polyFitDispSolution(dispSolLst, plot=False,degree=2, plotFile=None)
+                #gaussSol =waveSol.gaussSmoothDispSolution(result[0],nPix=3,plotFile=None)  
+
+            dispSolLst = polySol
             
             print('Creating wavelength map')
             #Create wavemap
@@ -193,8 +220,53 @@ for lstNum = in range(len(lst)):
                         pdf.savefig(dpi=300)
                         plt.close()
 
-                    #now save FWHM map
+                #now build and save FWHM map
                 fwhmMapLst = waveSol.buildFWHMMap(results[2], results[3], npts)
+                #get max and min starting wavelength based on median of central slice (slice 8)
+                waveMin = np.nanmedian(waveMapLst[:,0])
+                waveMax = np.nanmedian(waveMapLst[:,-1])
+                
+                #determine length along spatial direction
+                ntot = 0
+                for j in range(len(rmsLst)):
+                    ntot += len(rmsLst[j])
+                    
+                #get mean FWHM
+                fwhmMean = 0.
+                nFWHM = 0.
+                for f in fwhmLst:
+                    for i in range(len(f)):
+                        for j in range(len(f[i])):
+                            fwhmMean += f[i][j]
+                            nFWHM += 1.
+            
+                fwhmMean /= nFWHM
 
+                #build "detector" map images
+                #wavelength solution
+                waveMap = np.empty((npts,ntot),dtype='float32')
+                strt=0
+                for m in waveMapLst:
+                    waveMap[:,strt:strt+m.shape[0]] = m.T
+                    strt += m.shape[0]
+
+                #fwhm map
+                fwhmMap = np.empty((npts,ntot),dtype='float32')
+                strt=0
+                for f in fwhmMapLst:
+                    fwhmMap[:,strt:strt+f.shape[0]] = f.T
+                    strt += f.shape[0]
+
+                #save results
+                wifisIO.writeFits(waveMap, 'quality_control/'folder+'_waveMapImg.fits', ask=False)
+                wifisIO.writeFits(fwhmMap, 'quality_control/'folder+'_fwhmMapImg.fits', ask=False)
+
+                plt.imshow(fwhmMap, aspect='auto', cmap='jet')
+                plt.colorbar()
+                plt.title('Mean FWHM is '+str(fwhmMean) +', min wave is '+str(waveMin)+', max wave is '+str(waveMax))
+                plt.savefig('quality_control/'+folder+'fwhmMapImg.png', dpi=300)
+                plt.close()
+
+                           
 print ("Total time to run entire script: ",time.time()-t0)
 
