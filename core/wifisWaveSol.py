@@ -11,6 +11,7 @@ import multiprocessing as mp
 import wifisIO
 from scipy.interpolate import interp1d
 from astropy import convolution as conv
+from matplotlib.backends.backend_pdf import PdfPages
 
 import warnings
 warnings.simplefilter('ignore', np.RankWarning)
@@ -689,11 +690,11 @@ def trimWaveSlice(input):
     flatMed = np.nanmedian(flatSlc, axis=0)
     mx = np.nanmax(flatMed)
     
-    #work on axis 0 first
-    for i in range(slc.shape[0]):
-        y = flatSlc[i,:]
-        whr = np.where(y < threshold*mx)[0]
-        slc[i,whr] = np.nan
+    ##work on axis 0 first
+    #for i in range(slc.shape[0]):
+    #    y = flatSlc[i,:]
+    #    whr = np.where(y < threshold*mx)[0]
+    #    slc[i,whr] = np.nan
         
     #work on axis 1 now
     for i in range(slc.shape[1]):
@@ -703,10 +704,10 @@ def trimWaveSlice(input):
 
     return slc
 
-def polyFitDispSolution(dispIn,plot=False, degree=2):
+def polyFitDispSolution(dispIn,plotFile=None, degree=2):
     """
     """
-
+    
     nTerms = 0
     #determine maximum degree of polynomial
     for d in dispIn:
@@ -749,16 +750,17 @@ def polyFitDispSolution(dispIn,plot=False, degree=2):
         
         polySol.append(tmpSol)
 
-        if (plot):
-            print(i)
-            fig,ax = plt.subplots(1,nTerms, figsize=(19,6))
-            for k in range(nTerms):
-                tmp = np.asarray(c[k])
-                ax[k].plot(tmp[:,0], tmp[:,1], 'o')
-                ax[k].plot(f[k](np.arange(len(c[k]))),'--')
-            plt.show()
-            
-        
+        if (plotFile is not None):
+            with PdfPages(plotFile) as pdf:
+                fig,ax = plt.subplots(1,nTerms, figsize=(19,6))
+                for k in range(nTerms):
+                    tmp = np.asarray(c[k])
+                    ax[k].plot(tmp[:,0], tmp[:,1], 'o')
+                    ax[k].plot(f[k](np.arange(len(c[k]))),'--')
+
+                pdf.savefig(fig)
+                plt.close
+           
     return polySol
 
 def medSmoothDispSolution(dispIn, nPix=5, plot=False):
@@ -811,7 +813,7 @@ def medSmoothDispSolution(dispIn, nPix=5, plot=False):
 
     return smoothSol
 
-def gaussSmoothDispSolution(dispIn, nPix=5, plot=False):
+def gaussSmoothDispSolution(dispIn, nPix=5, plotFile=None):
     """
     """
 
@@ -853,13 +855,15 @@ def gaussSmoothDispSolution(dispIn, nPix=5, plot=False):
         smoothSol.append(tmpSol)
 
         if (plot):
-            fig,ax = plt.subplots(1,nTerms, figsize=(19,6))
-            for k in range(nTerms):
-                for j in range(len(d)):
-                    if len(d[j])>k:
+            with PdfPages(plotName) as pdf:
+                fig,ax = plt.subplots(1,nTerms, figsize=(19,6))
+                for k in range(nTerms):
+                    for j in range(len(d)):
+                        if len(d[j])>k:
                         ax[k].plot(j, d[j][k],'bo')
-                ax[k].plot(smth[k])
-            plt.show()
+                    ax[k].plot(smth[k])
+                pdf.savefig(fig)
+                plt.close()
 
     return smoothSol
 
