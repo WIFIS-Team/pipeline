@@ -3,7 +3,7 @@
 
 import numpy as np
 
-def compFowler(inttime, fluxImg, satFrame, nFrames, gain = 1., ron=1.):
+def compFowler(inttime, fluxImg, satFrame, gain = 1., ron=1.):
     """
     inttime is array of integration times
     fluxImg is processed flux image. ***UNITS UNKNOWN AT THIS POINT***
@@ -12,6 +12,7 @@ def compFowler(inttime, fluxImg, satFrame, nFrames, gain = 1., ron=1.):
     ron = read out noise, in units of electrons
     """
 
+    nFrames = len(inttime)
     deltaT = inttime[-1] - inttime[int(inttime.shape[0]/2)-1] #integration time
     dT = inttime[1]-inttime[0] # readout time per frame
     nReads = satFrame - int(nFrames/2)
