@@ -498,7 +498,7 @@ def traceRonchiAll(extSlices, nbin=2, winRng=5, mxWidth=1,smth=5,bright=False, M
             else:
                 flatSlc = flatSlices[i]
                 
-            lst.append([extSlices[i], nbin, winRng, extSlices[i].shape[1], False, mxWidth,smth,bright, flatSlc])
+            lst.append([extSlices[i], nbin, winRng, extSlices[i].shape[1], False, mxWidth,smth,bright, flatSlc, threshold])
 
         if (ncpus == None):
             ncpus = mp.cpu_count()
@@ -513,7 +513,7 @@ def traceRonchiAll(extSlices, nbin=2, winRng=5, mxWidth=1,smth=5,bright=False, M
             else:
                 flatSlc = flatSlices[i]
  
-            result.append(traceRonchiSlice([slc, nbin, winRng, extSlices[i].shape[1],False, mxWidth, smth, bright, flatSlc]))
+            result.append(traceRonchiSlice([extSlices[i], nbin, winRng, extSlices[i].shape[1],False, mxWidth, smth, bright, flatSlc, threshold]))
 
     #now organize results
     traces = []
