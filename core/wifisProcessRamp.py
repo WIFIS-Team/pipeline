@@ -56,7 +56,7 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, s
 
     #****************************************************************************
     
-    wifisIO.writeFits([fluxImg, sigmaImg, satFrame], saveName, hdr=hdr)
+    wifisIO.writeFits([fluxImg, sigmaImg, satFrame], saveName, hdr=hdr, ask=False)
     
     # CORRECT BAD PIXELS
     #check for BPM and read, if exists
@@ -132,7 +132,7 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1
 
     #****************************************************************************
             
-    wifisIO.writeFits([fluxImg, sigmaImg, satFrame], saveName, hdr=hdr)
+    wifisIO.writeFits([fluxImg, sigmaImg, satFrame], saveName, hdr=hdr, ask=False)
 
     # CORRECT BAD PIXELS
     #check for BPM and read, if exists
