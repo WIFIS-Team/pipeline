@@ -117,7 +117,10 @@ def findLimits(data, dispAxis=0, winRng=51, imgSmth=5, limSmth=10, ncpus=None, r
     #now go through and shift all limits along the spatial direction to account for reference removed image
     if (rmRef):
         limSmth = np.clip(limSmth-4,0, dTmp.shape[1]-1)
-        
+
+    #lastly round all limits to nearest integer to avoid potential pixel differences
+    limSmth = limSmth.astype(int)
+    
     return limSmth
 
 #def extSlices(data, limits, dispAxis=0):
@@ -530,7 +533,7 @@ def polyFitLimits(limits, degree=2):
         poly = np.poly1d(polyCoef)
         polyFit = poly(x)
         np.clip(polyFit, 0, x.shape[0]-1, out = polyFit)
-        polyLimits.append(polyFit)
+        polyLimits.append(polyFit.astype(int))
     return np.asarray(polyLimits)
         
 def medSmoothSlices(extSlices, nPix, MP=True, ncpus=None):
