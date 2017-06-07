@@ -40,7 +40,7 @@ fileList = 'flat.lst' # a simple ascii file containing a list of the folder name
 nlFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_NLCoeff.fits' # the non-linearity correction coefficients file        
 satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits' # the saturation limits file
 bpmFile = '/data/pipeline/external_data/bpm.fits' # the bad pixel mask
-distMapLimitsFile = '/data/pipeline/external_data/master_flat_limits.fits'
+distMapLimitsFile = '/data/pipeline/external_data/ronchiMap_limits.fits'
 
 #optional behaviour of pipeline
 plot = True #whether to plot the traces
@@ -141,11 +141,11 @@ for lstNum in range(len(lst)):
         if os.path.exists(distMapLimitsFile):
             print('Using slice limits relative to distortion map file')
             distMapLimits = wifisIO.readImgsFromFile(distMapLimitsFile)[0]
-            shft = np.nanmedian(polyLimits[1:-1,:] - distMapLimits[1:-1,:])
-            polyLimits = distMapLimits + shft
-
-        #make sure limits are clipped correctly at boundaries
-        polyLimits = np.clip(polyLimits, 0,flatCor.shape[0]-1)
+            shft = int(np.nanmedian(polyLimits[1:-1,:] - distMapLimits[1:-1,:]))
+            finalLimits = distMapLimits
+        else:
+            finalLimits = polyLimits
+            shft = 0
             
         #save figures of tracing results for quality control purposes
         if (plot):
@@ -159,23 +159,22 @@ for lstNum in range(len(lst)):
             plt.colorbar()
             for l in range(limits.shape[0]):
                 plt.plot(limits[l], np.arange(limits.shape[1]),'k', linewidth=1)
-                plt.plot(polyLimits[l], np.arange(limits.shape[1]),'r--', linewidth=1)
+                plt.plot(finalLimits[l]+shft, np.arange(limits.shape[1]),'r--', linewidth=1)
             plt.savefig('quality_control/'+folder+'_flat_slices_traces.png', dpi=300)
             plt.close(fig)
-                    
-        limits = polyLimits
 
-        #write limits to file
-        wifisIO.writeFits(limits,savename+'_flat_limits.fits', hdr=hdr)
-
+        #write distMapLimits + shft to file
+        hdr.set('LIMSHIFT',shft, 'Limits shift relative to Ronchi slices')
+        wifisIO.writeFits(distMapLimits,savename+'_flat_limits.fits', hdr=hdr)
+      
         #now extract the individual slices
-        flatSlices = slices.extSlices(flatCor, limits, dispAxis=0)
+        flatSlices = slices.extSlices(flatCor, finalLimits, dispAxis=0, shft=shft)
 
         #extract uncertainty slices
-        sigmaSlices = slices.extSlices(sigmaCor, limits, dispAxis=0)
+        sigmaSlices = slices.extSlices(sigmaCor, finalLimits, dispAxis=0, shft=shft)
 
         #extract saturation slices
-        satSlices = slices.extSlices(satFrame, limits, dispAxis=0)
+        satSlices = slices.extSlices(satFrame, finalLimits, dispAxis=0)
 
         print('Getting normalized flat field')
         #now get smoothed and normalized response function
