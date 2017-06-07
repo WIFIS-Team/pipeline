@@ -25,25 +25,27 @@ import wifisUncertainties
 import wifisBadPixels as badPixels
 import wifisSlices as slices
 import wifisHeaders as headers
+import wifisProcessRamp as processRamp
+import wifisCreateCube as createCube
 from matplotlib.backends.backend_pdf import PdfPages
 
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
 os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target
+plt.ioff()
 
 #*****************************************************************************
 #************************** Required input ***********************************
-fileList = ''
-flatName = ''
+fileList = 'wave.lst' # a table, with first column corresponding to arc folder and second to associated flat
 
 #mostly static input
 templateFile = '/data/pipeline/external_data/templateSlices.fits'
 prevResultsFile = '/data/pipeline/external_data/prevSol.pkl'
 nlFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_NLCoeff.fits'        
 satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits'
-bpmFile = 'bpm.fits'
-atlasname = '/data/pipeline/external_data/best_lines2.dat'
-distMapFile = ''
-spatGridPropsFile = ''
+bpmFile = '/data/pipeline/external_data/bpm.fits'
+atlasFile = '/data/pipeline/external_data/best_lines2.dat'
+distMapFile = '/data/pipeline/external_data/distortionMap.fits'
+spatGridPropsFile = '/data/pipeline/external_data/spatGridProps.dat'
 
 #optional behaviour
 plot = True
@@ -53,20 +55,20 @@ rmsThresh = 0.3
 #*****************************************************************************
 #*****************************************************************************
 
+t0 = time.time()
+
 #first check if required input exists
-if not (os.path.exists(nlFile) and os.path.exists(satFile) and os.path.exists(flatName+'_limits.fits') and os.path.exists(atlasname) and os.path.exists(distMapFile) and os.path.exists(distMapLimitsFile)):
+if not (os.path.exists(nlFile) and os.path.exists(satFile) and os.path.exists(atlasFile) and os.path.exists(distMapFile) and os.path.exists(spatGridPropsFile)):
     if not (os.path.exists(satFile)):
         print ('*** ERROR: Cannot continue, saturation file ' + satFile + ' does not exist. Please process a detector linearity calibration sequence or provide the necessary file ***')
     if not (os.path.exists(nlFile)):
         print ('*** ERROR: Cannot continue, NL coefficients file ' + nlFile + ' does not exist. Please process a detector linearity calibration sequence or provide the necessary file ***')
-    if not (os.path.exists(limitsFile)):
-        print ('*** ERROR: Cannot continue, limits file ' + flatName+'_limits.fits' + ' does not exist. Please process flat field calibration sequence or provide the necessary file ***')
-    if not (os.path.exists(atlasname)):
-        print ('*** ERROR: Cannot continue, line atlas file ' + atlasname + ' does not exist. Please provide the necessary atlas file***')
+    if not (os.path.exists(atlasFile)):
+        print ('*** ERROR: Cannot continue, line atlas file ' + atlasFile + ' does not exist. Please provide the necessary atlas file***')
     if not (os.path.exists(distMapFile)):
         print ('*** ERROR: Cannot continue, distorion map file ' + distMapFile + ' does not exist. Please process a Ronchi calibration sequence or provide the necessary file ***')
-    if not (os.path.exists(distMapLimitsFile)):
-        print ('*** ERROR: Cannot continue, limits file used for distortion map' + distMapLimitsFile + ' does not exist. Please provide the necessary file ***')
+    if not (os.path.exists(spatGridPropsFile)):
+        print ('*** ERROR: Cannot continue, spatial propertites grid file ' + spatGridPropsFile + ' does not exist. Please process a Ronchi calibration sequence or provide the necessary file ***')
     raise SystemExit('*** Missing required calibration files, exiting ***')
 
 #create processed directory, in case it doesn't exist
@@ -86,21 +88,24 @@ else:
 #read file list
 lst= wifisIO.readAsciiList(fileList)
 
-if lst.ndim == 0:
-    lst = np.asarray([lst])
+if (lst.ndim == 1):
+    lstLen = 1
+else:
+    lstLen = len(lst)
 
-t0 = time.time()
-
-for lstNum = in range(len(lst)):
+for lstNum in range(lstLen):
     if (lst.ndim>1):
-        folder = lst[lstNum,0]
+        waveFolder = lst[lstNum,0]
+        flatFolder = lst[lstNum,1]
     else:
-        folder = lst[lstNum].tostring()
-
-    savename = 'processed/'+folder
+        waveFolder = lst[0]
+        flatFolder = lst[1]
+        
+    savename = 'processed/'+waveFolder
+    flatName = 'processed/'+flatFolder
     
     if(os.path.exists(savename+'_wave.fits') and os.path.exists(savename+'_waveMap.fits') and os.path.exists(savename+'_waveFitResuls.pkl') and os.path.exists(savename+'_wave_distCor.fits')):
-        cont = wifisIO.userInput('Processed wavelength calibration files already exists for ' +foldername+', do you want to continue processing (y/n)?')
+        cont = wifisIO.userInput('Processed wavelength calibration files already exists for ' +waveFolder+', do you want to continue processing (y/n)?')
         if (cont.lower() == 'y'):
             contProc = True
         else:
@@ -109,10 +114,10 @@ for lstNum = in range(len(lst)):
         contProc = True
     
     if (contProc):
-        print('*** Working on folder ' + folder + ' ***')
+        print('*** Working on folder ' + waveFolder + ' ***')
 
         if (os.path.exists(savename+'_wave.fits')):
-            cont = wifisIO.userInput('Processed arc lamp file already exists for ' +foldername+', do you want to continue processing (y/n)?')
+            cont = wifisIO.userInput('Processed arc lamp file already exists for ' + waveFolder+', do you want to continue processing (y/n)?')
             if (cont.lower() == 'n'):
                 print('Reading image'+savename+'_wave.fits instead')
                 waveCor, sigmaImg, satFrame= wifisIO.readImgsFromFile(savename+'_wave.fits')[0]
@@ -123,26 +128,28 @@ for lstNum = in range(len(lst)):
             contProc2 = True
         
         if (contProc2):
-            if (os.path.exists(folder+'/Result')):
+            if (os.path.exists(waveFolder+'/Result')):
                 #process CDS/Fowler ramps
-                wave, sigmaImg, satFrame = processRamp.fromFowler(folder, savename+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=2)
+                wave, sigmaImg, satFrame,hdr = processRamp.fromFowler(waveFolder, savename+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=2)
             else:
                 #process UTR
-                wave, sigmaImg, satFrame = processRamp.fromUTR(folder, savename+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=2)
+                wave, sigmaImg, satFrame,hdr = processRamp.fromUTR(waveFolder, savename+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=2)
 
         print('Extracting slices')
         #first get rid of reference pixels
         wave = wave[4:2044,4:2044]
-        sigmaImg = sigmaImg[4:2044, 4:0244]
+        sigmaImg = sigmaImg[4:2044, 4:2044]
         satFrame = satFrame[4:2044, 4:2044]
         
-        limits = wifisIO.readImgsFromFile(flatName+'_limits.fits')[0]
-        waveSlices = slices.extSlices(wave, limits, dispAxis=0)
+        limits, limHdr = wifisIO.readImgsFromFile(flatName+'_flat_limits.fits')
+        limShift = limHdr['LIMSHIFT']
+        
+        waveSlices = slices.extSlices(wave, limits, dispAxis=0, shft=limShift)
         sigmaSlices = slices.extSlices(sigmaImg, limits, dispAxis=0)
         satSlices = slices.extSlices(satFrame, limits, dispAxis=0)
 
         print('Flat fielding slices')
-        flatNorm = wifisIO.readImgsFromFile(flatName+'_slices_norm.fits')[0][0:18]
+        flatNorm = wifisIO.readImgsFromFile(flatName+'_flat_slices_norm.fits')[0][0:18]
         waveFlat = slices.ffCorrectAll(waveSlices, flatNorm)
         sigmaFlat = slices.ffCorrectAll(sigmaSlices,flatNorm)
         
@@ -152,7 +159,7 @@ for lstNum = in range(len(lst)):
         waveCor = createCube.distCorAll(waveFlat, distMap, spatGridProps=spatGridProps)
 
         #save distortion corrected arc image
-        wifisIO.writeFits(waveCor, savename+'_wave_distCor.fits')
+        wifisIO.writeFits(waveCor, savename+'_wave_distCor.fits',hdr=hdr)
         
         #Determine dispersion solution
         print('Determining dispersion solution')
@@ -164,7 +171,7 @@ for lstNum = in range(len(lst)):
     
         #check if solution already exists.
         if(os.path.exists(savename+'_waveFitResults.pkl') and (os.path.exists(savename+'_waveMap.fits'))):
-            cont = wifisIO.userInput('Dispersion solution and wavemap already exists for ' +foldername+', do you want to continue and replace (y/n)?')
+            cont = wifisIO.userInput('Dispersion solution and wavemap already exists for ' +waveFolder+', do you want to continue and replace (y/n)?')
             if (cont.lower() == ''):
                 cont3 = True
             else:
@@ -173,10 +180,10 @@ for lstNum = in range(len(lst)):
             cont3 = True
                 
         if cont3:
-            results = waveSol.getWaveSol(waveSlices, template, atlasname, 3, prevSol, winRng=9, mxCcor=30, weights=False, buildSol=False, sigmaClip=1, allowLower=True, lngthConstraint=True)
+            results = waveSol.getWaveSol(waveSlices, template, atlasFile, 3, prevSol, winRng=13, mxCcor=150, weights=False, buildSol=False, sigmaClip=1, allowLower=True, lngthConstraint=True)
     
             #Save all results
-            wifisIO.writePickle(savename+'_waveFitResults.pkl', results)
+            wifisIO.writePickle(results, savename+'_waveFitResults.pkl')
 
             dispSolLst = results[0]
 
@@ -186,14 +193,15 @@ for lstNum = in range(len(lst)):
             if (rmsThresh is not None):
                 rms = results[4]
                 for i in range(len(rms)):
-                    whr = np.where(r > rmsThresh)[0]
-                    dispSolLst[i][whr] = np.asarray([np.nan])
+                    for j in range(len(rms[i])):
+                        if (rms[i][j] > rmsThresh):
+                            dispSolLst[i][j] = np.asarray([np.nan])
 
             if (plot):
-                polySol = waveSol.polyFitDispSolution(dispSolLst, plot=False,degree=2, plot='quality_control/'+folder+'_polyFit_dispSol.pdf')
-                #gaussSol =waveSol.gaussSmoothDispSolution(result[0],nPix=3,plot='quality_control/'+folder+'_polyFit_dispSol.pdf')
+                polySol = waveSol.polyFitDispSolution(dispSolLst, degree=2, plotFile='quality_control/'+waveFolder+'_polyFit_dispSol.pdf')
+                #gaussSol =waveSol.gaussSmoothDispSolution(result[0],nPix=3,plot='quality_control/'+waveFolder+'_polyFit_dispSol.pdf')
             else:
-                polySol = waveSol.polyFitDispSolution(dispSolLst, plot=False,degree=2, plotFile=None)
+                polySol = waveSol.polyFitDispSolution(dispSolLst, degree=2, plotFile=None)
                 #gaussSol =waveSol.gaussSmoothDispSolution(result[0],nPix=3,plotFile=None)  
 
             dispSolLst = polySol
@@ -203,7 +211,7 @@ for lstNum = in range(len(lst)):
             waveMapLst = waveSol.buildWaveMap(dispSolLst, waveSlices[0].shape[1])
 
             #save wavemap solution
-            wifisIO.writeFits(waveMapLst, savename+'_waveMap.fits')
+            wifisIO.writeFits(waveMapLst, savename+'_waveMap.fits',hdr=hdr)
 
             if (plot):
                 #save some output for quality control purposes
@@ -212,7 +220,7 @@ for lstNum = in range(len(lst)):
                 #first save RMS results
                 rms = results[4]
 
-                with PdfPages('quality_control/'+folder+'_wave_RMS.pdf') as pdf:
+                with PdfPages('quality_control/'+waveFolder+'_wave_RMS.pdf') as pdf:
                     for r in rms:
                         plt.plot(r)
                         plt.xlabel('Column #')
@@ -258,13 +266,13 @@ for lstNum = in range(len(lst)):
                     strt += f.shape[0]
 
                 #save results
-                wifisIO.writeFits(waveMap, 'quality_control/'folder+'_waveMapImg.fits', ask=False)
-                wifisIO.writeFits(fwhmMap, 'quality_control/'folder+'_fwhmMapImg.fits', ask=False)
+                wifisIO.writeFits(waveMap, 'quality_control/'+waveFolder+'_waveMapImg.fits', ask=False,hdr=hdr)
+                wifisIO.writeFits(fwhmMap, 'quality_control/'+waveFolder+'_fwhmMapImg.fits', ask=False,hdr=hdr)
 
                 plt.imshow(fwhmMap, aspect='auto', cmap='jet')
                 plt.colorbar()
                 plt.title('Mean FWHM is '+str(fwhmMean) +', min wave is '+str(waveMin)+', max wave is '+str(waveMax))
-                plt.savefig('quality_control/'+folder+'fwhmMapImg.png', dpi=300)
+                plt.savefig('quality_control/'+waveFolder+'fwhmMapImg.png', dpi=300)
                 plt.close()
 
                            
