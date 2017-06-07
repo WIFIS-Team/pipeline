@@ -500,7 +500,7 @@ def extSlices(data, limits,shft=0, dispAxis=0):
     
     for i in range(0,nSlices-1):
         #initialize output slices
-        mnOut = np.ceil(np.min(limits[i,:])).astype('int')
+        mnOut = np.floor(np.min(limits[i,:])).astype('int')
         mxOut = np.ceil(np.max(limits[i+1,:])).astype('int')
         slice = np.empty((mxOut-mnOut,n), dtype=data.dtype)
         slice[:] = np.nan
