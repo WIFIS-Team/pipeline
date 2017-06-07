@@ -14,7 +14,7 @@ os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target
 #*******************************************************************************
 #required input!
 flatFolder = '20170606213032'
-waveFolder = '20170606213439'
+waveFolder = '20170606222923'
 
 #should be (mostly) static
 atlasFile = '/data/pipeline/external_data/best_lines2.dat'
@@ -132,7 +132,7 @@ wifisIO.writeFits(fwhmMap, 'quick_reduction/'+waveFolder+'_fwhm_map.fits', ask=F
 
 plt.imshow(fwhmMap, aspect='auto', cmap='jet')
 plt.colorbar()
-plt.title('Mean FWHM is '+str(fwhmMean) +', min wave is '+str(waveMin)+', max wave is '+str(waveMax))
-plt.savefig('quick_reduction/'+waveFolder+'fwhm_map.png', dpi=300)
+plt.title('Mean FWHM is '+'{:3.1f}'.format(fwhmMean) +', min wave is '+'{:6.1f}'.format(waveMin)+', max wave is '+'{:6.1f}'.format(waveMax))
+plt.savefig('quick_reduction/'+waveFolder+'_fwhm_map.png', dpi=300)
 plt.close()
 
