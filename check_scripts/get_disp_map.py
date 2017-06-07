@@ -13,8 +13,8 @@ os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target
 
 #*******************************************************************************
 #required input!
-flatFolder = '20170510233851'
-waveFolder = '20170510234217'
+flatFolder = '20170606213032'
+waveFolder = '20170606213439'
 
 #should be (mostly) static
 atlasFile = '/data/pipeline/external_data/best_lines2.dat'
@@ -46,7 +46,7 @@ else:
     
     #get processed ramp
     wave = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
-
+    wave = wave[4:2044,4:2044]
 print('Processing flat file')
 #check the type of raw data, only assumes CDS or up-the-ramp
 if (os.path.exists(flatFolder+'/Results/CDSResult.fits')):
@@ -62,7 +62,7 @@ else:
     flat = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
 
 print('Finding flat limits')
-limits = slices.findLimits(flat, dispAxis=0, winRng=51, imgSmth=5, limSmth=20)
+limits = slices.findLimits(flat, dispAxis=0, winRng=51, imgSmth=5, limSmth=20,rmRef=True)
 
 print('extracting wave slices')
 waveSlices = slices.extSlices(wave, limits, dispAxis=0)
@@ -84,8 +84,8 @@ waveMapLst = waveSol.buildWaveMap(dispSolLst,npts)
 fwhmMapLst = waveSol.buildFWHMMap(pixCentLst, fwhmLst, npts)
 
 #get max and min starting wavelength based on median of central slice (slice 8)
-waveMin = np.nanmedian(waveMapLst[:,0])
-waveMax = np.nanmedian(waveMapLst[:,-1])
+waveMax = np.nanmedian(waveMapLst[8][:,0])
+waveMin = np.nanmedian(waveMapLst[8][:,-1])
 print('********************************************************')
 print('*** Minimum median wavelength for slice 8 is ' + str(waveMin)+ '***')
 print('*** Maximum median wavelength for slice 8 is ' + str(waveMax)+ '***')
