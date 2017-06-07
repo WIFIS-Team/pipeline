@@ -146,6 +146,6 @@ r = np.arange(360)*np.pi/180.
 x = fwhmPix*np.cos(r) + gFit.x_mean
 y = fwhmPix*np.sin(r) + gFit.y_mean
 plt.plot(x,y, 'r--')
-plt.title('Average FWHM of object is '+str(fwhmDeg)+' arcsec')
+plt.title('Average FWHM of object is '+'{:4.2f}'.format(fwhmDeg)+' arcsec')
 plt.savefig('quick_reduction/'+rampFolder+'_quickRedImg.png', dpi=300)
 plt.show()
