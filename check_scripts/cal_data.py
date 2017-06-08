@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import wifisUncertainties
 import wifisBadPixels as badPixels
 import wifisCreateCube as createCube
-import wifisWCS
+import wifisHeaders as headers
 import wifisWaveSol as waveSol
 import wifisProcessRamp as processRamp
 import os
@@ -23,12 +23,14 @@ obsLstFile = 'obs.lst'
 skyLstFile = 'sky.lst'
 
 #likely static
-distMapFile = 'ronchi_map_polyfit.fits'
-distMapLimitsFile = 'master_flat_limits.fits'
-satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170502141549/processed/master_detLin_satCounts.fits'
-bpmFile = 'bpm.fits'
-nlFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170502141549/processed/master_detLin_NLCoeff.fits'
-spatGridPropsFile = 'spatGridProps.dat'
+rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
+
+distMapFile = '/data/pipeline/external_data/distortionMap.fits'
+distMapLimitsFile = '/data/pipeline/ronchiMap_limits.fits'
+satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits'
+bpmFile = '/data/pipeline/external_data/bpm.fits'
+nlFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_NLCoeff.fits'
+spatGridPropsFile = '/data/pipeline/external_data/spatGridProps.dat'
 waveTempFile = 'waveFlat_distCor.fits'
 waveTempResultsFile = 'waveFlat_fitting_results.pkl'
 atlasFile = '/data/pipeline/external_data/best_lines2.dat'
@@ -59,11 +61,7 @@ else:
 print('processing flat')
 
 #check image type
-if (os.path.exists(flatFolder+'/Result')):
-    flat, sigmaImg, satFrame, hdr = processRamp.fromFowler(flatFolder, 'processed/'+flatFolder+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=20)
-else:
-    #if dealing with a very big ramp, increase rowSplit value below
-    flat, sigmaImg, satFrame, hdr = processRamp.fromUTR(flatFolder, 'processed/'+flatFolder+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=20)
+flat, sigmaImg, satFrame, hdr = processRamp.auto(flatFolder, rootFolder,'processed/'+flatFolder+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=20)
 
 #get limits
 print('Getting limits relative to distortion map')
@@ -86,10 +84,7 @@ distMap = wifisIO.readImgsFromFile(distMapFile)[0]
 spatGridProps = wifisIO.readTable(spatGridPropsFile)
 
 print('processing arc image')
-if (os.path.exists(waveFolder+'/Result')):
-    wave, sigmaImg, satFrame, hdr = processRamp.fromFowler(waveFolder, 'processed/'+waveFolder+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=2)
-else:
-    wave, sigmaImg, satFrame, hdr = processRamp.fromUTR(waveFolder, 'processed/'+waveFolder+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2)
+wave, sigmaImg, satFrame, hdr = processRamp.auto(waveFolder, rootFolder,'processed/'+waveFolder+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2)
 
 #remove reference pixels
 wave = wave[4:2044,4:2044]
@@ -113,7 +108,7 @@ sol = templateResults[5]
 result =  waveSol.getWaveSol(waveCor, template, atlasFile, 3, sol, winRng=9, mxCcor=150, weights=False, buildSol=False, sigmaClip=1, allowLower=True, lngthConstraint=True)
 wifisIO.writePickle(result, 'processed/'+waveFolder+'_waveFitResults.pkl')
 
-polySol = waveSol.polyFitDispSolution(result[0], plot=False,degree=2)
+polySol = waveSol.polyFitDispSolution(result[0], plotFile=None,degree=2)
 
 print('Building wavelegth map')
 waveMap = waveSol.buildWaveMap(polySol, waveCor[0].shape[1])
@@ -127,10 +122,10 @@ print('processing observations')
 
 obsLst = wifisIO.readAsciiList(obsLstFile)
 
-if obslst.ndim == 0:
+if obsLst.ndim == 0:
     obsLst = np.asarray([obsLst])
 
-if skyLst is not None:
+if skyLstFile is not None:
     skyLst = wifisIO.readAsciiList(skyLstFile)
     if skyLst.ndim == 0:
         skyLst = np.asarray([skyLst])
@@ -143,10 +138,7 @@ for i in range(len(obsLst)):
     print('Working on data folder ' + dataFolder)
 
     print('Processing science data')
-    if (os.path.exists(dataFolder+'/Result')):
-        data, sigmaImg, satFrame, hdr = processRamp.fromFowler(dataFolder, 'processed/'+dataFolder+'_obs.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=2)
-    else:
-        data, sigmaImg, satFrame, hdr = processRamp.fromUTR(dataFolder, 'processed/'+dataFolder+'_obs.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2)
+    data, sigmaImg, satFrame, hdr = processRamp.auto(dataFolder, rootFolder,'processed/'+dataFolder+'_obs.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2)
 
     #remove reference pixels
     data = data[4:2044,4:2044]
@@ -154,10 +146,8 @@ for i in range(len(obsLst)):
     if skyLst is not None:
         skyFolder = skyLst[i]
         print('Processing sky data')
-        if (os.path.exists(skyFolder+'/Result')):
-            sky, sigmaImg, satFrame, hdrSky = processRamp.fromFowler(skyFolder, 'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=2)
-        else:
-            sky, sigmaImg, satFrame, hdrSky = processRamp.fromUTR(skyFolder, 'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2)
+        sky, sigmaImg, satFrame, hdrSky = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2)
+
         #remove reference pixels
         sky = sky[4:2044,4:2044]
 
@@ -168,7 +158,7 @@ for i in range(len(obsLst)):
     print('Extracting slices')
     #extracting slices
     dataSlices = slices.extSlices(data, distMapLimits, shft=shft)
-    wifisIO.writeFits(dataslices, 'processed/'+dataFolder+'_obs_slices.fits', ask=False)
+    wifisIO.writeFits(dataSlices, 'processed/'+dataFolder+'_obs_slices.fits', ask=False)
 
     #apply flat-field correction
     print('Applying flat field corrections')
@@ -189,7 +179,7 @@ for i in range(len(obsLst)):
     dataCube = createCube.mkCube(dataGrid, ndiv=1)
 
     dataImg = np.nansum(dataCube, axis=2)
-    
+
     #write WCS to header
     hdrCube = hdr
     hdrImg = hdr
@@ -208,7 +198,7 @@ combCube = np.zeros(dataCube.shape, dtype=dataCube.dtype)
 for cube in cubeLst:
     combCube += cube
 
-cubeAll /= float(len(cubeLst))
+combCube /= float(len(cubeLst))
 #now save combined cube
 
 wifisIO.writeFits(combCube, 'processed/'+objectName+'_combined_cube.fits', hdr=hdrCube, ask=False)
