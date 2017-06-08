@@ -15,56 +15,127 @@ os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target
 #******************************************************************************
 #required user input
 
-rampFolder = '20170510232750' #must point to location of folder containing the ramp
-flatFolder = '20170510233851' #must point to location flat field folder associated with observation
+rampFolder = '20170607231712' #must point to location of folder containing the ramp
+flatFolder = '20170607223000' #must point to location flat field folder associated with observation
+
+rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319/'
 
 #(mostly) static input
-distMapFile = '/home/jason/wifis/static_processed/ronchi_map_polyfit.fits' #must point to location of distortion map file
-distLimitsFile = '/home/jason/wifis/static_processed/master_flat_limits.fits' #must point to the location of the flat-field associated with the Ronchi mask image
+distMapFile = '/data/pipeline/external_data/distortionMap.fits' #must point to location of distortion map file
+distLimitsFile = '/data/pipeline/external_data/ronchiMap_limits.fits' #must point to the location of the flat-field associated with the Ronchi mask image
 satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits' #must point to location of saturation limits file, from detector linearity measurements
-spatGridProps = wifisIO.readTable('/home/jason/wifis/static_processed/spatGridProps.dat')
-bpmFile = 'bpm.fits'
+spatGridProps = wifisIO.readTable('/data/pipeline/external_data/spatGridProps.dat')
+bpmFile = '/data/pipeline/external_data/bpm.fits'
 #******************************************************************************
+
+satCounts = wifisIO.readImgsFromFile(satFile)[0]
 
 wifisIO.createDir('quick_reduction')
 
 #read in data
 print('Processing ramp')
-data, inttime, hdr = wifisIO.readRampFromFolder(rampFolder)
 
-#find if any pixels are saturated and avoid usage
-satCounts = wifisIO.readImgsFromFile(satFile)[0]
-satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+#check file type
+#CDS
+if os.path.exists(rootFolder+'/CDSReference/'+rampFolder):
+    folderType = '/CDSReference/'
+    fluxImg, hdr = wifisIO.readImgsFromFile(rootFolder + folderType + rampFolder+'/Result/CDSResult.fits')
+    UTR = False
+    
+#Fowler
+elif os.path.exists(rootFolder+'/FSRamp/'+rampFolder):
+    folderType = '/FSRamp/'
+    UTR =  False
+    if os.path.exists(rootFolder + folderType + rampFolder+'/Result/CDSResult.fits'):
+        fluxImg, hdr = wifisIO.readImgsFromFile(rootFolder + folderType + rampFolder+'/Result/CDSResult.fits')
+    else:
+        data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + rampFolder)
 
-#get processed ramp
-fluxImg = combData.upTheRampCRRejectCL(inttime, data, satFrame, 32)[0]
+        #find if any pixels are saturated and avoid usage
+        satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+
+        #get processed ramp
+        fluxImg = combData.FowlerSamplingCL(inttime, data, satFrame, 32)[0]  
+
+elif os.path.exists(rootFolder + '/UpTheRamp/'+rampFolder):
+    UTR = True
+    folderType = '/UpTheRamp'
+    data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + rampFolder)
+
+    #find if any pixels are saturated and avoid usage
+    satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+
+    #get processed ramp
+    fluxImg = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
+
+else:
+    raise SystemExit('*** Ramp folder ' + rampFolder + ' does not exist ***')
+
 
 #remove bad pixels
 if os.path.exists(bpmFile):
     print('Removing bad pixels')
     bpm = wifisIO.readImgsFromFile(bpmFile)[0]
+    
     fluxImg[bpm.astype(bool)] = np.nan
-    fluxImg[fluxImg < 0] = np.nan
-    fluxImg[satFrame < 2] = np.nan
+    if UTR:
+        fluxImg[fluxImg < 0] = np.nan
+        fluxImg[satFrame < 2] = np.nan
     
 fluxImg = fluxImg[4:2044, 4:2044]
+obsinfoFile = rootFolder + folderType + rampFolder+'/obsinfo.dat'
 
-#extract slices
 #first check if limits already exists
 if os.path.exists('quick_reduction/'+flatFolder+'_limits.fits'):
     limitsFile = 'quick_reduction/'+flatFolder+'_limits.fits'
     limits = wifisIO.readImgsFromFile(limitsFile)[0]
 else:
     print('Processing flat')
-    #read in and process flat to find limits
-    flatData, inttime, hdr = wifisIO.readRampFromFolder(rampFolder)
-    satFrame = satInfo.getSatFrameCL(flatData, satCounts,32)
-    flat= combData.upTheRampCL(inttime, flatData, satFrame, 32)[0]
+
+    #check file type
+    #CDS
+    if os.path.exists(rootFolder+'/CDSReference/'+flatFolder):
+        folderType = '/CDSReference/'
+        flat = wifisIO.readImgsFromFile(rootFolder + folderType + flatFolder+'/Result/CDSResult.fits')[0]
+        UTR = False
+    
+    #Fowler
+    elif os.path.exists(rootFolder+'/FSRamp/'+ flatFolder):
+        folderType = '/FSRamp/'
+        UTR =  False
+        if os.path.exists(rootFolder + folderType + flatFolder+'/Result/CDSResult.fits'):
+            flat, hdr = wifisIO.readImgsFromFile(rootFolder + folderType + rampFolder+'/Result/CDSResult.fits')
+        else:
+            data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + flatFolder)
+
+            #find if any pixels are saturated and avoid usage
+            satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+
+            #get processed ramp
+            flat = combData.FowlerSamplingCL(inttime, data, satFrame, 32)[0]  
+
+    elif os.path.exists(rootFolder + '/UpTheRamp/'+flatFolder):
+        folderType = '/UpTheRamp/'
+        UTR = True
+        data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + flatFolder)
+
+        #find if any pixels are saturated and avoid usage
+        satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+        
+        #get processed ramp
+        flat = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
+
+    else:
+        raise SystemExit('*** flat folder ' + flatFolder + ' does not exist ***')
+    
     
     if os.path.exists(bpmFile):
         print('removing bad pixels')
         flat[bpm.astype(bool)] = np.nan
-        flat[satFrame < 2] = np.nan
+        if(UTR):
+            flat[satFrame < 2] = np.nan
+            flat[flat<0] = np.nan
+
         #flatCor = np.empty(flat.shape, dtype=flat.dtype)
         #flatCor[4:2044,4:2044] = badPixels.corBadPixelsAll(flat[4:2044,4:2044], mxRng=20)
         
@@ -74,7 +145,8 @@ else:
     print('Getting slice limits')
     limits = slices.findLimits(flat, dispAxis=0, rmRef=True)
     wifisIO.writeFits(limits, 'quick_reduction/'+flatFolder+'_limits.fits')
-    
+
+#get ronchi slice limits
 distLimits = wifisIO.readImgsFromFile(distLimitsFile)[0]
 
 #determine shift
@@ -116,14 +188,13 @@ gFit = fitG(gInit, x,y,dataImg)
 #fwhm2 = np.min(r[whr[0],whr[1]])
 
 #get average FWHM
-sigPix = (gFit.x_stddev+gFit.y_stddev)/2.
-fwhmPix = 2.*np.sqrt(2.* np.log(2))*sigPix
+#sigPix = (gFit.x_stddev+gFit.y_stddev)/2.
+#fwhmPix = 2.*np.sqrt(2.* np.log(2))*sigPix
 
-sigDeg = (np.abs(gFit.x_stddev*xScale)+np.abs(gFit.y_stddev*yScale))/2.
-fwhmDeg = 2.*np.sqrt(2.* np.log(2))*sigDeg
+#sigDeg = (np.abs(gFit.x_stddev*xScale)+np.abs(gFit.y_stddev*yScale))/2.
+#fwhmDeg = 2.*np.sqrt(2.* np.log(2))*sigDeg
 
 #fill in header info
-obsinfoFile = rampFolder+'/obsinfo.dat'
 headers.addTelInfo(hdr, obsinfoFile)
 
 #save distortion corrected slices
@@ -134,7 +205,6 @@ headers.getWCSImg(dataImg, hdr, xScale, yScale)
 #save image
 wifisIO.writeFits(dataImg, 'quick_reduction/'+rampFolder+'_quickRedImg.fits', hdr=hdr, ask=False)
 
-
 #plot the data
 WCS = wcs.WCS(hdr)
 
@@ -143,9 +213,11 @@ fig = plt.figure()
 fig.add_subplot(111, projection=WCS)
 plt.imshow(dataImg, origin='lower', cmap='jet')
 r = np.arange(360)*np.pi/180.
-x = fwhmPix*np.cos(r) + gFit.x_mean
-y = fwhmPix*np.sin(r) + gFit.y_mean
+fwhmX = np.abs(2.3548*gFit.x_stddev*xScale)
+fwhmY = np.abs(2.3548*gFit.y_stddev*yScale)
+x = fwhmX*np.cos(r) + gFit.x_mean
+y = fwhmY*np.sin(r) + gFit.y_mean
 plt.plot(x,y, 'r--')
-plt.title('Average FWHM of object is '+'{:4.2f}'.format(fwhmDeg)+' arcsec')
+plt.title(hdr['Object'] + ': FWHM of object is: '+'{:4.2f}'.format(fwhmX)+' in x and ' + '{:4.2f}'.format(fwhmY)+' in y, in arcsec')
 plt.savefig('quick_reduction/'+rampFolder+'_quickRedImg.png', dpi=300)
 plt.show()
