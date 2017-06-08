@@ -7,6 +7,7 @@ import wifisCombineData as combData
 import wifisUncertainties
 import wifisBadPixels as badPixels
 import wifisHeaders as headers
+import os
 
 def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2):
     """
@@ -67,7 +68,7 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, s
         
         fluxImg[BPM.astype(bool)] = np.nan
         fluxImg[satFrame < 2] = np.nan
-        fluxImg[fluxImg < 0] = np.nan
+        #fluxImg[fluxImg < 0] = np.nan
         sigmaImg[~np.isfinite(fluxImg)] = np.nan
     
         #try and correct all pixels, but not the reference pixels
@@ -143,7 +144,7 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1
         
         fluxImg[BPM.astype(bool)] = np.nan
         fluxImg[satFrame < 2] = np.nan
-        fluxImg[fluxImg < 0] = np.nan
+        #fluxImg[fluxImg < 0] = np.nan
         sigmaImg[~np.isfinite(fluxImg)] = np.nan
 
         #try and correct all pixels, but not the reference pixels
@@ -163,3 +164,29 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1
     return imgCor, sigmaCor, satFrame, hdr
 
 
+def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2):
+    """
+    """
+
+    #check if file already processed
+    
+    #check file type    
+    #CDS
+    if os.path.exists(rootFolder+'/CDSReference/'+folder):
+        folderType = '/CDSReference/'
+
+        imgCor, sigmaCor, satFrame, hdr = fromFowler(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng)
+    #Fowler
+    elif os.path.exists(rootFolder+'/FSRamp/'+folder):
+        folderType = '/FSRamp/'
+        
+        imgCor, sigmaCor, satFrame, hdr = fromFowler(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng)
+
+    elif os.path.exists(rootFolder + '/UpTheRamp/'+folder):
+        folderType = '/UpTheRamp/'
+        imgCor, sigmaCor, satFrame, hdr = fromUTR(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, rowSplit=rowSplit, satSplit=satSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng)
+
+    else:
+        raise SystemExit('*** Ramp folder ' + folder + ' does not exist ***')
+
+    return imgCor, sigmaCor, satFrame, hdr
