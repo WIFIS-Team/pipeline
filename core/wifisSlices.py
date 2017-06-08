@@ -491,7 +491,7 @@ def extSlices(data, limits,shft=0, dispAxis=0):
         dTmp = data
 
     #compute the relative limits based on the provided shift
-    limNew = np.clip(limits + shft, 0, dTmp.shape[0])
+    limNew = np.clip(limits + shft, 0, dTmp.shape[0]-1)
     
     #initialize slice list
     slices = []
@@ -506,8 +506,8 @@ def extSlices(data, limits,shft=0, dispAxis=0):
         slice[:] = np.nan
 
         #now go through input image and copy into output slices
-        mnIn = int(mnOut + shft)
-        mxIn= int(mxOut + shft)
+        mnIn = np.clip(int(mnOut + shft),0, dTmp.shape[0]-1)
+        mxIn= np.clip(int(mxOut + shft), 0, dTmp.shape[0]-1)
 
         for j in range(mnIn,mxIn):
             keep = np.ones(n, dtype=bool)
