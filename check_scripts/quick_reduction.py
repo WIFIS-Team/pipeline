@@ -14,13 +14,17 @@ os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target
 
 #******************************************************************************
 #required user input
-
-rampFolder = '20170607231712' #must point to location of folder containing the ramp
-flatFolder = '20170607223000' #must point to location flat field folder associated with observation
-
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319/'
 
+#change here
+rampFolder = '20170607233730' #must point to location of folder containing the ramp
+flatFolder = '20170607235216' #must point to location flat field folder associated with observation
+
+#optional
+skyFolder = '20170607234619' #None # must be set to folder or None
+
 #(mostly) static input
+
 distMapFile = '/data/pipeline/external_data/distortionMap.fits' #must point to location of distortion map file
 distLimitsFile = '/data/pipeline/external_data/ronchiMap_limits.fits' #must point to the location of the flat-field associated with the Ronchi mask image
 satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits' #must point to location of saturation limits file, from detector linearity measurements
@@ -33,7 +37,7 @@ satCounts = wifisIO.readImgsFromFile(satFile)[0]
 wifisIO.createDir('quick_reduction')
 
 #read in data
-print('Processing ramp')
+print('Processing object ramp')
 
 #check file type
 #CDS
@@ -41,7 +45,6 @@ if os.path.exists(rootFolder+'/CDSReference/'+rampFolder):
     folderType = '/CDSReference/'
     fluxImg, hdr = wifisIO.readImgsFromFile(rootFolder + folderType + rampFolder+'/Result/CDSResult.fits')
     UTR = False
-    
 #Fowler
 elif os.path.exists(rootFolder+'/FSRamp/'+rampFolder):
     folderType = '/FSRamp/'
@@ -56,10 +59,9 @@ elif os.path.exists(rootFolder+'/FSRamp/'+rampFolder):
 
         #get processed ramp
         fluxImg = combData.FowlerSamplingCL(inttime, data, satFrame, 32)[0]  
-
 elif os.path.exists(rootFolder + '/UpTheRamp/'+rampFolder):
     UTR = True
-    folderType = '/UpTheRamp'
+    folderType = '/UpTheRamp/'
     data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + rampFolder)
 
     #find if any pixels are saturated and avoid usage
@@ -70,6 +72,52 @@ elif os.path.exists(rootFolder + '/UpTheRamp/'+rampFolder):
 
 else:
     raise SystemExit('*** Ramp folder ' + rampFolder + ' does not exist ***')
+
+
+obsinfoFile = rootFolder + folderType + rampFolder+'/obsinfo.dat'
+
+#now process sky, if it exists
+
+#read in data
+if (skyFolder is not None):
+    print('Processing and subtracting sky ramp')
+
+    #check file type
+    #CDS
+    if os.path.exists(rootFolder+'/CDSReference/'+skyFolder):
+        folderType = '/CDSReference/'
+        skyImg, hdr = wifisIO.readImgsFromFile(rootFolder + folderType + skyFolder+'/Result/CDSResult.fits')
+        UTR = False
+    #Fowler
+    elif os.path.exists(rootFolder+'/FSRamp/'+skyFolder):
+        folderType = '/FSRamp/'
+        UTR =  False
+        if os.path.exists(rootFolder + folderType + skyFolder+'/Result/CDSResult.fits'):
+            skyImg, hdr = wifisIO.readImgsFromFile(rootFolder + folderType + skyFolder+'/Result/CDSResult.fits')
+        else:
+            data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + skyFolder)
+
+            #find if any pixels are saturated and avoid usage
+            satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+
+            #get processed ramp
+            skyImg = combData.FowlerSamplingCL(inttime, data, satFrame, 32)[0]  
+    elif os.path.exists(rootFolder + '/UpTheRamp/'+skyFolder):
+        UTR = True
+        folderType = '/UpTheRamp/'
+        data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + skyFolder)
+        
+        #find if any pixels are saturated and avoid usage
+        satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+        
+        #get processed ramp
+        skyImg = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
+
+    else:
+        raise SystemExit('*** sky Ramp folder ' + skyFolder + ' does not exist ***')
+
+    #subtract
+    fluxImg -= skyImg
 
 
 #remove bad pixels
@@ -83,7 +131,7 @@ if os.path.exists(bpmFile):
         fluxImg[satFrame < 2] = np.nan
     
 fluxImg = fluxImg[4:2044, 4:2044]
-obsinfoFile = rootFolder + folderType + rampFolder+'/obsinfo.dat'
+
 
 #first check if limits already exists
 if os.path.exists('quick_reduction/'+flatFolder+'_limits.fits'):
