@@ -109,6 +109,7 @@ def getSolQuick(input):
     allowLower = input[10]
     sigmaClip = input[11]
     lngthConstraint = input[12]
+    adjustFitWin = input[13]
     totPix = len(yRow)
 
     #get cross-correlation correction to correct any offsets to within 1 pixel
@@ -168,10 +169,15 @@ def getSolQuick(input):
             if (len(whr)>0):
                 atlas = atlas[whr,:]
                 atlasPix = atlasPix[whr]
-        
-                #now find lines, taking only lines with strength >= 3*noise level, based on the predicted line strength
-                atlas[:,1] = atlas[:,1]/np.max(atlas[:,1])
-                whr = np.where(atlas[:,1] >= 3.*nse)[0]
+                                
+                #now find lines, taking only lines with strength >= 2*noise level, based on the predicted line strength, normalized to the strongest line in the observed spectrum
+                mxObsLine = np.nanargmax(yRow)
+                
+                #find closest predicted line
+                mxAtlasLine = np.argmin(np.abs(atlasPix-mxObsLine))
+                                 
+                atlas[:,1] = atlas[:,1]/atlas[mxAtlasLine,1]
+                whr = np.where(atlas[:,1] >= 2.*nse)[0]
                 atlas = atlas[whr,:]
                 atlasPix = atlasPix[whr]
         else:
@@ -186,7 +192,9 @@ def getSolQuick(input):
         print('Pixel offset of ' + str(pixOffset))
         plt.plot(yRow)
         plt.plot(np.arange(totPix)+pixOffset,template)
-        plt.plot([0,len(yRow)],[nse, nse],'--')
+        plt.plot([0,len(yRow)],[2*nse, 2*nse],'--')
+        for i in range(len(atlasPix)):
+            plt.plot([atlasPix[i],atlasPix[i]], [0, atlas[i,1]], 'k:')
         plt.show()
         
     goodFit = False
@@ -224,6 +232,7 @@ def getSolQuick(input):
                 prevMx = -1
                 if plot:
                     print('*********')
+                    print('Fitting line ' +str(atlas[i,0]))
                     
                 while (mxPos != prevMx):
                     #update the search range to centre on peak
@@ -247,10 +256,25 @@ def getSolQuick(input):
                         #fit guassian to region to determine central location
                         #print('Trying to fit line', bestPix[i])
                             try:
+                                winRngTmp = winRng
                                 amp,cent,wid = gaussFit(pixRng,yRng, winRng/3.,plot=plot,title=str(atlasPix[i]))
+
+                                if (adjustFitWin and wid > winRng/3):
+                                    if (plot):
+                                        print('adjusting fit window')
+                                        
+                                    pixRng = int(cent) + np.arange(int(wid)*5)-int(wid*5/2)
+                                    pixRng= pixRng[np.logical_and(pixRng >=0, pixRng<totPix)]
+                                    yRng = yRow[pixRng]
+
+                                    winRngTmp = wid*4
+                                    amp,cent,wid = gaussFit(pixRng,yRng, winRngTmp/3.,plot=plot,title=str(atlasPix[i]))
                                 
-                                #only keep line if amplitude of fit >3*noise level #and width of fit <1/2 of winRng
-                                if (amp/nse >= 3. and np.abs(wid) < winRng/2.):
+                                #only keep line if amplitude of fit >2*noise level #and width of fit <1/2 of winRng
+                                if (amp/nse >= 2. and np.abs(wid) < winRngTmp/2.):
+                                    if plot:
+                                        print('Keeping line')
+                                        
                                     centFit.append(cent)
                                     widthFit.append(wid)
                                     ampFit.append(amp)
@@ -267,6 +291,12 @@ def getSolQuick(input):
                                     
                             except (RuntimeError):
                                 pass
+                        else:
+                            if plot:
+                                print('S/N too low, excluding')
+                    else:
+                        if plot:
+                            print('S/N too low, excluding')
             except (IndexError, ValueError):
                 pass
 
@@ -332,7 +362,10 @@ def getSolQuick(input):
                 if (lngthConstraint):
                     if ((np.nanmax(centFit)-np.nanmin(centFit)) < 1000):
                         mxorder=1
-                        
+
+                        if (plot):
+                            print('Forcing linear solution')
+                            
                         if (useWeights):        
                             fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
                         else:
@@ -403,7 +436,7 @@ def getSolQuick(input):
         return np.repeat(np.nan,mxorder+1), [],[], [],np.nan, np.repeat(np.nan,mxorder+1)
     
 
-def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None, allowLower=False, sigmaClip=2., lngthConstraint=False, MP=True):
+def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None, allowLower=False, sigmaClip=2., lngthConstraint=False, MP=True, adjustFitWin=False):
     """
     Computes dispersion solution for each set of pixels along the dispersion axis in the provided image slices.
     Usage: output = getWaveSol(dataSlices, template, mxorder, prevSolution, winRng, mxCcor, weights, buildSol, ncpus, allowLower, sigmaClip, lngthConstraint)
@@ -500,11 +533,11 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
                         tmpSol = prevSol[i][j]
                         tmpTemp = tmpLst[i][j,:]
 
-                lst.append([dataLst[i][j,:],tmpTemp, bestLines, mxorder,tmpSol,winRng, mxCcor,weights, False, buildSol,allowLower,sigmaClip,lngthConstraint])
+                lst.append([dataLst[i][j,:],tmpTemp, bestLines, mxorder,tmpSol,winRng, mxCcor,weights, False, buildSol,allowLower,sigmaClip,lngthConstraint, adjustFitWin])
                         
         else:
             for j in range(dataLst[i].shape[0]):
-                    lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, False, buildSol, allowLower, sigmaClip,lngthConstraint])
+                    lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, False, buildSol, allowLower, sigmaClip,lngthConstraint, adjustFitWin])
 
     if (MP):
         #setup multiprocessing routines
