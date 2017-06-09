@@ -17,22 +17,23 @@ os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target
 #*****************************************************************************
 #REQUIRED INPUT
 #likely changes for each obs
-flatFolder = '20170512004126'
-waveFolder = '20170512004311'
+flatInfoFile = 'flat.lst'
+waveInfoFile = 'wave.lst'
 obsLstFile = 'obs.lst'
 skyLstFile = 'sky.lst'
 
 #likely static
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
 
-distMapFile = '/data/pipeline/external_data/distortionMap.fits'
-distMapLimitsFile = '/data/pipeline/ronchiMap_limits.fits'
+distMapFile = '/home/jason/wifis/data/ronchi_map_june/20170607010313/processed/20170607001609_ronchi_distMap.fits'
+distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_june/20170607010313/processed/20170607001828_flat_limits.fits'
+spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_june/20170607010313/processed/20170607001609_ronchi_spatGridProps.dat'
+
 satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits'
 bpmFile = '/data/pipeline/external_data/bpm.fits'
 nlFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_NLCoeff.fits'
-spatGridPropsFile = '/data/pipeline/external_data/spatGridProps.dat'
-waveTempFile = 'waveFlat_distCor.fits'
-waveTempResultsFile = 'waveFlat_fitting_results.pkl'
+waveTempFile = '/data/pipeline/external_data/waveTemplate.fits'
+waveTempResultsFile = '/data/pipeline/external_data/waveTemplateFittingResults.pkl'
 atlasFile = '/data/pipeline/external_data/best_lines2.dat'
 
 #pixel scale
@@ -60,6 +61,8 @@ else:
 #deal with flats first
 print('processing flat')
 
+flatFolder = wifisIO.readAsciiList(flatInfoFile).tostring()
+
 #check image type
 flat, sigmaImg, satFrame, hdr = processRamp.auto(flatFolder, rootFolder,'processed/'+flatFolder+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=20)
 
@@ -84,6 +87,7 @@ distMap = wifisIO.readImgsFromFile(distMapFile)[0]
 spatGridProps = wifisIO.readTable(spatGridPropsFile)
 
 print('processing arc image')
+waveFolder = wifisIO.readAsciiList(waveInfoFile).tostring()
 wave, sigmaImg, satFrame, hdr = processRamp.auto(waveFolder, rootFolder,'processed/'+waveFolder+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2)
 
 #remove reference pixels
@@ -98,7 +102,7 @@ waveFlat = slices.ffCorrectAll(waveSlices, flatNorm)
 
 print('Distortion correcting flat slices')
 waveCor = createCube.distCorAll(waveFlat, distMap, spatGridProps=spatGridProps)
-wifisIO.writeFits(waveCor,'wave_slices_distCor.fits', ask=False)
+wifisIO.writeFits(waveCor,'processed/'+waveFolder+'_wave_slices_distCor.fits', ask=False)
 
 print('getting dispersion solution')
 template = wifisIO.readImgsFromFile(waveTempFile)[0]
