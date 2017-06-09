@@ -683,24 +683,18 @@ def trimWaveSlice(input):
 
     slc = np.empty((input[0].shape))
     np.copyto(slc, input[0])
-    flatSlc = input[1]
+    flatSlc = np.empty(input[1].shape)
+    np.copyto(flatSlc, input[1])
     threshold = input[2]
 
     #get median-averaged values for each column along the dispersion axis to avoid effects of hot pixels
     flatMed = np.nanmedian(flatSlc, axis=0)
     mx = np.nanmax(flatMed)
     
-    ##work on axis 0 first
-    #for i in range(slc.shape[0]):
-    #    y = flatSlc[i,:]
-    #    whr = np.where(y < threshold*mx)[0]
-    #    slc[i,whr] = np.nan
-        
-    #work on axis 1 now
-    for i in range(slc.shape[1]):
-        y = flatSlc[:,i]
-        whr = np.where(y < threshold*mx)[0]
-        slc[whr,i] = np.nan
+    #get rid of problematic values
+    flatSlc[~np.isfinite(flatSlc)] = 0.
+    whr = np.where(flatSlc < threshold*mx)
+    slc[whr[0],whr[1]] = np.nan
 
     return slc
 
