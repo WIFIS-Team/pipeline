@@ -12,6 +12,7 @@ import wifisIO
 from scipy.interpolate import interp1d
 from astropy import convolution as conv
 from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib import gridspec
 
 import warnings
 warnings.simplefilter('ignore', np.RankWarning)
@@ -301,9 +302,12 @@ def getSolQuick(input):
             #ampFit = ampFit[whr[0]]
 
             if (plot):
-                fig = plt.figure()
-                ax = fig.add_subplot(211)
-                plt.plot(centFit, atlasFit, 'bo')
+                fig = plt.figure(figsize=(10,5))
+                #ax = fig.add_subplot(211)
+                gs = gridspec.GridSpec(2,2)
+                gs.update(left=0.1,right = 0.98)
+                ax1 = fig.add_subplot(gs[0,0])
+                ax1.plot(centFit, atlasFit, 'bo')
                 
             if (useWeights):        
                 fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
@@ -369,27 +373,26 @@ def getSolQuick(input):
                 
                 #for testing purposes only
                 if (plot):
-                    ax.set_xlim(0, yRow.shape[0])
-                    plt.plot(centFit, atlasFit, 'ro')
-                    plt.xlabel('Pixel #')
-                    plt.ylabel('Wavelength')
-                    plt.plot(np.arange(len(yRow)), poly(np.arange(len(yRow))))
-                    ax = fig.add_subplot(212)
-                    ax.set_xlim(0, yRow.shape[0])
-                    plt.plot(centFit, polyPix(atlasFit) - centFit, 'ro')
-                    plt.xlabel('Pixel #')
-                    plt.ylabel('Residuals (pixels)')
-                    plt.plot([0, len(atlasFit)],[0,0],'--')
+                    ax1.set_xlim(0, yRow.shape[0])
+                    ax1.plot(centFit, atlasFit, 'ro')
+                    ax1.set_xlabel('Pixel #')
+                    ax1.set_ylabel('Wavelength')
+                    ax1.plot(np.arange(len(yRow)), poly(np.arange(len(yRow))))
+                    ax2 = fig.add_subplot(gs[1,0])
+                    ax2.set_xlim(0, yRow.shape[0])
+                    ax2.plot(centFit, polyPix(atlasFit) - centFit, 'ro')
+                    ax2.set_xlabel('Pixel #')
+                    ax2.set_ylabel('Residuals (pixels)')
+                    ax2.plot([0, len(atlasFit)],[0,0],'--')
                     print('final std dev:',np.std(atlasFit - poly(centFit)), ' in wavelength')
 
-                    fig2 = plt.figure()
-                    ax =fig2.add_subplot(111)
-                    ax.set_xlim(0, yRow.shape[0])
-                    plt.plot(yRow,'k')
-                    plt.xlabel('Pixel')
-                    plt.ylabel('Normalized signal')
+                    ax3 =fig.add_subplot(gs[:,1])
+                    ax3.set_xlim(0, yRow.shape[0])
+                    ax3.plot(yRow,'k')
+                    ax3.set_xlabel('Pixel')
+                    ax3.set_ylabel('Normalized signal')
                     for lne in range(centFit.shape[0]):
-                        plt.plot([centFit[lne],centFit[lne]], [0,ampFit[lne]], 'r--')
+                        ax3.plot([centFit[lne],centFit[lne]], [0,ampFit[lne]], 'r--')
                         
                     plt.show()
         
