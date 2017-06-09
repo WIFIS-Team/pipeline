@@ -110,6 +110,7 @@ def getSolQuick(input):
     sigmaClip = input[11]
     lngthConstraint = input[12]
     adjustFitWin = input[13]
+    sigmaLimit = input[14]
     totPix = len(yRow)
 
     #get cross-correlation correction to correct any offsets to within 1 pixel
@@ -177,7 +178,7 @@ def getSolQuick(input):
                 mxAtlasLine = np.argmin(np.abs(atlasPix-mxObsLine))
                                  
                 atlas[:,1] = atlas[:,1]/atlas[mxAtlasLine,1]
-                whr = np.where(atlas[:,1] >= 2.*nse)[0]
+                whr = np.where(atlas[:,1] >= sigmaLimit*nse)[0]
                 atlas = atlas[whr,:]
                 atlasPix = atlasPix[whr]
         else:
@@ -192,7 +193,7 @@ def getSolQuick(input):
         print('Pixel offset of ' + str(pixOffset))
         plt.plot(yRow)
         plt.plot(np.arange(totPix)+pixOffset,template)
-        plt.plot([0,len(yRow)],[2*nse, 2*nse],'--')
+        plt.plot([0,len(yRow)],[sigmaLimit*nse, sigmaLimit*nse],'--')
         for i in range(len(atlasPix)):
             plt.plot([atlasPix[i],atlasPix[i]], [0, atlas[i,1]], 'k:')
         plt.show()
@@ -271,7 +272,7 @@ def getSolQuick(input):
                                     amp,cent,wid = gaussFit(pixRng,yRng, winRngTmp/3.,plot=plot,title=str(atlasPix[i]))
                                 
                                 #only keep line if amplitude of fit >2*noise level #and width of fit <1/2 of winRng
-                                if (amp/nse >= 2. and np.abs(wid) < winRngTmp/2.):
+                                if (amp/nse >= sigmaLimit and np.abs(wid) < winRngTmp/2.):
                                     if plot:
                                         print('Keeping line')
                                         
@@ -436,7 +437,7 @@ def getSolQuick(input):
         return np.repeat(np.nan,mxorder+1), [],[], [],np.nan, np.repeat(np.nan,mxorder+1)
     
 
-def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None, allowLower=False, sigmaClip=2., lngthConstraint=False, MP=True, adjustFitWin=False):
+def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None, allowLower=False, sigmaClip=2., lngthConstraint=False, MP=True, adjustFitWin=False, sigmaLimit=3):
     """
     Computes dispersion solution for each set of pixels along the dispersion axis in the provided image slices.
     Usage: output = getWaveSol(dataSlices, template, mxorder, prevSolution, winRng, mxCcor, weights, buildSol, ncpus, allowLower, sigmaClip, lngthConstraint)
@@ -533,11 +534,11 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
                         tmpSol = prevSol[i][j]
                         tmpTemp = tmpLst[i][j,:]
 
-                lst.append([dataLst[i][j,:],tmpTemp, bestLines, mxorder,tmpSol,winRng, mxCcor,weights, False, buildSol,allowLower,sigmaClip,lngthConstraint, adjustFitWin])
+                lst.append([dataLst[i][j,:],tmpTemp, bestLines, mxorder,tmpSol,winRng, mxCcor,weights, False, buildSol,allowLower,sigmaClip,lngthConstraint, adjustFitWin, sigmaLimit])
                         
         else:
             for j in range(dataLst[i].shape[0]):
-                    lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, False, buildSol, allowLower, sigmaClip,lngthConstraint, adjustFitWin])
+                    lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, False, buildSol, allowLower, sigmaClip,lngthConstraint, adjustFitWin,sigmaLimit])
 
     if (MP):
         #setup multiprocessing routines
