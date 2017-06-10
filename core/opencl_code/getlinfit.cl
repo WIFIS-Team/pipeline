@@ -23,7 +23,7 @@ __kernel void lsfit(const unsigned int nx, const unsigned int nt, __global float
   
   unsigned long pos3d = 0;
   unsigned long pos2d = i*nx+j;
-  double satframe = (double) sat[pos2d];
+  satframe = sat[pos2d];
   
   double covar = 0;
   double varx = 0;
