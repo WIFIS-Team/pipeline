@@ -23,7 +23,7 @@ __kernel void lsfit(const unsigned int nx, const unsigned int nt, __global float
   
   unsigned long pos3d = 0;
   unsigned long pos2d = i*nx+j;
-  satframe = sat[pos2d];
+  unsigned int satframe = sat[pos2d];
   
   double covar = 0;
   double varx = 0;
@@ -86,5 +86,10 @@ __kernel void lsfit(const unsigned int nx, const unsigned int nt, __global float
     
     variance[pos2d] = (float)vari;
     
+  }
+  else{
+    a0[pos2d] = NAN;
+    a1[pos2d] = NAN;
+    variance[pos2d] = NAN;
   }
 }
