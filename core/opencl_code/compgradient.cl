@@ -35,7 +35,7 @@ __kernel void compmeangrad(const unsigned int nx, const unsigned int nt, __globa
 
   // only compute gradient for minimum of 2 frames
   if (satframe <1){
-    meangrad = 0;
+    meangrad = NAN;
   } else {
     // if only 2 frames, compute gradient for both points as y[1]-y[0]
     if (satframe == 1){
