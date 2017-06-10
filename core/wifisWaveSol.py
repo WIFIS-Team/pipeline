@@ -13,9 +13,11 @@ from scipy.interpolate import interp1d
 from astropy import convolution as conv
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib import gridspec
+from scipy.optimize import OptimizeWarning
 
 import warnings
 warnings.simplefilter('ignore', np.RankWarning)
+warnings.simplefilter('ignore', OptimizeWarning)
 
 def crossCor (spectrum, template,mx):
     """
@@ -130,7 +132,7 @@ def getSolQuick(input):
     #using a recursive sigma clipping routine
     #may be unecessary if the proper processing already deals with this
     
-    tmp = yRow
+    tmp = yRow[np.isfinite(yRow)]
     flr = np.nanmedian(tmp)
     for i in range(10):
         whr = np.where((tmp-flr) < 3.*np.nanstd(tmp))
