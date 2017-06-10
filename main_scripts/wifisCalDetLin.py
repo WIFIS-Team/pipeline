@@ -21,7 +21,9 @@ import wifisGetSatInfo as satInfo
 import wifisNLCor as NLCor
 import wifisRefCor as refCor
 import os
-import wifisIO 
+import wifisIO
+import wifisHeaders as headers
+import warnings
 
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
 os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target, should uncomment and set to preferred device to avoid interactively selecting each time
@@ -34,8 +36,11 @@ t0 = time.time()
 #set file list
 fileList = 'det.lst'
 
+rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
+folderType = '/UpTheRamp/'
+
 #if exists and to be updated
-bpmFile = 'processed/bad_pixel_mask.fits'
+#bpmFile = 'processed/bad_pixel_mask.fits'
 #*****************************************************************************
 
 #read file list
@@ -43,6 +48,7 @@ lst= wifisIO.readAsciiList(fileList)
 
 #create processed directory
 wifisIO.createDir('processed')
+
 
 #check if processing needs to be done
 if(os.path.exists('processed/master_detLin_NLCoeff.fits') and os.path.exists('processed/master_detLin_satCounts.fits')):
@@ -86,23 +92,21 @@ if (contProc):
 
             #Read in data
             ta = time.time()
-
+            print('Reading data into cube')
             #adjust accordingly depending on data source
-            #data, inttime, hdr = wifisIO.readRampFromFolder(filename)
-            data, inttime, hdr = wifisIO.readRampFromAsciiList(filename)
-
+            data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + filename)
+            #data, inttime, hdr = wifisIO.readRampFromAsciiList(filename)
             #data, inttime, hdr = wifisIO.readRampFromFile(filename)
-            
-            print("time to read all files took "+str(time.time()-ta) + " seconds")
-
+         
+            data = data.astype('float32')
             #**********************************************************************
             #******************************************************************************
             #Correct data for reference pixels
             #ta = time.time()
-            #print("Subtracting reference pixel channel bias")
-            #refCor.channelCL(data, 32)
-            #print("Subtracting reference pixel row bias")
-            #refCor.rowCL(data, 4,5)
+            print("Subtracting reference pixel channel bias")
+            refCor.channelCL(data, 32)
+            print("Subtracting reference pixel row bias")
+            refCor.rowCL(data, 4,5)
             #print("time to apply reference pixel corrections ", time.time()-ta, " seconds")
             #**********************************************************************
 
@@ -116,14 +120,13 @@ if (contProc):
                 print('Getting saturation info')
                 ta = time.time()
                 satCounts = satInfo.getSatCountsCL(data,0.95, 1)
-                print ("saturation code took "+str(time.time()-ta)+ " seconds")
 
                 #save file
-                wifisIO.writeFits(satCounts, savename+'_satCounts.fits',ask=False)
+                wifisIO.writeFits(satCounts, savename+'_detLin_satCounts.fits',ask=False)
                 
             else:
                 print('Reading saturation info from file')
-                satCounts = wifisIO.readImgsFromFile(savename+'_satCounts.fits')[0]
+                satCounts = wifisIO.readImgsFromFile(savename+'_detLin_satCounts.fits')[0]
 
             satCountsLst.append(satCounts)
         
@@ -143,15 +146,14 @@ if (contProc):
                 print('Determining non-linearity corrections')
                 ta = time.time()
                 nlCoeff, zpntImg, rampImg = NLCor.getNLCorCL(data,satFrame,32)
-                print ("non-linearity code took" +str(time.time()-ta)+ " seconds")
 
                 #save file
-                wifisIO.writeFits(nlCoeff, savename+'_NLCoeff.fits',ask=False)
-                wifisIO.writeFits([zpntImg, rampImg], savename+'_polyCoeff.fits', ask=False)
+                wifisIO.writeFits(nlCoeff, savename+'_detLin_NLCoeff.fits',ask=False)
+                wifisIO.writeFits([zpntImg, rampImg], savename+'_detLin_polyCoeff.fits', ask=False)
             else:
                 print('Reading non-linearity coefficient file')
-                nlCoeff = wifisIO.readImgsFromFile(savename+'_NLCoeff.fits')[0]
-                zpntImg, rampImg = wifisIO.readImgsFromFile(savename+'_polyCoeff.fits')[0]
+                nlCoeff = wifisIO.readImgsFromFile(savename+'_detLin_NLCoeff.fits')[0]
+                zpntImg, rampImg = wifisIO.readImgsFromFile(savename+'_detLin_polyCoeff.fits')[0]
                 
             nlCoeffLst.append(nlCoeff)
             zpntLst.append(zpntImg)
@@ -170,22 +172,22 @@ if (contProc):
     
     #create and write master files
     print('Creating master files')
-    masterSatCounts = np.nanmedian(np.array(satCountsLst),axis=0)
-    masterNLCoeff = np.nanmedian(np.array(nlCoeffLst),axis=0)
-    masterZpnt = np.nanmedian(np.array(zpntLst), axis=0)
-    masterRamp = np.nanmedian(np.array(rampLst),axis=0)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        masterSatCounts = np.nanmedian(np.array(satCountsLst),axis=0)
+        masterNLCoeff = np.nanmedian(np.array(nlCoeffLst),axis=0)
+        masterZpnt = np.nanmedian(np.array(zpntLst), axis=0)
+        masterRamp = np.nanmedian(np.array(rampLst),axis=0)
     
     #write files, if necessary
-    wifisIO.writeFits(masterSatCounts,'processed/master_detLin_satCounts.fits')
-    wifisIO.writeFits(masterNLCoeff,'processed/master_detLin_NLCoeff.fits')
-    wifisIO.writeFits([masterZpnt, masterRamp], 'processed/master_detLin_polyCoeff.fits')
+    wifisIO.writeFits(masterSatCounts.astype('float32'),'processed/master_detLin_satCounts.fits')
+    wifisIO.writeFits(masterNLCoeff.astype('float32'),'processed/master_detLin_NLCoeff.fits')
+    wifisIO.writeFits([masterZpnt.astype('float32'), masterRamp.astype('float32')], 'processed/master_detLin_polyCoeff.fits')
 else:
     print('No processing necessary')
 
 
-
-print('EXITING SCRIPT, BAD PIXEL IDENTIFICATION CURRENTLY A WORK IN PROGRESS')
-exit()
+raise SystemExit('EXITING SCRIPT, BAD PIXEL IDENTIFICATION CURRENTLY A WORK IN PROGRESS')
 
 #check if analysis of NL coefficients needs to be done
 if(os.path.exists('processed/bad_pixel_mask.fits')):
