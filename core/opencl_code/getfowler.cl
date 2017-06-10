@@ -51,5 +51,8 @@ __kernel void fowler(const unsigned int nx, const unsigned int nt, __global floa
     meanTime /= nGood;
     
     flux[pos2d] = meanCnts/meanTime;
-  }  
+  }
+  else{
+    flux[pos2d] = NAN;
+  }
 }
