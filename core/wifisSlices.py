@@ -508,12 +508,17 @@ def extSlices(data, limits,shft=0, dispAxis=0):
     slices = []
     n=limits.shape[1]
     nSlices = limits.shape[0]
-    
+
+    if (np.issubdtype(data.dtype,np.integer)):
+        dtype = 'float32'
+    else:
+        dtype = data.dtype
+        
     for i in range(0,nSlices-1):
         #initialize output slices
         mnOut = np.floor(np.min(limits[i,:])).astype('int')
         mxOut = np.ceil(np.max(limits[i+1,:])).astype('int')
-        slice = np.empty((mxOut-mnOut,n), dtype=data.dtype)
+        slice = np.empty((mxOut-mnOut,n), dtype=dtype)
         slice[:] = np.nan
 
         #now go through input image and copy into output slices
