@@ -10,7 +10,9 @@ import wifisIO
 import astropy.convolution as conv
 from astropy.modeling import models, fitting
 import matplotlib.pyplot as plt
-from scipy.ndimage.interpolation import shift 
+from scipy.ndimage.interpolation import shift
+import warnings
+
 def limFit1(input):
     """
     Used to determine slice edges for a single column, assuming dispersion axis is aligned along rows.
@@ -194,7 +196,7 @@ def getResponse2D(input):
         sliceSmth = slice
 
     norm = sliceSmth/nrmValue
-    norm[np.where(norm < cutoff)] = np.nan
+    norm[np.isfinite(norm)][norm[np.isfinite(norm)]<cutoff] = np.nan
 
     return norm
 
@@ -309,7 +311,11 @@ def ffCorrectAll(slices, response, MP=False, ncpus=None):
         result=[]
 
         for i in range(len(slices)):
-            result.append(slices[i]/response[i])
+            whr = np.where(response[i] != 0)
+            tmp = np.empty(slices[i].shape, dtype=slices[i].dtype)
+            tmp[:] = np.nan
+            tmp[whr[0],whr[1]] = slices[i][whr[0],whr[1]]/response[i][whr[0],whr[1]]
+            result.append(tmp)
         
     return result
 
@@ -322,6 +328,11 @@ def ffCorrectSlice(input):
 
     slice = input[0]
     response = input[1]
+
+    whr = np.where(response != 0)
+    tmp = np.empty(slices.shape, dtype=slices.dtype)
+    tmp[:] = np.nan
+    tmp[whr[0],whr[1]] = slice=[whr[0],whr[1]]/response[whr[0],whr[1]]
 
     result = slice/response
 
