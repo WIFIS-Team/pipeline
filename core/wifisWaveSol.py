@@ -113,6 +113,7 @@ def getSolQuick(input):
     lngthConstraint = input[12]
     adjustFitWin = input[13]
     sigmaLimit = input[14]
+    allowSearch = input[15]
     totPix = len(yRow)
 
     #get cross-correlation correction to correct any offsets to within 1 pixel
@@ -241,12 +242,18 @@ def getSolQuick(input):
                     #update the search range to centre on peak
                     if (plot):
                         print(pixRng)
+                        plt.plot(pixRng, yRng)
+                        plt.show()
+                        
                     prevMx = mxPos
                     pixRng = (np.arange(winRng)-winRng2 + pixRng[mx]).astype('int')
                     yRng = yRow[pixRng]
                     mx = np.argmax(yRng)
                     mxPos = pixRng[mx]
 
+                    if (not allowSearch):
+                        break
+                        
                 pixRng = pixRng[np.logical_and(pixRng >=0, pixRng<totPix)]
                 if(plot):
                     print(pixRng)
@@ -439,7 +446,7 @@ def getSolQuick(input):
         return np.repeat(np.nan,mxorder+1), [],[], [],np.nan, np.repeat(np.nan,mxorder+1)
     
 
-def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None, allowLower=False, sigmaClip=2., lngthConstraint=False, MP=True, adjustFitWin=False, sigmaLimit=3):
+def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None, allowLower=False, sigmaClip=2., lngthConstraint=False, MP=True, adjustFitWin=False, sigmaLimit=3, allowSearch=False):
     """
     Computes dispersion solution for each set of pixels along the dispersion axis in the provided image slices.
     Usage: output = getWaveSol(dataSlices, template, mxorder, prevSolution, winRng, mxCcor, weights, buildSol, ncpus, allowLower, sigmaClip, lngthConstraint)
@@ -536,11 +543,11 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
                         tmpSol = prevSol[i][j]
                         tmpTemp = tmpLst[i][j,:]
 
-                lst.append([dataLst[i][j,:],tmpTemp, bestLines, mxorder,tmpSol,winRng, mxCcor,weights, False, buildSol,allowLower,sigmaClip,lngthConstraint, adjustFitWin, sigmaLimit])
+                lst.append([dataLst[i][j,:],tmpTemp, bestLines, mxorder,tmpSol,winRng, mxCcor,weights, False, buildSol,allowLower,sigmaClip,lngthConstraint, adjustFitWin, sigmaLimit, allowSearch])
                         
         else:
             for j in range(dataLst[i].shape[0]):
-                    lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, False, buildSol, allowLower, sigmaClip,lngthConstraint, adjustFitWin,sigmaLimit])
+                    lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, False, buildSol, allowLower, sigmaClip,lngthConstraint, adjustFitWin,sigmaLimit, allowSearch])
 
     if (MP):
         #setup multiprocessing routines
