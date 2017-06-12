@@ -5,9 +5,6 @@
 
 import numpy as np
 import multiprocessing as mp
-import wifisIO
-import matplotlib.pyplot as plt
-
 
 def corBadPixelsAll(data,dispAxis=0,mxRng=2,MP=True, ncpus=None, sigma=False):
     """
