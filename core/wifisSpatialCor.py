@@ -15,6 +15,9 @@ from scipy.interpolate import griddata
 from scipy.interpolate import RectBivariateSpline
 from astropy.modeling import models, fitting
 from scipy.interpolate import interp1d
+import warnings
+
+warnings.simplefilter("ignore", OptimizeWarning)
 
 def gaussFit(x, y, plot=False):
     """
@@ -195,7 +198,7 @@ def fitColumn(pos,slce,allTrace, winRng, reverse=False, plot=False, prnt=False, 
 
             #compute centre as weighted average instead
             try:
-                if (len(xtmp)>2 and len(yfit)>2):
+                if (len(xtmp)>2 and len(yfit)>2 and np.all(~np.isfinite(yfit[winRng2-1:winRng2+2]))):
                     mxPos = np.nanargmax(yfit[winRng2-1:winRng2+2])
                     #xtmp = xtmp[int(np.arange(int(winRng/2))-1+mxPos)]
                     xtmp = xtmp[int(mxPos-winRng2):int(mxPos+winRng2+1)]
