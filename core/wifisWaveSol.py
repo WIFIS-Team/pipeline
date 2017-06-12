@@ -114,6 +114,7 @@ def getSolQuick(input):
     adjustFitWin = input[13]
     sigmaLimit = input[14]
     allowSearch = input[15]
+    sigmaClipRounds = input[16]
     totPix = len(yRow)
 
     #get cross-correlation correction to correct any offsets to within 1 pixel
@@ -355,7 +356,7 @@ def getSolQuick(input):
                 fitCoef = np.polyfit(centFit, atlasFit,mxorder) # returns polynomial coefficients in reverse order
 
             #exclude poorly fit lines based on deviation from best fit
-            for i in range(1):
+            for i in range(sigmaClipRounds):
                 poly = np.poly1d(fitCoef)
                 dev = atlasFit-poly(centFit)
                 whr = np.where(np.abs(dev) < sigmaClip*np.std(dev))
@@ -446,7 +447,7 @@ def getSolQuick(input):
         return np.repeat(np.nan,mxorder+1), [],[], [],np.nan, np.repeat(np.nan,mxorder+1)
     
 
-def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None, allowLower=False, sigmaClip=2., lngthConstraint=False, MP=True, adjustFitWin=False, sigmaLimit=3, allowSearch=False):
+def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None, allowLower=False, sigmaClip=2., lngthConstraint=False, MP=True, adjustFitWin=False, sigmaLimit=3, allowSearch=False, sigmaClipRounds=1):
     """
     Computes dispersion solution for each set of pixels along the dispersion axis in the provided image slices.
     Usage: output = getWaveSol(dataSlices, template, mxorder, prevSolution, winRng, mxCcor, weights, buildSol, ncpus, allowLower, sigmaClip, lngthConstraint)
@@ -543,11 +544,11 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
                         tmpSol = prevSol[i][j]
                         tmpTemp = tmpLst[i][j,:]
 
-                lst.append([dataLst[i][j,:],tmpTemp, bestLines, mxorder,tmpSol,winRng, mxCcor,weights, False, buildSol,allowLower,sigmaClip,lngthConstraint, adjustFitWin, sigmaLimit, allowSearch])
+                lst.append([dataLst[i][j,:],tmpTemp, bestLines, mxorder,tmpSol,winRng, mxCcor,weights, False, buildSol,allowLower,sigmaClip,lngthConstraint, adjustFitWin, sigmaLimit, allowSearch, sigmaClipRounds])
                         
         else:
             for j in range(dataLst[i].shape[0]):
-                    lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, False, buildSol, allowLower, sigmaClip,lngthConstraint, adjustFitWin,sigmaLimit, allowSearch])
+                    lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, False, buildSol, allowLower, sigmaClip,lngthConstraint, adjustFitWin,sigmaLimit, allowSearch,sigmaClipRounds])
 
     if (MP):
         #setup multiprocessing routines
@@ -756,50 +757,128 @@ def polyFitDispSolution(dispIn,plotFile=None, degree=2):
                 nTerms = len(d[i])
    
     polySol = []
-    for i in range(len(dispIn)):
-        #organize the coefficients into separates arrays/lists
-        c = []
-        for j in range(nTerms):
-            c.append([])
+    if (plotFile is not None):
+        with PdfPages(plotFile) as pdf:
+            for i in range(len(dispIn)):
+                #organize the coefficients into separates arrays/lists
+                c = []
+                for j in range(nTerms):
+                    c.append([])
             
-        d = dispIn[i]
+                d = dispIn[i]
         
-        for j in range(len(d)):
-            for k in range(len(d[j])):
-                c[k].append([j,d[j][k]])
+                for j in range(len(d)):
+                    for k in range(len(d[j])):
+                        c[k].append([j,d[j][k]])
 
-        #determine polynomial fits for each coefficient
-        f=[]
-        for k in range(nTerms):
-            cTmp = np.asarray(c[k])
-            whr = np.where(np.isfinite(cTmp[:,1]))[0]
-            for j in range(2):
-                fc =np.polyfit(cTmp[whr,0].flatten(),cTmp[whr,1].flatten(),degree)
-                ff = np.poly1d(fc)
-                dev = np.abs(ff(cTmp[whr,0])-cTmp[whr,1])
-                whr = whr[np.where(dev <1.*np.std(dev))[0]]
-            f.append(ff)
+                #determine polynomial fits for each coefficient
+                f=[]
+                for k in range(nTerms):
+                    cTmp = np.asarray(c[k])
+                    whr = np.where(np.isfinite(cTmp[:,1]))[0]
+                    for j in range(3):
+                        fc =np.polyfit(cTmp[whr,0].flatten(),cTmp[whr,1].flatten(),degree)
+                        ff = np.poly1d(fc)
+                        dev = np.abs(ff(cTmp[whr,0])-cTmp[whr,1])
+                        whr = whr[np.where(dev <1.*np.std(dev))[0]]
+                    f.append(ff)
 
-        #create output list that matches structure of input list
-        tmpSol = []
-        for j in range(len(d)):
-            tmpLst = []
-            for k in range(nTerms):
-                tmpLst.append(f[k](j))
-            tmpSol.append(np.asarray(tmpLst))
+                #create output list that matches structure of input list
+                tmpSol = []
+                for j in range(len(d)):
+                    tmpLst = []
+                    for k in range(nTerms):
+                        tmpLst.append(f[k](j))
+                    tmpSol.append(np.asarray(tmpLst))
         
-        polySol.append(tmpSol)
+                polySol.append(tmpSol)
 
-        if (plotFile is not None):
-            with PdfPages(plotFile) as pdf:
                 fig,ax = plt.subplots(1,nTerms, figsize=(19,6))
                 for k in range(nTerms):
                     tmp = np.asarray(c[k])
                     ax[k].plot(tmp[:,0], tmp[:,1], 'o')
                     ax[k].plot(f[k](np.arange(len(c[k]))),'--')
-
+            
                 pdf.savefig(fig)
-                plt.close
+                plt.close()
+    else:
+        for i in range(len(dispIn)):
+            #organize the coefficients into separates arrays/lists
+            c = []
+            for j in range(nTerms):
+                c.append([])
+            
+            d = dispIn[i]
+            
+            for j in range(len(d)):
+                for k in range(len(d[j])):
+                    c[k].append([j,d[j][k]])
+                    
+            #determine polynomial fits for each coefficient
+            f=[]
+            for k in range(nTerms):
+                cTmp = np.asarray(c[k])
+                whr = np.where(np.isfinite(cTmp[:,1]))[0]
+                for j in range(3):
+                    fc =np.polyfit(cTmp[whr,0].flatten(),cTmp[whr,1].flatten(),degree)
+                    ff = np.poly1d(fc)
+                    dev = np.abs(ff(cTmp[whr,0])-cTmp[whr,1])
+                    whr = whr[np.where(dev <1.*np.std(dev))[0]]
+                f.append(ff)
+
+            #create output list that matches structure of input list
+            tmpSol = []
+            for j in range(len(d)):
+                tmpLst = []
+                for k in range(nTerms):
+                    tmpLst.append(f[k](j))
+                tmpSol.append(np.asarray(tmpLst))
+        
+            polySol.append(tmpSol)
+                
+#    for i in range(len(dispIn)):
+#        #organize the coefficients into separates arrays/lists
+#        c = []
+#        for j in range(nTerms):
+#            c.append([])
+#            
+#        d = dispIn[i]
+#        
+#        for j in range(len(d)):
+#            for k in range(len(d[j])):
+#                c[k].append([j,d[j][k]])
+#
+#        #determine polynomial fits for each coefficient
+#        f=[]
+#        for k in range(nTerms):
+#            cTmp = np.asarray(c[k])
+#            whr = np.where(np.isfinite(cTmp[:,1]))[0]
+#            for j in range(2):
+#                fc =np.polyfit(cTmp[whr,0].flatten(),cTmp[whr,1].flatten(),degree)
+#                ff = np.poly1d(fc)
+#                dev = np.abs(ff(cTmp[whr,0])-cTmp[whr,1])
+#                whr = whr[np.where(dev <1.*np.std(dev))[0]]
+#            f.append(ff)
+#
+#        #create output list that matches structure of input list
+#        tmpSol = []
+#        for j in range(len(d)):
+#            tmpLst = []
+#            for k in range(nTerms):
+#                tmpLst.append(f[k](j))
+#            tmpSol.append(np.asarray(tmpLst))
+#        
+#        polySol.append(tmpSol)
+#
+#        if plotFile:
+#            fig,ax = plt.subplots(1,nTerms, figsize=(19,6))
+#            for k in range(nTerms):
+#                tmp = np.asarray(c[k])
+#                ax[k].plot(tmp[:,0], tmp[:,1], 'o')
+#                ax[k].plot(f[k](np.arange(len(c[k]))),'--')
+#            
+#            pdf.savefig(fig)
+#            plt.close
            
     return polySol
 
@@ -868,42 +947,109 @@ def gaussSmoothDispSolution(dispIn, nPix=5, plotFile=None):
 
 
     smoothSol = []
-    for d in dispIn:
-        c = []
-        smth=[]
-        for j in range(nTerms):
-            c.append([])
-            smth.append([])
-            
-        for j in range(len(d)):
-            for k in range(nTerms):
-                if len(d[j])>k:
-                    c[k].append(d[j][k])
-                else:
-                    c[k].append(np.nan)
+    if (plotFile is not None):
+        with PdfPages(plotFile) as pdf:
 
-        #smoothing time!
-        for k in range(nTerms):
-            smth[k] = conv.convolve(c[k],gKern,boundary='extend', normalize_kernel=True)
+            for d in dispIn:
+                c = []
+                smth=[]
+                for j in range(nTerms):
+                    c.append([])
+                    smth.append([])
             
-        tmpSol = []
-        for j in range(len(d)):
-            tmpLst = []
-            for k in range(nTerms):
-                tmpLst.append(smth[k][j])
-            tmpSol.append(np.asarray(tmpLst))
-        smoothSol.append(tmpSol)
+                for j in range(len(d)):
+                    for k in range(nTerms):
+                        if len(d[j])>k:
+                            c[k].append(d[j][k])
+                        else:
+                            c[k].append(np.nan)
 
-        if (plot):
-            with PdfPages(plotName) as pdf:
+                #smoothing time!
+                for k in range(nTerms):
+                    smth[k] = conv.convolve(c[k],gKern,boundary='extend', normalize_kernel=True)
+            
+                tmpSol = []
+                for j in range(len(d)):
+                    tmpLst = []
+                    for k in range(nTerms):
+                        tmpLst.append(smth[k][j])
+                    tmpSol.append(np.asarray(tmpLst))
+                smoothSol.append(tmpSol)
+
                 fig,ax = plt.subplots(1,nTerms, figsize=(19,6))
                 for k in range(nTerms):
                     for j in range(len(d)):
                         if len(d[j])>k:
                             ax[k].plot(j, d[j][k],'bo')
-                    ax[k].plot(smth[k])
+                        ax[k].plot(smth[k])
                 pdf.savefig(fig)
                 plt.close()
+
+    else:
+        
+        for d in dispIn:
+            c = []
+            smth=[]
+            for j in range(nTerms):
+                c.append([])
+                smth.append([])
+            
+            for j in range(len(d)):
+                for k in range(nTerms):
+                    if len(d[j])>k:
+                        c[k].append(d[j][k])
+                    else:
+                        c[k].append(np.nan)
+
+            #smoothing time!
+            for k in range(nTerms):
+                smth[k] = conv.convolve(c[k],gKern,boundary='extend', normalize_kernel=True)
+            
+            tmpSol = []
+            for j in range(len(d)):
+                tmpLst = []
+                for k in range(nTerms):
+                    tmpLst.append(smth[k][j])
+                tmpSol.append(np.asarray(tmpLst))
+            smoothSol.append(tmpSol)
+      
+    
+#    for d in dispIn:
+#        c = []
+#        smth=[]
+#        for j in range(nTerms):
+#            c.append([])
+#            smth.append([])
+#            
+#        for j in range(len(d)):
+#            for k in range(nTerms):
+#                if len(d[j])>k:
+#                    c[k].append(d[j][k])
+#                else:
+#                    c[k].append(np.nan)
+#
+#        #smoothing time!
+#        for k in range(nTerms):
+#            smth[k] = conv.convolve(c[k],gKern,boundary='extend', normalize_kernel=True)
+#            
+#        tmpSol = []
+#        for j in range(len(d)):
+#            tmpLst = []
+#            for k in range(nTerms):
+#                tmpLst.append(smth[k][j])
+#            tmpSol.append(np.asarray(tmpLst))
+#        smoothSol.append(tmpSol)
+#
+#        if (plotFile):
+#            with PdfPages(plotFile) as pdf:
+#                fig,ax = plt.subplots(1,nTerms, figsize=(19,6))
+#                for k in range(nTerms):
+#                    for j in range(len(d)):
+#                        if len(d[j])>k:
+#                            ax[k].plot(j, d[j][k],'bo')
+#                    ax[k].plot(smth[k])
+#                pdf.savefig(fig)
+#                plt.close()
 
     return smoothSol
 
