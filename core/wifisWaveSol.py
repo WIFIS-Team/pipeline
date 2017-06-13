@@ -1053,3 +1053,80 @@ def gaussSmoothDispSolution(dispIn, nPix=5, plotFile=None):
 
     return smoothSol
 
+def cleanDispSol(result, plotFile=None, threshold=1.5):
+    """
+    """
+
+    dispSolLst = result[0]
+    rms = result[4]
+    pixSolLst = result[5]
+
+    dispSolClean = []
+    pixSolClean = []
+    rmsClean = []
+    
+    #print quality control stuff
+    if plotFile is not None:
+        print('Plotting quality control')
+
+        with PdfPages(plotFile) as pdf:
+            for i in range(len(rms)):
+                r = rms[i]
+
+                dispSlice = []
+                pixSlice = []
+                rmsSlice = []
+                
+                for k in range(2):
+                    m = np.nanmedian(r)
+                    s = np.nanstd(r)
+                
+                for j in range(len(r)):
+                    if r[j] > m+threshold*s:
+                        dispSlice.append(np.asarray([np.nan]))
+                        pixSlice.append(np.asarray([np.nan]))
+                        rmsSlice.append(np.nan)
+                    else:
+                        dispSlice.append(dispSolLst[i][j])
+                        pixSlice.append(pixSolLst[i][j])
+                        rmsSlice.append(r[j])
+
+                dispSolClean.append(dispSlice)
+                pixSolClean.append(pixSlice)
+                rmsClean.append(rmsSlice)
+                
+                fig = plt.figure()
+                plt.plot(rms[i], 'b')
+                plt.plot([0,len(rms[i])],[m+threshold*s,m+threshold*s], 'r--')
+                plt.xlabel('Column #')
+                plt.ylabel('RMS in pixels')
+                plt.title('Slice: ' +str(i) + ', RMS Cutoff: '+'{:4.2f}'.format(m+1.5*s))
+                pdf.savefig(fig, dpi=300)
+                plt.close()
+    else:
+        for i in range(len(rms)):
+                r = rms[i]
+
+                dispSlice = []
+                pixSlice = []
+                rmsSlice = []
+                
+                for k in range(2):
+                    m = np.nanmedian(r)
+                    s = np.nanstd(r)
+                
+                for j in range(len(r)):
+                    if r[j] > m+threshold*s:
+                        dispSlice.append(np.asarray([np.nan]))
+                        pixSlice.append(np.asarray([np.nan]))
+                        rmsSlice.append(np.nan)
+                    else:
+                        dispSlice.append(dispSolLst[i][j])
+                        pixSlice.append(pixSolLst[i][j])
+                        rmsSlice.append(r[j])
+
+                dispSolClean.append(dispSlice)
+                pixSolClean.append(pixSlice)
+                rmsClean.append(rmsSlice)
+                
+    return rmsClean, dispSolClean, pixSolClean
