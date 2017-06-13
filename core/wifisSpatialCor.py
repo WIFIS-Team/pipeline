@@ -15,6 +15,7 @@ from scipy.interpolate import griddata
 from scipy.interpolate import RectBivariateSpline
 from astropy.modeling import models, fitting
 from scipy.interpolate import interp1d
+from scipy.optimize import OptimizeWarning
 import warnings
 
 warnings.simplefilter("ignore", OptimizeWarning)
@@ -1015,7 +1016,7 @@ def traceCentreFlatSlice(input):
 
     return centSmth
 
-def polyFitRonchiTrace(trace, goodReg, order=3, lngthConstraint=False):
+def polyFitRonchiTrace(trace, goodReg, order=3, lngthConstraint=False, sigmaClipRounds=0):
     """
     """
 
@@ -1054,6 +1055,21 @@ def polyFitRonchiTrace(trace, goodReg, order=3, lngthConstraint=False):
         pcoef = np.polyfit(xfit,yfit,order)
         poly = np.poly1d(pcoef)
 
+        if sigmaClipRounds > 0:
+            
+            #identify regions <= 1-sigma from fit, redo fit with just that region
+
+            for rnd in range(sigmaClipRounds):
+                ypoly = poly(xfit)
+                diff = ypoly - yfit
+                med = np.nanmedian(yfit-ypoly)
+                std = np.nanstd(yfit-ypoly)
+                whr = np.where(np.logical_and(diff >= med - std, diff <= med + std))[0]
+                xfitRnd = xfit[whr]
+                yfitRnd = yfit[whr]
+                pcoef = np.polyfit(xfitRnd, yfitRnd,order)
+                poly = np.poly1d(pcoef)
+                
         if(lngthConstraint):
             if (xfit.max()-xfit.min() < 1000):
                 xTmp = np.arange(xfit.min(), xfit.max()+1)
