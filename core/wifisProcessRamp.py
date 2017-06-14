@@ -9,7 +9,7 @@ import wifisBadPixels as badPixels
 import wifisHeaders as headers
 import os
 
-def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2):
+def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True):
     """
     """
     
@@ -57,8 +57,11 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, s
 
     #****************************************************************************
     
-    wifisIO.writeFits([fluxImg, sigmaImg, satFrame], saveName, hdr=hdr, ask=False)
-    
+    if (saveAll):
+        wifisIO.writeFits([fluxImg, sigmaImg, satFrame], saveName, hdr=hdr, ask=False)
+    else:
+        wifisIO.writeFits(fluxImg, saveName, hdr=hdr, ask=False)
+        
     # CORRECT BAD PIXELS
     #check for BPM and read, if exists
     if(BPM is not None):
@@ -88,7 +91,7 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, s
     return imgCor, sigmaCor, satFrame, hdr
 
 
-def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2):
+def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True):
     """
     """
     
@@ -132,9 +135,11 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1
     headers.addTelInfo(hdr, folder+'/obsinfo.dat')
 
     #****************************************************************************
-            
-    wifisIO.writeFits([fluxImg, sigmaImg, satFrame], saveName, hdr=hdr, ask=False)
-
+    if saveAll:
+        wifisIO.writeFits([fluxImg, sigmaImg, satFrame], saveName, hdr=hdr, ask=False)
+    else:
+        wifisIO.writeFits(fluxImg, saveName, hdr=hdr, ask=False)
+    
     # CORRECT BAD PIXELS
     #check for BPM and read, if exists
     if(BPM is not None):
@@ -164,7 +169,7 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1
     return imgCor, sigmaCor, satFrame, hdr
 
 
-def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2):
+def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True):
     """
     """
 
