@@ -419,7 +419,7 @@ def getTrimLimsSlice(input):
         y2 = whr[-1]
 
     if(plot):
-        plt.figure()
+        fig = plt.figure()
         plt.plot(ytmp)
         plt.plot(ysmth, '--')
         plt.plot([y1,y1],[np.nanmin(ytmp),np.nanmax(ytmp)],'r--')
