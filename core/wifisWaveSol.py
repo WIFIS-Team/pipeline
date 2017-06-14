@@ -1077,7 +1077,7 @@ def cleanDispSol(result, plotFile=None, threshold=1.5):
         for k in range(2):
             m = np.nanmedian(r)
             s = np.nanstd(r)
-            with warnings:
+            with warnings.cath_warnings():
                 warnings.simplefilter('ignore', RuntimeWarning)
                 r[r>m+s] = np.nan
 
