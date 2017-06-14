@@ -9,7 +9,7 @@ import wifisBadPixels as badPixels
 import wifisHeaders as headers
 import os
 
-def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True):
+def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True):
     """
     """
     
@@ -25,7 +25,7 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, s
     print("Subtracting reference pixel channel bias")
     refCor.channelCL(data, nChannel)
     print("Subtracting reference pixel row bias")
-    refCor.rowCL(data, 4,rowSplit)
+    refCor.rowCL(data, nRows,rowSplit)
         
     satFrame = satInfo.getSatFrameCL(data, satCounts,satSplit)
                 
@@ -91,7 +91,7 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, s
     return imgCor, sigmaCor, satFrame, hdr
 
 
-def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True):
+def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True):
     """
     """
     
@@ -107,7 +107,7 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1
     print("Subtracting reference pixel channel bias")
     refCor.channelCL(data, nChannel)
     print("Subtracting reference pixel row bias")
-    refCor.rowCL(data, 4,rowSplit)
+    refCor.rowCL(data, nRows,rowSplit)
         
     satFrame = satInfo.getSatFrameCL(data, satCounts,satSplit)
     
@@ -169,7 +169,7 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1
     return imgCor, sigmaCor, satFrame, hdr
 
 
-def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True):
+def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True):
     """
     """
 
@@ -180,16 +180,16 @@ def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, rowS
     if os.path.exists(rootFolder+'/CDSReference/'+folder):
         folderType = '/CDSReference/'
 
-        imgCor, sigmaCor, satFrame, hdr = fromFowler(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng)
+        imgCor, sigmaCor, satFrame, hdr = fromFowler(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng)
     #Fowler
     elif os.path.exists(rootFolder+'/FSRamp/'+folder):
         folderType = '/FSRamp/'
         
-        imgCor, sigmaCor, satFrame, hdr = fromFowler(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng)
+        imgCor, sigmaCor, satFrame, hdr = fromFowler(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng)
 
     elif os.path.exists(rootFolder + '/UpTheRamp/'+folder):
         folderType = '/UpTheRamp/'
-        imgCor, sigmaCor, satFrame, hdr = fromUTR(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, rowSplit=rowSplit, satSplit=satSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng)
+        imgCor, sigmaCor, satFrame, hdr = fromUTR(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=rowSplit, satSplit=satSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng)
 
     else:
         raise SystemExit('*** Ramp folder ' + folder + ' does not exist ***')
