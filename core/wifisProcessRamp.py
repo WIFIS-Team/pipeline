@@ -9,7 +9,7 @@ import wifisBadPixels as badPixels
 import wifisHeaders as headers
 import os
 
-def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True):
+def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=Falses):
     """
     """
     
@@ -81,17 +81,18 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSp
         imgCor[4:2044,4:2044] = badPixels.corBadPixelsAll(fluxImg[4:2044,4:2044], dispAxis=0, mxRng=bpmCorRng, MP=True) 
         sigmaCor[4:2044, 4:2044]  = badPixels.corBadPixelsAll(sigmaImg[4:2044,4:2044], dispAxis=0, mxRng=bpmCorRng, MP=True, sigma=True)
     else:
-        cont = wifisIO.userInput('*** WARNING: No bad pixel mask provided. Do you want to continue? *** (y/n)?')
-        if (cont.lower()!='y'):
-            raise SystemExit('*** Missing bad pixel mask. Exiting ***')
-        else:
-            imgCor = fluxImg
-            sigmaCor = sigmaImg
+        if not ignoreBPM:
+            cont = wifisIO.userInput('*** WARNING: No bad pixel mask provided. Do you want to continue? *** (y/n)?')
+            if (cont.lower()!='y'):
+                raise SystemExit('*** Missing bad pixel mask. Exiting ***')
+                
+        imgCor = fluxImg
+        sigmaCor = sigmaImg
    
     return imgCor, sigmaCor, satFrame, hdr
 
 
-def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True):
+def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False):
     """
     """
     
@@ -159,17 +160,18 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,ro
         imgCor[4:2044,4:2044] = badPixels.corBadPixelsAll(fluxImg[4:2044,4:2044], dispAxis=0, mxRng=bpmCorRng, MP=True) 
         sigmaCor[4:2044, 4:2044]  = badPixels.corBadPixelsAll(sigmaImg[4:2044,4:2044], dispAxis=0, mxRng=bpmCorRng, MP=True, sigma=True)
     else:
-        cont = wifisIO.userInput('*** WARNING: No bad pixel mask provided. Do you want to continue? *** (y/n)?')
-        if (cont.lower()!='y'):
-            raise SystemExit('*** Missing bad pixel mask. Exiting ***')
-        else:
-            imgCor = fluxImg
-            sigmaCor = sigmaImg
+        if not ignoreBPM:
+            cont = wifisIO.userInput('*** WARNING: No bad pixel mask provided. Do you want to continue? *** (y/n)?')
+            if (cont.lower()!='y'):
+                raise SystemExit('*** Missing bad pixel mask. Exiting ***')
+            
+        imgCor = fluxImg
+        sigmaCor = sigmaImg
    
     return imgCor, sigmaCor, satFrame, hdr
 
 
-def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True):
+def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False):
     """
     """
 
@@ -180,16 +182,16 @@ def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRow
     if os.path.exists(rootFolder+'/CDSReference/'+folder):
         folderType = '/CDSReference/'
 
-        imgCor, sigmaCor, satFrame, hdr = fromFowler(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng)
+        imgCor, sigmaCor, satFrame, hdr = fromFowler(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM)
     #Fowler
     elif os.path.exists(rootFolder+'/FSRamp/'+folder):
         folderType = '/FSRamp/'
         
-        imgCor, sigmaCor, satFrame, hdr = fromFowler(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng)
+        imgCor, sigmaCor, satFrame, hdr = fromFowler(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM)
 
     elif os.path.exists(rootFolder + '/UpTheRamp/'+folder):
         folderType = '/UpTheRamp/'
-        imgCor, sigmaCor, satFrame, hdr = fromUTR(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=rowSplit, satSplit=satSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng)
+        imgCor, sigmaCor, satFrame, hdr = fromUTR(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=rowSplit, satSplit=satSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM)
 
     else:
         raise SystemExit('*** Ramp folder ' + folder + ' does not exist ***')
