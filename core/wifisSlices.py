@@ -212,8 +212,11 @@ def getResponseAll(flatSlices, sigma, cutoff, MP=True, ncpus=None):
 
     #first determine the normalization weight, based on the maximum median value along each slice
     medSlice = getMedLevelAll(flatSlices, MP=True, ncpus=None)
-    nrmValue = np.nanmax(medSlice)
-    
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore",RuntimeWarning)
+        nrmValue = np.nanmax(medSlice)
+        
     #multiprocessing may improve performance
     if (MP):
         #set up the input list
@@ -329,10 +332,12 @@ def ffCorrectSlice(input):
     slice = input[0]
     response = input[1]
 
-    whr = np.where(response != 0)
-    tmp = np.empty(slices.shape, dtype=slices.dtype)
-    tmp[:] = np.nan
-    tmp[whr[0],whr[1]] = slice=[whr[0],whr[1]]/response[whr[0],whr[1]]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore",RuntimeWarning)
+        whr = np.where(response != 0)
+        tmp = np.empty(slices.shape, dtype=slices.dtype)
+        tmp[:] = np.nan
+        tmp[whr[0],whr[1]] = slice=[whr[0],whr[1]]/response[whr[0],whr[1]]
 
     result = slice/response
 
@@ -620,9 +625,11 @@ def getMedLevelSlice(slc):
 
     out = np.empty(slc.shape[1])
 
-    for i in range(slc.shape[1]):
-        y = slc[:,i]
-        out[i] = np.nanmedian(y)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore",RuntimeWarning)
+        for i in range(slc.shape[1]):
+            y = slc[:,i]
+            out[i] = np.nanmedian(y)
 
     return out
 
