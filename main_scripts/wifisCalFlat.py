@@ -36,6 +36,7 @@ t0 = time.time()
 #*****************************************************************************
 #******************************* Required input ******************************
 fileList = 'flat.lst' # a simple ascii file containing a list of the folder names that contain the ramp data
+darkListFile = None # list of processed dark ramps
 
 #mostly static input from here
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
@@ -48,7 +49,7 @@ distMapLimitsFile = '/data/pipeline/external_data/ronchiMap_limits.fits'
 plot = True #whether to plot the traces
 crReject = False
 skipObsinfo = False
-skipMissing = True
+skipDarkCheck = True
 
 #*****************************************************************************
 
@@ -85,6 +86,13 @@ lst= wifisIO.readAsciiList(fileList)
 if lst.ndim == 0:
     lst = np.asarray([lst])
 
+darkLst = wifisIO.readAsciiList(darkListFile)
+
+if darkLst.ndimi == 0:
+    darkLst = np.asarray(darkLst)
+else:
+    darkLst = None
+    
 procFlux = []
 procSigma = []
 procSatFrame = []
@@ -100,6 +108,15 @@ for lstNum in range(len(lst)):
     else:
         folder = lst[lstNum].tostring()
 
+
+    if darkLst is not None:
+        if darkLst.ndim>1:
+            darkFile = darkLst[lstNum]
+        else:
+            darkFile = darkLst[lstNum].tostring() 
+    else:
+        darkFile = None
+        
     savename = 'processed/'+folder
     
     #first check master flat and limits exists
@@ -129,7 +146,20 @@ for lstNum in range(len(lst)):
 
         if contProc2:
             print('Processing ramp')
-            flatImg, sigmaImg, satFrame, hdr = processRamp.auto(folder, rootFolder,savename+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=20, skipObsinfo=skipObsinfo, skipMissing=skipMissing)
+            flatImg, sigmaImg, satFrame, hdr = processRamp.auto(folder, rootFolder,savename+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=20, skipObsinfo=skipObsinfo)
+            
+        #carry out dark subtraction
+        if darkFile is not None:
+            print('Subtracting dark ramp')
+            dark, darkSig, darkSat = wifisIO.readImgsFromFile(darkFile)[0]
+            flatImg -= dark
+            sigmaImg = np.sqrt(sigmaImg**2 + darkSig**2)
+        else:
+            if not skipDarkCheck:
+                cont = wifisIO.userInput('No dark ramp provided, do you want to proceed without dark subtraction (y/n)?')
+                if (cont.lower()=='n')
+                raise SystemExit("*** EXIITING. NO DARK RAMP PROVIDED ***")
+
             
         if os.path.exists(savename+'_flat_limits.fits'):
             cont = wifisIO.userInput('Limits file already exists for ' +folder+', do you want to continue processing (y/n)?')
