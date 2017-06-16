@@ -12,6 +12,8 @@ Produces:
 
 """
 
+import matplotlib
+matplotlib.use('Agg')
 import numpy as np
 import astropy.io.fits as fits
 import astropy.io.ascii as ascii
@@ -48,7 +50,6 @@ lst= wifisIO.readAsciiList(fileList)
 
 #create processed directory
 wifisIO.createDir('processed')
-
 
 #check if processing needs to be done
 if(os.path.exists('processed/master_detLin_NLCoeff.fits') and os.path.exists('processed/master_detLin_satCounts.fits')):
@@ -133,6 +134,11 @@ if (contProc):
             #find the first saturated frames
             satFrame = satInfo.getSatFrameCL(data,satCounts,1)
 
+            #reset the values of the reference pixels so that all frames are used
+            refFrame = np.ones(satFrame.shape, dtype=bool)
+            refFrame[4:-4,4:-4] = False
+            satFrame[refFrame] = data.shape[2]
+
             #**********************************************************************
             #**********************************************************************
 
@@ -147,6 +153,10 @@ if (contProc):
                 ta = time.time()
                 nlCoeff, zpntImg, rampImg = NLCor.getNLCorCL(data,satFrame,32)
 
+                #hard code the NLCoeff for reference pixels
+                nlCoeff[refFrame,0] = 1.
+                nlCoeff[refFrame,1:] = 0.
+                
                 #save file
                 wifisIO.writeFits(nlCoeff, savename+'_detLin_NLCoeff.fits',ask=False)
                 wifisIO.writeFits([zpntImg, rampImg], savename+'_detLin_polyCoeff.fits', ask=False)
@@ -173,7 +183,7 @@ if (contProc):
     #create and write master files
     print('Creating master files')
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+        warnings.simplefilter("ignore", RuntimeWarning)
         masterSatCounts = np.nanmedian(np.array(satCountsLst),axis=0)
         masterNLCoeff = np.nanmedian(np.array(nlCoeffLst),axis=0)
         masterZpnt = np.nanmedian(np.array(zpntLst), axis=0)
