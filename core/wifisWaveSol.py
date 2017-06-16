@@ -1065,19 +1065,20 @@ def cleanDispSol(result, plotFile=None, threshold=1.5):
     pixSolClean = []
     rmsClean = []
 
+    medLst = []
+    stdLst = []
+    
     for i in range(len(rms)):
-        r = rms[i]
+        r = np.asarray(rms[i])
         
         dispSlice = []
         pixSlice = []
         rmsSlice = []
-        medLst = []
-        stdLst = []
-
+                
         for k in range(2):
             m = np.nanmedian(r)
             s = np.nanstd(r)
-            with warnings.cath_warnings():
+            with warnings.catch_warnings():
                 warnings.simplefilter('ignore', RuntimeWarning)
                 r[r>m+s] = np.nan
 
