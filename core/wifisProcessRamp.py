@@ -9,7 +9,7 @@ import wifisBadPixels as badPixels
 import wifisHeaders as headers
 import os
 
-def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=Falses):
+def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False,skipObsinfo=False):
     """
     """
     
@@ -28,7 +28,12 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSp
     refCor.rowCL(data, nRows,rowSplit)
         
     satFrame = satInfo.getSatFrameCL(data, satCounts,satSplit)
-                
+
+    #reset the values of the reference pixels so that all frames are used
+    refFrame = np.ones(satFrame.shape, dtype=bool)
+    refFrame[4:-4,4:-4] = False
+    satFrame[refFrame] = data.shape[2]
+    
     #******************************************************************************
     #apply non-linearity correction
     print("Correcting for non-linearity")
@@ -53,8 +58,9 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSp
 
     #****************************************************************************
     #add additional header information here
-    headers.addTelInfo(hdr, folder+'/obsinfo.dat')
-
+    if not skipObsinfo:
+        headers.addTelInfo(hdr, folder+'/obsinfo.dat')
+        
     #****************************************************************************
     
     if (saveAll):
@@ -92,7 +98,7 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSp
     return imgCor, sigmaCor, satFrame, hdr
 
 
-def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False):
+def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False, skipObsinfo=False):
     """
     """
     
@@ -111,6 +117,11 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,ro
     refCor.rowCL(data, nRows,rowSplit)
         
     satFrame = satInfo.getSatFrameCL(data, satCounts,satSplit)
+
+    #reset the values of the reference pixels so that all frames are used
+    refFrame = np.ones(satFrame.shape, dtype=bool)
+    refFrame[4:-4,4:-4] = False
+    satFrame[refFrame] = data.shape[2]
     
     #******************************************************************************
     #apply non-linearity correction
@@ -133,7 +144,8 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,ro
 
     #****************************************************************************
     #add additional header information here
-    headers.addTelInfo(hdr, folder+'/obsinfo.dat')
+    if not skipObsinfo:
+        headers.addTelInfo(hdr, folder+'/obsinfo.dat')
 
     #****************************************************************************
     if saveAll:
@@ -171,7 +183,7 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,ro
     return imgCor, sigmaCor, satFrame, hdr
 
 
-def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False):
+def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False, skipObsinfo=False):
     """
     """
 
@@ -182,18 +194,18 @@ def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRow
     if os.path.exists(rootFolder+'/CDSReference/'+folder):
         folderType = '/CDSReference/'
 
-        imgCor, sigmaCor, satFrame, hdr = fromFowler(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM)
+        imgCor, sigmaCor, satFrame, hdr = fromFowler(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM, saveAll=saveAll, skipObsinfo=skipObsinfo)
     #Fowler
     elif os.path.exists(rootFolder+'/FSRamp/'+folder):
         folderType = '/FSRamp/'
         
-        imgCor, sigmaCor, satFrame, hdr = fromFowler(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM)
+        imgCor, sigmaCor, satFrame, hdr = fromFowler(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM, saveAll=saveAll, skipObsinfo=skipObsinfo)
 
     elif os.path.exists(rootFolder + '/UpTheRamp/'+folder):
         folderType = '/UpTheRamp/'
-        imgCor, sigmaCor, satFrame, hdr = fromUTR(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=rowSplit, satSplit=satSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM)
+        imgCor, sigmaCor, satFrame, hdr = fromUTR(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=rowSplit, satSplit=satSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM, saveAll=saveAll, skipObsinfo=skipObsinfo)
 
     else:
-        raise SystemExit('*** Ramp folder ' + folder + ' does not exist ***')
-
+        raise Warning('*** Ramp folder ' + folder + ' does not exist ***')
+    
     return imgCor, sigmaCor, satFrame, hdr
