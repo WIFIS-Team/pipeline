@@ -14,6 +14,8 @@ Produces:
 
 """
 
+import matplotlib
+matplotlib.use('gtkagg')
 import numpy as np
 import time
 import matplotlib.pyplot as plt
@@ -23,8 +25,8 @@ import wifisRefCor as refCor
 import os
 import wifisIO 
 import wifisCombineData as combData
-import glob
-import astropy.io.fits as fits
+import warnings
+import wifisUncertainties
 
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '1' # Used to show compile errors for debugging, can be removed
 os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
@@ -33,22 +35,24 @@ t0 = time.time()
 
 #*****************************************************************************
 #************************** Required user input ******************************
-fileList = 'list'
-nlFile = 'processed/master_detLin_NLCoeff.fits'        
-satFile = 'processed/master_detLin_satCounts.fits'
+fileList = 'dark.lst'
+rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
+nlFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_NLCoeff.fits' # the non-linearity correction coefficients file        
+satFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_satCounts.fits' # the saturation limits file
 bpmFile = 'processed/bad_pixel_mask.fits'
 #*****************************************************************************
 
 #first check if required input exists
 if not (os.path.exists(nlFile) and os.path.exists(satFile)):
     if not (os.path.exists(satFile)):
-        print ('*** ERROR: Cannot continue, file ' + satFile + ' does not exist. Please process the a detector linearity calibration sequence or provide the necessary file ***')
+        print ('*** ERROR: Cannot continue, file ' + satFile + ' does not exist. Please process a detector linearity calibration sequence or point to the necessary file ***')
     if not (os.path.exists(nlFile)):
-        print ('*** ERROR: Cannot continue, file ' + nlFile + ' does not exist. Please process the a detector linearity calibration sequence or provide the necessary file ***')
+        print ('*** ERROR: Cannot continue, file ' + nlFile + ' does not exist. Please process a detector linearity calibration sequence or point to the necessary file ***')
     raise SystemExit('*** Missing required calibration files, exiting ***')
 
 #create processed directory, in case it doesn't exist
 wifisIO.createDir('processed')
+wifisIO.createDir('quality_control')
 
 #read file list
 lst= wifisIO.readAsciiList(fileList)
@@ -56,23 +60,11 @@ lst= wifisIO.readAsciiList(fileList)
 if lst.ndim == 0:
     lst = [lst]
 
-#*******************************************************************************************
-#read last file to get total integration time (taken as time difference between end of last frame - end of first frame)
-folder = lst[0]
-fleLst = glob.glob(folder+'/H2*fits')
-srtLst = wifisIO.sorted_nicely(fleLst)
-hdr = fits.getheader(list[0])
-iTime0 = hdr['INTTIME']
-hdr = fits.getheader(list[-1])
-iTime1 = hdr['INTTIME']
-iTime = iTime1 - iTime0
-#*******************************************************************************************
-
-masterSave = 'processed/master_dark_I'+str(iTime)+'.fits'
+masterSave = 'processed/master_dark.fits'
 
 #first check if master dark exists
 if(os.path.exists(masterSave)):
-    cont = wifisIO.userInput('Master dark file already exists for integration time (s)' + str(iTime)+', do you want to replace (y/n)?')
+    cont = wifisIO.userInput('Master dark file already exists, do you want to replace (y/n)?')
     if (cont.lower() == 'y'):
         contProc = True
     else:
@@ -85,6 +77,7 @@ if (contProc):
     procDark = []
     procSigma = []
     procSatFrame = []
+    procVarImg = []
 
     #go through list and process each file individually
 
@@ -105,54 +98,102 @@ if (contProc):
             contProc2 = True
         
         if (contProc2):
-            #Read in data
-            ta = time.time()
-            data, inttime, hdr = wifisIO.readRampFromFolder(folder)
-            print("time to read all files took", time.time()-ta, " seconds")
-        
-            nFrames = inttime.shape[0]
-            nx = data.shape[1]
-            ny = data.shape[0]
+            print('*** Working on folder '+ folder+ ' ***')
+            print('Reading data into cube')
 
+            #Read in data
+            if os.path.exists(rootFolder + '/UpTheRamp/'+folder):
+                folderType = '/UpTheRamp/'
+                UTR = True
+                data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder+folderType + folder)
+            elif os.path.exists(rootFolder + '/CDSReference/' + folder):
+                folderType = '/CDSReference/'
+                UTR = False
+                data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder+folderType + folder)
+            elif os.path.exists(rootFolder + '/FSRamp/' + folder):
+                folderType = '/FSRamp/'
+                UTR = False
+                data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder+folderType+folder)
+            else:
+                raise Warning('*** Ramp folder ' + folder + ' does not exist ***')
+
+
+            data = data.astype('float32')
             #******************************************************************************
             #Correct data for reference pixels
-            ta = time.time()
             print("Subtracting reference pixel channel bias")
-            refCor.channelCL(data, nFrames, 32)
+            refCor.channelCL(data, 32)
             print("Subtracting reference pixel row bias")
-            refCor.rowCL(data, nFrames, 4,5) 
-            print("time to apply reference pixel corrections ", time.time()-ta, " seconds")
+            refCor.rowCL(data, 4,5) 
         
             #******************************************************************************
             #find if any pixels are saturated to avoid use in future calculations
         
             satCounts = wifisIO.readImgsFromFile(satFile)[0]
-            satFrame = satInfo.getSatFrameCL(data, satCounts,32)
-        
+            satFrame = satInfo.getSatFrameCL(data, satCounts,32, ignoreRefPix=True)
+            
             #******************************************************************************
             #apply non-linearity correction
-            ta = time.time()
             print("Correcting for non-linearity")
-        
             nlCoeff = wifisIO.readImgsFromFile(nlFile)[0]
             NLCor.applyNLCorCL(data, nlCoeff, 32)
-            print("time to apply non-linearity corrections ", time.time()-ta, " seconds")
         
             #******************************************************************************
             #Combine data cube into single image
-            fluxImg, zptnImg, varImg = combData.upTheRampCL(inttime, data, satFrame, 32)
+            fluxImg, zpntImg, varImg = combData.upTheRampCL(inttime, data, satFrame, 32)
             #fluxImg = combData.upTheRampCRRejectCL(inttime, data, satFrame, 32)
 
+            
+            #reset cube to reduce memory impact 
             data = 0
-
+ 
             #get uncertainties for each pixel
-            sigma = wifisUncertainties.getUTR(inttime, fluxImg, satFrame)
+            if UTR:
+                sigma = wifisUncertainties.compUTR(inttime, fluxImg, satFrame)
+            else:
+                sigma = wifisUncertainties.compFowler(inttime, fluxImg, satFrame)
 
             #add additional header information here
-        
+
             wifisIO.writeFits([fluxImg, sigma, satFrame], savename+'_dark.fits', hdr=hdr)
 
-            out = 0
+            #plot quality control stuff here
+            medDark = np.nanmedian(fluxImg)
+            stdDark = np.nanstd(fluxImg)
+
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore',RuntimeWarning)
+                for k in range(4):
+                    stdDark = np.nanstd(fluxImg[np.logical_and(fluxImg >= medDark-stdDark, fluxImg <= medDark+stdDark)])
+
+            fig = plt.figure()
+            plt.hist(fluxImg.flatten(), bins=100, range=[medDark-5*stdDark, medDark+5*stdDark])
+            plt.xlabel('Dark current')
+            plt.ylabel('# of pixels')
+            plt.title('Median dark current of ' + '{:10.2e}'.format(medDark))
+            plt.savefig('quality_control/'+folder+'_dark_hist.png',dpi=300)
+            plt.close()
+            
+            #compute read-out-noise
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore',RuntimeWarning)
+                ron = np.sqrt(varImg)
+                medRon = np.nanmedian(ron)
+                stdRon = np.nanstd(ron)
+
+                for k in range(4):
+                    stdRon = np.nanstd(ron[np.logical_and(ron >= medRon-stdRon, ron <= medRon+stdRon)])
+
+                
+            fig = plt.figure()
+            plt.hist(ron.flatten(),range=[medRon-5.*stdRon,medRon+5.*stdRon],bins=100)
+            plt.title('Median RON of ' + '{: e}'.format(medRon))
+            plt.xlabel('Flux')
+            plt.ylabel('# of pixels')
+            plt.savefig('quality_control/'+folder+'_dark_ron_hist.png',dpi=300)
+            plt.close()
+            wifisIO.writeFits(ron, 'processed/'+folder+'_dark_RON.fits',ask=False)
+
         else:
             #read in file instead
             fluxImg, sigma, satFrame = wifisIO.readImgsFromFile(savename+'_dark.fits')[0]
@@ -160,24 +201,62 @@ if (contProc):
         procDark.append(fluxImg)
         procSigma.append(sigma)
         procSatFrame.append(satFrame)
-
+        procVarImg.append(varImg)
+        
     #now combine all dark images into master dark, propagating uncertainties as needed
     masterDark, masterSigma  = wifisUncertainties.compMedian(np.array(procDark),np.array(procSigma), axis=0)
 
     #combine satFrame
     masterSatFrame = np.median(np.array(procSatFrame), axis=0).astype('int')
+
+    #combine variance frame
+    masterVarImg = np.nansum(np.array(procVarImg), axis=0)
     
     #******************************************************************************
     #******************************************************************************
 
     #add/modify header information here
-    hdr['INTTIME']=iTime
 
     #save file
     wifisIO.writeFits([masterDark, masterSigma, masterSatFrame], masterSave)
 
-    #extract any information of interest
-    #RON, etc.
+    #plot quality control stuff here
+    medDark = np.nanmedian(masterDark)
+    stdDark = np.nanstd(masterDark)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore',RuntimeWarning)
+        for k in range(4):
+            medDark = np.nanmedian(masterDark[np.logical_and(masterDark >= medDark-stdDark, masterDark <= medDark+stdDark)])
+            stdDark = np.nanstd(masterDark[np.logical_and(masterDark >= medDark-stdDark, masterDark <= medDark+stdDark)])
+
+    fig = plt.figure()
+    plt.hist(fluxImg.flatten(), bins=100, range=[medDark-5*stdDark, medDark+5*stdDark])
+    plt.xlabel('Dark current')
+    plt.ylabel('# of pixels')
+    plt.title('Median dark current of ' + '{:10.2e}'.format(medDark))
+    plt.savefig('quality_control/master_dark_hist.png',dpi=300)
+    plt.close()
+            
+    #compute read-out-noise
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore',RuntimeWarning)
+        ron = np.sqrt(masterVarImg)
+        medRon = np.nanmedian(ron)
+        stdRon = np.nanstd(ron)
+
+        for k in range(4):
+            medRon = np.nanmedian(ron[np.logical_and(ron >= medRon-stdRon, ron <= medRon+stdRon)])
+            stdRon = np.nanstd(ron[np.logical_and(ron >= medRon-stdRon, ron <= medRon+stdRon)])
+
+    fig = plt.figure()
+    plt.hist(ron.flatten(),range=[medRon-5.*stdRon,medRon+5.*stdRon],bins=100)
+    plt.title('Median RON of ' + '{: e}'.format(medRon))
+    plt.xlabel('Flux')
+    plt.ylabel('# of pixels')
+    plt.savefig('quality_control/'+folder+'_dark_ron_hist.png',dpi=300)
+    plt.close()
+    wifisIO.writeFits(ron, masterSave +'_dark_RON.fits',ask=False)
     
 else:
      print('No processing necessary')   
