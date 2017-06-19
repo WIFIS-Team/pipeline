@@ -69,7 +69,7 @@ def getSatCounts(data, thresh):
             satCounts[y,x] = satVal*0.97 #set useful range as 97% of the saturation value
     return satCounts
 
-def getSatFrame(data,satCounts):
+def getSatFrame(data,satCounts, ignoreRefPix=True):
     """
     Determine frame number of first saturated frame for each pixel using built-in python routines
     Usage: satFrame =getSatFrame(data,satCounts)
@@ -93,6 +93,13 @@ def getSatFrame(data,satCounts):
             
             satVal = satCounts[y,x]
             satFrame = ((np.where(ytmp >= satVal))[0])[0]
+
+    if ignoreRefPix:
+        #reset the values of the reference pixels so that all frames are used
+        refFrame = np.ones(satFrame.shape, dtype=bool)
+        refFrame[4:-4,4:-4] = False
+        satFrame[refFrame] = nt
+
     return satFrame    
 
 def getSatCountsCL(data, thresh, nSplit):
@@ -188,7 +195,7 @@ def getSatCountsCL(data, thresh, nSplit):
     
     return satCounts
 
-def getSatFrameCL(data,satCounts, nSplit):
+def getSatFrameCL(data,satCounts, nSplit, ignoreRefPix=True):
     """
     Determine frame number of first saturated frame for each pixel using OpenCL routines for each pixel
     Usage: satFrame =getSatFrame(data,satCounts,nSplit)
@@ -257,4 +264,10 @@ def getSatFrameCL(data,satCounts, nSplit):
     dTmp = 0
     data_buf = 0  
 
+    if ignoreRefPix:
+        #reset the values of the reference pixels so that all frames are used
+        refFrame = np.ones(satFrame.shape, dtype=bool)
+        refFrame[4:-4,4:-4] = False
+        satFrame[refFrame] = nt
+        
     return satFrame
