@@ -13,7 +13,6 @@ matplotlib.use('pdf')
 import numpy as np
 import time
 import matplotlib.pyplot as plt
-import wifisGetSatInfo as satInfo
 import wifisNLCor as NLCor
 import wifisRefCor as refCor
 import os
