@@ -132,12 +132,7 @@ if (contProc):
             satCountsLst.append(satCounts)
         
             #find the first saturated frames
-            satFrame = satInfo.getSatFrameCL(data,satCounts,1)
-
-            #reset the values of the reference pixels so that all frames are used
-            refFrame = np.ones(satFrame.shape, dtype=bool)
-            refFrame[4:-4,4:-4] = False
-            satFrame[refFrame] = data.shape[2]
+            satFrame = satInfo.getSatFrameCL(data,satCounts,32, ignoreRefPix=True)
 
             #**********************************************************************
             #**********************************************************************
