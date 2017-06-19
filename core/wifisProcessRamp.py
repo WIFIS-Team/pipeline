@@ -27,13 +27,8 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSp
     print("Subtracting reference pixel row bias")
     refCor.rowCL(data, nRows,rowSplit)
         
-    satFrame = satInfo.getSatFrameCL(data, satCounts,satSplit)
+    satFrame = satInfo.getSatFrameCL(data, satCounts,satSplit, ignoreRefPix=True)
 
-    #reset the values of the reference pixels so that all frames are used
-    refFrame = np.ones(satFrame.shape, dtype=bool)
-    refFrame[4:-4,4:-4] = False
-    satFrame[refFrame] = data.shape[2]
-    
     #******************************************************************************
     #apply non-linearity correction
     print("Correcting for non-linearity")
@@ -116,13 +111,8 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,ro
     print("Subtracting reference pixel row bias")
     refCor.rowCL(data, nRows,rowSplit)
         
-    satFrame = satInfo.getSatFrameCL(data, satCounts,satSplit)
+    satFrame = satInfo.getSatFrameCL(data, satCounts,satSplit, ignoreRefPix=True)
 
-    #reset the values of the reference pixels so that all frames are used
-    refFrame = np.ones(satFrame.shape, dtype=bool)
-    refFrame[4:-4,4:-4] = False
-    satFrame[refFrame] = data.shape[2]
-    
     #******************************************************************************
     #apply non-linearity correction
     print("Correcting for non-linearity")
