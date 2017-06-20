@@ -678,7 +678,7 @@ def buildFWHMMap(pixCentLst,fwhmLst,npts):
     
         for j in range(len(fwhm)):
             y = fwhm[j]
-            if (len(y) > 0):
+            if (len(y) > 1):
                 x = cent[j]
                 finter = interp1d(x,y, kind='linear', bounds_error=False)
                 fwhmMap[j,:] = finter(xgrid)
