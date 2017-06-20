@@ -85,10 +85,13 @@ lst= wifisIO.readAsciiList(fileList)
 if lst.ndim == 0:
     lst = np.asarray([lst])
 
-darkLst = wifisIO.readAsciiList(darkListFile)
-
-if darkLst.ndimi == 0:
-    darkLst = np.asarray(darkLst)
+if darkListFile is not None:
+    darkLst = wifisIO.readAsciiList(darkListFile)
+    
+    if darkLst.ndim == 0:
+        darkLst = np.asarray(darkLst)
+    else:
+        darkLst = None
 else:
     darkLst = None
     
@@ -156,8 +159,8 @@ for lstNum in range(len(lst)):
         else:
             if not skipDarkCheck:
                 cont = wifisIO.userInput('No dark ramp provided, do you want to proceed without dark subtraction (y/n)?')
-                if (cont.lower()=='n')
-                raise SystemExit("*** EXIITING. NO DARK RAMP PROVIDED ***")
+                if (cont.lower()=='n'):
+                    raise SystemExit("*** EXIITING. NO DARK RAMP PROVIDED ***")
 
             
         if os.path.exists(savename+'_flat_limits.fits'):
