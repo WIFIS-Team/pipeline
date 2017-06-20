@@ -48,12 +48,15 @@ folderType = '/UpTheRamp/'
 #read file list
 lst= wifisIO.readAsciiList(fileList)
 
+if lst.ndim == 0:
+    lst = np.asarray([lst])
+
 #create processed directory
 wifisIO.createDir('processed')
 
 #check if processing needs to be done
 if(os.path.exists('processed/master_detLin_NLCoeff.fits') and os.path.exists('processed/master_detLin_satCounts.fits')):
-    
+    cont = 'n'
     cont = wifisIO.userInput('Master non-linearity processed files already exists, do you want to continue processing (y/n)?')
 
     if (cont.lower() == 'y'):
@@ -76,6 +79,7 @@ if (contProc):
         savename = 'processed/'+filename.replace('.gz','')
 
         if(os.path.exists(savename+'_satCounts.fits') and os.path.exists(savename+'_NLCoeff.fits')):
+            cont = 'n'
             cont = wifisIO.userInput('Non-linearity processed files already exists for ' + filename +', do you want to continue processing (y/n)?')
            
             if (cont.lower() == 'y'):
@@ -113,6 +117,7 @@ if (contProc):
 
             #Get saturation info
             if(os.path.exists(savename+'_satCounts.fits')):
+                cont ='n'
                 cont = wifisIO.userInput('satCounts file already exists for ' +filename+', do you want to replace (y/n)?')
             else:
                 cont = 'y'
@@ -139,6 +144,7 @@ if (contProc):
 
             # Get the non-linearity correction coefficients
             if(os.path.exists(savename+'_NLCoeff.fits')):
+                cont='n'
                 cont = wifisIO.userInput('NLCoeff file already exists for ' +filename+', do you want to replace (y/n)?')
             else:
                 cont = 'y'
