@@ -87,8 +87,9 @@ if (contProc):
         savename = 'processed/'+folder
 
         if(os.path.exists(savename+'_dark.fits')):
+            cont = 'n'
             cont = wifisIO.userInput('Processed dark file already exists for ' +folder+', do you want to continue processing (y/n)?')
-            if (cont.lower() == 'n'):
+            if (not cont.lower() == 'y'):
                 print('Reading image'+savename+'_dark.fits instead')
                 fluxImg = wifisIO.readImgsFromFile(savename+'_dark.fits')
                 contProc2 = False
@@ -143,7 +144,6 @@ if (contProc):
             fluxImg, zpntImg, varImg = combData.upTheRampCL(inttime, data, satFrame, 32)
             #fluxImg = combData.upTheRampCRRejectCL(inttime, data, satFrame, 32)
 
-            
             #reset cube to reduce memory impact 
             data = 0
  
