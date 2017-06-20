@@ -143,11 +143,13 @@ def getSolQuick(input):
 
     #measure the noise level - may be uneccessary if we can provide this from other routines
     nse = np.nanstd(tmp)
-    nse = nse/(np.nanmax(yRow-flr))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        nse = nse/(np.nanmax(yRow-flr))
     
-    #normalize the spectra so that the predicted line strengths are on the same scale as the observed spectrum
-    yRow = (yRow-flr)/np.nanmax((yRow-flr))
-    template = template/np.nanmax(template)
+        #normalize the spectra so that the predicted line strengths are on the same scale as the observed spectrum
+        yRow = (yRow-flr)/np.nanmax((yRow-flr))
+        template = template/np.nanmax(template)
 
     #use this offset to determine window range and list of lines to use
     #base on provided dispersion solution from template, which is expected to be close enough
@@ -735,12 +737,18 @@ def trimWaveSlice(input):
     threshold = input[2]
 
     #get median-averaged values for each column along the dispersion axis to avoid effects of hot pixels
-    flatMed = np.nanmedian(flatSlc, axis=0)
-    mx = np.nanmax(flatMed)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        flatMed = np.nanmedian(flatSlc, axis=0)
+        mx = np.nanmax(flatMed)
     
     #get rid of problematic values
     flatSlc[~np.isfinite(flatSlc)] = 0.
-    whr = np.where(flatSlc < threshold*mx)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore',RuntimeWarning)
+        whr = np.where(flatSlc < threshold*mx)
+        
     slc[whr[0],whr[1]] = np.nan
 
     return slc
