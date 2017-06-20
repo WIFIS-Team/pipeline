@@ -169,7 +169,7 @@ if not os.path.exists('processed/'+waveFolder+'wave_slices_distCor.fits'):
 else:
     waveCor = wifisIO.readImgsFromFile('processed/'+waveFolder+'_wave_slices_distCor.fits')[0]
 
-if not os.path.exists('processed/'+waveFolder+'_waveFitResults.pkl'):
+if not os.path.exists('processed/'+waveFolder+'_wave_fitResults.pkl'):
     print('getting dispersion solution')
     template = wifisIO.readImgsFromFile(waveTempFile)[0]
     templateResults = wifisIO.readPickle(waveTempResultsFile)
@@ -177,33 +177,33 @@ if not os.path.exists('processed/'+waveFolder+'_waveFitResults.pkl'):
 
     result = waveSol.getWaveSol(waveCor, template, atlasFile,mxOrder, prevSol, winRng=9, mxCcor=150, weights=False, buildSol=False, allowLower=False, sigmaClip=3, lngthConstraint = True, MP=True, adjustFitWin=False, allowSearch=False, sigmaClipRounds=3)
 
-    wifisIO.writePickle(result, 'processed/'+waveFolder+'_waveFitResults.pkl')
+    wifisIO.writePickle(result, 'processed/'+waveFolder+'_wave_fitResults.pkl')
 else:
-    result = wifisIO.readPickle('processed/'+waveFolder+'_waveFitResults.pkl')
+    result = wifisIO.readPickle('processed/'+waveFolder+'_wave_fitResults.pkl')
     
-if not os.path.exists('processed/'+waveFolder+'_waveMap.fits'):
+if not os.path.exists('processed/'+waveFolder+'_wave_waveMap.fits'):
     print('Building wavelegth map')
     wifisIO.createDir('quality_control')
-    rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(result, plotFile='quality_control/'+waveFolder+'_waveFit_rms.pdf')
+    rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(result, plotFile='quality_control/'+waveFolder+'_wave_waveFit_rms.pdf')
 
     #resultClean = [dispSolClean, result[1],result[2],result[3], rmsClean, pixSolClean]
     #wifisIO.writePickle(resultClean, 'processed/'+waveFolder+'_waveFitResults_cleaned.pkl')
 
     waveMap = waveSol.buildWaveMap(dispSolClean, waveCor[0].shape[1], extrapolate=True)
-    wifisIO.writeFits(waveMap, 'processed/'+waveFolder+'_waveMap.fits', ask=False)
+    wifisIO.writeFits(waveMap, 'processed/'+waveFolder+'_wave_waveMap.fits', ask=False)
 
     #now trim wavemap if needed
 
     waveGridProps = createCube.compWaveGrid(waveMap)
-    wifisIO.writeTable(waveGridProps, 'processed/'+waveFolder+'_waveGridProps.dat')
+    wifisIO.writeTable(waveGridProps, 'processed/'+waveFolder+'_wave_waveGridProps.dat')
 else:
-    waveMap = wifisIO.readImgsFromFile('processed/'+waveFolder+'_waveMap.fits')[0]
+    waveMap = wifisIO.readImgsFromFile('processed/'+waveFolder+'_wave_waveMap.fits')[0]
     waveGridProps = wifisIO.readTable('processed/'+waveFolder+'_waveGridProps.dat')
 
-if not os.path.exists('processed/'+waveFolder+'_wave_slices_grid.fits'):
+if not os.path.exists('processed/'+waveFolder+'_wave_fullGrid.fits'):
     print('placing arc image on grid')
     waveGrid = createCube.waveCorAll(waveCor, waveMap, waveGridProps=waveGridProps)
-    wifisIO.writeFits(waveGrid, 'processed/'+waveFolder+'_wave_slices_grid.fits', ask=False)
+    wifisIO.writeFits(waveGrid, 'processed/'+waveFolder+'_wave_fullGrid.fits', ask=False)
 
 print('processing observations')
 
