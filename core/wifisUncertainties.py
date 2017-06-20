@@ -2,6 +2,7 @@
 """
 
 import numpy as np
+import warnings
 
 def compFowler(inttime, fluxImg, satFrame, gain = 1., ron=1.):
     """
@@ -16,13 +17,15 @@ def compFowler(inttime, fluxImg, satFrame, gain = 1., ron=1.):
     deltaT = inttime[-1] - inttime[int(inttime.shape[0]/2)-1] #integration time
     dT = inttime[1]-inttime[0] # readout time per frame
     nReads = satFrame - int(nFrames/2)
-    eff_ron = np.sqrt(2)*ron/np.sqrt(nReads) #effect read noise, assuming no co-additions
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        eff_ron = np.sqrt(2)*ron/np.sqrt(nReads) #effect read noise, assuming no co-additions
 
-    #compute variance, assuming no co-adds
-    var = fluxImg/(gain*deltaT) * (1.-(1./3.)*(dT/deltaT)*(nReads**2-1.)/nReads) + eff_ron**2/(gain**2*deltaT**2)
+        #compute variance, assuming no co-adds
+        var = fluxImg/(gain*deltaT) * (1.-(1./3.)*(dT/deltaT)*(nReads**2-1.)/nReads) + eff_ron**2/(gain**2*deltaT**2)
 
-    #compute uncertainty from variance as a 32-bit float
-    sigma = np.sqrt(var).astype('float32')
+        #compute uncertainty from variance as a 32-bit float
+        sigma = np.sqrt(var).astype('float32')
 
     return sigma
 
@@ -39,13 +42,16 @@ def compUTR(inttime, fluxImg, satFrame, gain = 1., ron=1.):
     dT = np.mean(np.gradient(inttime)) # mean readout time per frame
     deltaT = (satFrame - 1)*dT 
     nReads = satFrame
-    eff_ron = np.sqrt(2)*ron/np.sqrt(nReads) #effect read noise, assuming no co-additions
 
-    #compute variance, assuming no co-adds
-    var = 6./5. * fluxImg/(gain *nReads *deltaT)* (nReads**2 + 1.)/(nReads + 1) + 6.*eff_ron**2/(gain**2*deltaT**2)*(nReads - 1.)/(nReads + 1.)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        eff_ron = np.sqrt(2)*ron/np.sqrt(nReads) #effect read noise, assuming no co-additions
 
-    #compute uncertainty from variance as a 32-bit float
-    sigma = np.sqrt(var).astype('float32')
+        #compute variance, assuming no co-adds
+        var = 6./5. * fluxImg/(gain *nReads *deltaT)* (nReads**2 + 1.)/(nReads + 1) + 6.*eff_ron**2/(gain**2*deltaT**2)*(nReads - 1.)/(nReads + 1.)
+
+        #compute uncertainty from variance as a 32-bit float
+        sigma = np.sqrt(var).astype('float32')
 
     return sigma
 
@@ -112,3 +118,34 @@ def compMedian(data, sigma, axis=None):
             outS = outS.swapaxes(0,axis-1)
     
     return np.asarray(outD), np.asarray(outS)
+
+def addSlices(sigma1, sigma2):
+    """
+    """
+
+    sigma = []
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+
+        for i in range(len(sigma1)):
+            sigmaSlc = np.sqrt(sigma1[i]**2 + sigma2[i]**2)
+            sigma.append(sigmaSlc)
+
+    return sigma
+
+
+def multiplySlices(slice1, sigma1, slice2,sigma2):
+    """
+    """
+
+    sigma = []
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+
+        for i in range(len(sigma1)):
+            sigmaSlc = slice1[i]*slice2[i]*np.sqrt((sigma1[i]/slice1[i])**2 + (sigma2[i]/slice2[i])**2)
+            sigma.append(sigmaSlc)
+
+    return sigma
+
+
