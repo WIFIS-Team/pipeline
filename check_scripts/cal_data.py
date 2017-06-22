@@ -1,5 +1,5 @@
 import matplotlib
-matplotlib.use('pdf')
+matplotlib.use('gtkagg')
 
 import wifisIO
 import wifisSlices as slices
@@ -26,7 +26,7 @@ waveInfoFile = 'wave.lst'
 obsLstFile = 'obs.lst'
 skyLstFile = None #'sky.lst'
 darkInfoFile = 'dark.lst'
-noFlat = True
+noFlat = False
 
 #likely static
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
@@ -148,7 +148,7 @@ spatGridProps = wifisIO.readTable(spatGridPropsFile)
 waveFolder = wifisIO.readAsciiList(waveInfoFile).tostring()
 if not os.path.exists('processed/'+waveFolder+'_wave.fits'):
     print('processing arc image')
-    wave, sigmaImg, satFrame, hdr = processRamp.auto(waveFolder, rootFolder,'processed/'+waveFolder+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=False)
+    wave, sigmaImg, satFrame, hdr = processRamp.auto(waveFolder, rootFolder,'processed/'+waveFolder+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=0, saveAll=False)
 else:
     wave = wifisIO.readImgsFromFile('processed/'+waveFolder+'_wave.fits')[0]
     
@@ -162,6 +162,8 @@ if not os.path.exists('processed/'+waveFolder+'wave_slices.fits'):
 else:
     waveSlices = wifisIO.readImgsFromFile('processed/'+waveFolder+'_wave_slices.fits')[0]
 
+waveFlat = slices.ffCorrectAll(waveSlices, flatNorm)
+    
 if not os.path.exists('processed/'+waveFolder+'wave_slices_distCor.fits'):
     print('Distortion correcting flat slices')
     waveCor = createCube.distCorAll(waveSlices, distMap, spatGridProps=spatGridProps)
@@ -175,7 +177,7 @@ if not os.path.exists('processed/'+waveFolder+'_wave_fitResults.pkl'):
     templateResults = wifisIO.readPickle(waveTempResultsFile)
     prevSol = templateResults[5]
 
-    result = waveSol.getWaveSol(waveCor, template, atlasFile,mxOrder, prevSol, winRng=9, mxCcor=150, weights=False, buildSol=False, allowLower=False, sigmaClip=3, lngthConstraint = True, MP=True, adjustFitWin=False, allowSearch=False, sigmaClipRounds=3)
+    result = waveSol.getWaveSol(waveCor, template, atlasFile,mxOrder, prevSol, winRng=9, mxCcor=150, weights=False, buildSol=False, allowLower=False, sigmaClip=2, lngthConstraint = True, MP=True, adjustFitWin=False, allowSearch=False, sigmaClipRounds=1)
 
     wifisIO.writePickle(result, 'processed/'+waveFolder+'_wave_fitResults.pkl')
 else:
@@ -198,12 +200,12 @@ if not os.path.exists('processed/'+waveFolder+'_wave_waveMap.fits'):
     wifisIO.writeTable(waveGridProps, 'processed/'+waveFolder+'_wave_waveGridProps.dat')
 else:
     waveMap = wifisIO.readImgsFromFile('processed/'+waveFolder+'_wave_waveMap.fits')[0]
-    waveGridProps = wifisIO.readTable('processed/'+waveFolder+'_waveGridProps.dat')
+    waveGridProps = wifisIO.readTable('processed/'+waveFolder+'_wave_waveGridProps.dat')
 
-if not os.path.exists('processed/'+waveFolder+'_wave_fullGrid.fits'):
+if not os.path.exists('processed/'+waveFolder+'_wave_slices_fullGrid.fits'):
     print('placing arc image on grid')
     waveGrid = createCube.waveCorAll(waveCor, waveMap, waveGridProps=waveGridProps)
-    wifisIO.writeFits(waveGrid, 'processed/'+waveFolder+'_wave_fullGrid.fits', ask=False)
+    wifisIO.writeFits(waveGrid, 'processed/'+waveFolder+'_wave_slices_fullGrid.fits', ask=False)
 
 print('processing observations')
 
