@@ -78,7 +78,7 @@ def corBadPixelsAll(data,dispAxis=0,mxRng=2,MP=True, ncpus=None, sigma=False):
 
 def corBadPixel(input):
     """
-    Interpolate only along dispersion axis and only if pixels available within specified
+    Interpolate only along dispersion axis and only if pixels available within specified range
     """
 
     data = input[0]
@@ -92,29 +92,32 @@ def corBadPixel(input):
 
     badPix += 1
 
-    #determine if any good pixels within range
-    xa = badPix
-    keepxa = False
-    for xa in xrange(badPix-1,badPix-mxRng-1,-1):
-        if(np.isfinite(ytmp[xa])):
-            keepxa = True
-            break
+    if mxRng > 0:
+        #determine if any good pixels within range
+        xa = badPix
+        keepxa = False
+        for xa in xrange(badPix-1,badPix-mxRng-1,-1):
+            if(np.isfinite(ytmp[xa])):
+                keepxa = True
+                break
 
-    xb = badPix
-    keepxb = False
-    for xb in xrange(badPix+1,badPix+mxRng+1,1):
-        if (np.isfinite(ytmp[xb])):
-            keepxb = True
-            break
+        xb = badPix
+        keepxb = False
+        for xb in xrange(badPix+1,badPix+mxRng+1,1):
+            if (np.isfinite(ytmp[xb])):
+                keepxb = True
+                break
 
-    #interpolate between values, if useable, else put in a NaN
-    if (keepxa and keepxb):
-        ia = (xb-badPix)/float(xb-xa)*ytmp[xa]*keepxa
-        ib = (badPix-xa)/float(xb-xa)*ytmp[xb]*keepxa
-        corr = ia + ib
+        #interpolate between values, if useable, else put in a NaN
+        if (keepxa and keepxb):
+            ia = (xb-badPix)/float(xb-xa)*ytmp[xa]*keepxa
+            ib = (badPix-xa)/float(xb-xa)*ytmp[xb]*keepxa
+            corr = ia + ib
+        else:
+            corr = np.nan
     else:
         corr = np.nan
-
+        
     #restore pixx to input value, in case it modifies the input
     badPix -= 1
     
