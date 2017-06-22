@@ -136,11 +136,12 @@ def getSolQuick(input):
     
     tmp = yRow[np.isfinite(yRow)]
     flr = np.nanmedian(tmp)
+    
     for i in range(10):
         whr = np.where((tmp-flr) < 3.*np.nanstd(tmp))
         tmp = tmp[whr[0]]
         flr = np.nanmedian(tmp)
-
+        
     #measure the noise level - may be uneccessary if we can provide this from other routines
     nse = np.nanstd(tmp)
     with warnings.catch_warnings():
@@ -177,7 +178,7 @@ def getSolQuick(input):
                 atlas = atlas[whr,:]
                 atlasPix = atlasPix[whr]
                                 
-                #now find lines, taking only lines with strength >= 2*noise level, based on the predicted line strength, normalized to the strongest line in the observed spectrum
+                #now find lines, taking only lines with strength >= sigmaLimit*noise level, based on the predicted line strength, normalized to the strongest line in the observed spectrum
                 mxObsLine = np.nanargmax(yRow)
                 
                 #find closest predicted line
