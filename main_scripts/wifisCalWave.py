@@ -12,7 +12,7 @@ Produces:
 """
 
 import matplotlib
-matplotlib.use('agg')
+matplotlib.use('gtkagg')
 import numpy as np
 import time
 import matplotlib.pyplot as plt
@@ -60,6 +60,9 @@ plot = True
 crReject = False
 cleanDispSol = True
 waveTrimThresh=0.1
+sigmaClipRounds=2 #number of iterations when sigma-clipping of dispersion solution
+sigmaClip = 2 #sigma-clip cutoff when sigma-clipping dispersion solution
+sigmaLimit= 3 #relative noise limit (x * noise level) for which to reject lines
 
 #*****************************************************************************
 #*****************************************************************************
@@ -210,8 +213,9 @@ for lstNum in range(len(waveLst)):
             prevResults = wifisIO.readPickle(prevResultsFile)
             prevSol = prevResults[5]
             
-            results = waveSol.getWaveSol(waveCor, template, atlasFile, 3, prevSol, winRng=13, mxCcor=150, weights=False, buildSol=False, sigmaClip=1, allowLower=True, lngthConstraint=True)
-    
+            results = waveSol.getWaveSol(waveCor, template, atlasFile, 3, prevSol, winRng=9, mxCcor=150, weights=False, buildSol=False, sigmaClip=sigmaClip, allowLower=False, lngthConstraint=True, MP=True, adjustFitWin=True, sigmaLimit=sigmaLimit, allowSearch=False, sigmaClipRounds=sigmaClipRounds)
+
+            print(cheese)
             #Save all results
             wifisIO.writePickle(results, savename+'_wave_fitResults.pkl')
 
@@ -331,7 +335,7 @@ for lstNum in range(len(waveLst)):
                 plt.imshow(fwhmMap, aspect='auto', cmap='jet', clim=[0, cMax])
                 plt.colorbar()
                 plt.title('Median FWHM is '+'{:3.1f}'.format(fwhmMed) +', min wave is '+'{:6.1f}'.format(waveMin)+', max wave is '+'{:6.1f}'.format(waveMax))
-                plt.savefig('quality_control/'+waveFolder+'_fwhm_map.png', dpi=300)
+                plt.savefig('quality_control/'+waveFolder+'_wave_fwhm_map.png', dpi=300)
                 plt.close()
                                 
                            
