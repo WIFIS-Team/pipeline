@@ -333,11 +333,11 @@ def traceRonchiSlice(input):
     
     #only use regions where signal in all pixels > threshold of the median signal (of the max portion)
     if (flatSlc is None):
-        mx = np.nanmedian(y[y>0.05*np.nanmax(y)])
+        mx = np.nanmedian(y[y>0.05*np.nanmax(np.nanmedian(y))])
         whr = np.where(y > threshold*mx)[0]
     else:
         yFlat = flatSlc[:,m2]
-        mx = np.nanmedian(yFlat[yFlat>0.05*np.nanmax(yFlat)])
+        mx = np.nanmedian(yFlat[yFlat>0.05*np.nanmax(np.nanmedian(yFlat))])
         whr = np.where(yFlat > threshold*mx)[0]
        
     strt = whr[0]
@@ -463,9 +463,11 @@ def traceRonchiSlice(input):
     if (plot):
         #tmp = np.sqrt(img)
         #mn = np.nanmin(img[np.where(tmp != 0)])
-        mx = np.nanmax(img)
+        med = np.nanmedian(img)
+        fig = plt.figure()
         #plt.imshow(img, aspect='auto', clim=[mn, np.max(img)])
-        plt.imshow(img, aspect='auto', clim=[mx*0.05, mx])
+        
+        plt.imshow(img, aspect='auto', clim=[med*0.05, med*1.25], cmap='jet', origin='lower')
 
         for i in range(outTrace.shape[0]):
             if (i%2 == 0):
@@ -572,13 +574,18 @@ def extendTraceSlice(input):
         zeroInterp = np.empty(zero.shape)
         zeroInterp[:] = np.nan
 
+        #zero pad z
+        zPad =np.zeros((z.shape[0]+2,z.shape[1]),dtype=z.dtype)
+        zPad[1:-1,:] = z
+        
         #identify corresponding spatial coordinate from Ronchi interpolation
         #using linear interpolation for increased precision (as trace likely falls between two grid points)
         for i in range(zero.shape[0]):
+            
             ia = np.floor(zero[i]).astype('int')
             ib = ia+1
-            za= z[ia,i]
-            zb = z[ib,i]
+            za= zPad[ia+1,i]
+            zb = zPad[ib+1,i]
             zeroInterp[i] = (zero[i]-ia)*zb + (ib-zero[i])*za
 
         #now subtract the zero value from each point to place on absoluate grid
@@ -654,7 +661,7 @@ def extendTraceAll(traceLst, extSlices, zeroTraces,space=1/15.,order=4,method='l
 
     return interpLst
 
-def traceWireFrameAll(zeroSlices, nbin=2,winRng=31,smooth=5,bright=False,MP=True, plot=False, mxChange=5, ncpus=None):
+def traceWireFrameAll(zeroSlices, nbin=2,winRng=31,smooth=5,bright=False,MP=True, plot=False, mxChange=5, ncpus=None, constRegion=None):
     """
     Routine used to determine/trace zero-point images (e.g. wireframe) of each slice
     Usage: cent = traceZeroPointAll(zeroSlices, nbin=2, winRng=31, smooth=5, bright=False, MP=True, plot=False, mxChange=5, ncpus=None)
@@ -678,7 +685,7 @@ def traceWireFrameAll(zeroSlices, nbin=2,winRng=31,smooth=5,bright=False,MP=True
         #build input list
         lst = []
         for i in range(len(zeroSlices)):
-            lst.append([zeroSlices[i],nbin,winRng,plot,smooth,bright,mxChange])
+            lst.append([zeroSlices[i],nbin,winRng,plot,smooth,bright,mxChange,constRegion])
             
         cent = pool.map(traceWireFrameSlice, lst)
         pool.close()
@@ -688,7 +695,7 @@ def traceWireFrameAll(zeroSlices, nbin=2,winRng=31,smooth=5,bright=False,MP=True
         cent = []
 
         for i in range(len(zeroSlices)):
-            cent.append(traceWireFrameSlice([zeroSlices[i],nbin,winRng,plot,smooth,bright,mxChange]))
+            cent.append(traceWireFrameSlice([zeroSlices[i],nbin,winRng,plot,smooth,bright,mxChange, constRegion]))
             
     return cent
 
@@ -715,19 +722,25 @@ def traceWireFrameSlice(input):
     smth = input[4]
     bright = input[5]
     mxChange = input[6]
-    
+    constRegion = input[7]
+
+    if constRegion is not None:
+        tmp1 = img[:,constRegion[0]:constRegion[1]]
+    else:
+        tmp1 = img
+        
     #first bin the image, if requested
     if (nbin > 1):
         
-        tmp = np.zeros((img.shape[0], img.shape[1]/nbin))
+        tmp = np.zeros((tmp1.shape[0], tmp1.shape[1]/nbin))
 
         for i in range(tmp.shape[1]-1):
-            tmp[:,i] = np.nansum(img[:,nbin*i:nbin*(i+1)],axis=1)
+            tmp[:,i] = np.nansum(tmp1[:,nbin*i:nbin*(i+1)],axis=1)
     else:
-        tmp = img
+        tmp = tmp1
 
     #find column with the maximum signal to find first zeropoint measurement
-    m1, m2 = np.unravel_index(np.argmax(tmp), tmp.shape)
+    m1, m2 = np.unravel_index(np.nanargmax(tmp), tmp.shape)
 
     #extract signal from this column
 
@@ -866,7 +879,7 @@ def traceWireFrameSlice(input):
 
     xTrace = np.arange(cent.shape[0])*nbin
        
-    centOut = np.empty(img.shape[1])
+    centOut = np.empty(tmp1.shape[1])
     centOut[:] = np.nan
     centOut[xTrace] = cent
 
