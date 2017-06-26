@@ -9,7 +9,7 @@ Produces:
 
 """
 import matplotlib
-matplotlib.use('pdf')
+matplotlib.use('gtkagg')
 import numpy as np
 import time
 import matplotlib.pyplot as plt
@@ -42,13 +42,15 @@ rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
 nlFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_NLCoeff.fits' # the non-linearity correction coefficients file        
 satFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_satCounts.fits' # the saturation limits file
 bpmFile = '/data/pipeline/external_data/bpm.fits' # the bad pixel mask
-distMapLimitsFile = '/data/pipeline/external_data/ronchiMap_limits.fits'
+distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_may/ronchiMap_limits.fits'
 
 #optional behaviour of pipeline
 plot = True #whether to plot the traces
 crReject = False
 skipObsinfo = False
 skipDarkCheck = True
+
+hband = True
 
 #*****************************************************************************
 
@@ -134,8 +136,8 @@ for lstNum in range(len(lst)):
 
         if (os.path.exists(savename+'_flat.fits')):
             cont = wifisIO.userInput('Processed flat field file already exists for ' +folder+', do you want to continue processing (y/n)?')
-            if (cont.lower() == 'n'):
-                print('Reading image'+savename+'_flat.fits instead')
+            if (not cont.lower() == 'y'):
+                print('Reading image '+savename+'_flat.fits instead')
                 flatImgs, hdr= wifisIO.readImgsFromFile(savename+'_flat.fits')
                 flatImg, sigmaImg, satFrame = flatImgs
                 if (type(hdr) is list):
@@ -159,14 +161,14 @@ for lstNum in range(len(lst)):
         else:
             if not skipDarkCheck:
                 cont = wifisIO.userInput('No dark ramp provided, do you want to proceed without dark subtraction (y/n)?')
-                if (cont.lower()=='n'):
+                if (not cont.lower()=='y'):
                     raise SystemExit("*** EXIITING. NO DARK RAMP PROVIDED ***")
 
             
         if os.path.exists(savename+'_flat_limits.fits'):
             cont = wifisIO.userInput('Limits file already exists for ' +folder+', do you want to continue processing (y/n)?')
-            if (cont.lower() == 'n'):
-                print('Reading limits'+savename+'_flat_limits.fits instead')
+            if (not cont.lower() == 'y'):
+                print('Reading limits '+savename+'_flat_limits.fits instead')
                 limits, limitsHdr= wifisIO.readImgsFromFile(savename+'_flat_limits.fits')
                 shft = limitsHdr['LIMSHIFT']
                 contProc2 = False
@@ -186,7 +188,17 @@ for lstNum in range(len(lst)):
             if os.path.exists(distMapLimitsFile):
                 print('Finding slice limits relative to distortion map file')
                 distMapLimits = wifisIO.readImgsFromFile(distMapLimitsFile)[0]
-                shft = int(np.nanmedian(polyLimits[1:-1,:] - distMapLimits[1:-1,:]))
+                if hband:
+                    #only use region with suitable flux
+                    flatImgMed = np.nanmedian(flatImg[4:-4,4:-4], axis=1)
+                    flatImgMedGrad = np.gradient(flatImgMed)
+                    medMax = np.nanargmax(flatImgMed)
+                    lim1 = np.nanargmax(flatImgMedGrad[:medMax])
+                    lim2 = np.nanargmin(flatImgMedGrad[medMax:])+medMax
+                    shft = int(np.nanmedian(polyLimits[1:-1,lim1:lim2+1] - distMapLimits[1:-1,lim1:lim2+1]))
+                else:
+                    shft = int(np.nanmedian(polyLimits[1:-1,:] - distMapLimits[1:-1,:]))
+                    
                 finalLimits = distMapLimits
             else:
                 finalLimits = polyLimits
@@ -206,10 +218,11 @@ for lstNum in range(len(lst)):
                     med1= np.nanmedian(flatImg)
                     
                     plt.imshow(flatImg[4:-4,4:-4], aspect='auto', cmap='jet', clim=[0,2.*med1], origin='lower')
+                    plt.xlim=(0,2040)
                     plt.colorbar()
                     for l in range(limits.shape[0]):
-                        plt.plot(limits[l], np.arange(limits.shape[1]),'k', linewidth=1)
-                        plt.plot(finalLimits[l]+shft, np.arange(limits.shape[1]),'r--', linewidth=1)
+                        plt.plot(limits[l], np.arange(limits.shape[1]),'k', linewidth=1) #drawn limits
+                        plt.plot(finalLimits[l]+shft, np.arange(limits.shape[1]),'r--', linewidth=1) #shifted ronchi limits, if provided, or polynomial fit
                     pdf.savefig()
                     plt.close(fig)
 
@@ -220,7 +233,7 @@ for lstNum in range(len(lst)):
 
         if os.path.exists(savename+'_flat_slices.fits'):
             cont = wifisIO.userInput('Flat slices file already exists for ' +folder+', do you want to continue processing (y/n)?')
-            if (cont.lower() == 'n'):
+            if (not cont.lower() == 'y'):
                 print('Reading slices file '+savename+'_flat_slices.fits instead')
                 flatSlices = wifisIO.readImgsFromFile(savename+'_flat_slices.fits')[0]
                 contProc2 = False
