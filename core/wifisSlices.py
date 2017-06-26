@@ -121,7 +121,7 @@ def findLimits(data, dispAxis=0, winRng=51, imgSmth=5, limSmth=10, ncpus=None, r
         limSmth = np.clip(limSmth-4,0, dTmp.shape[1]-1)
 
     #lastly round all limits to nearest integer to avoid potential pixel differences
-    limSmth = limSmth.astype(int)
+    limSmth = np.round(limSmth).astype(int)
     
     return limSmth
 
@@ -541,8 +541,9 @@ def extSlices(data, limits,shft=0, dispAxis=0):
         slices.append(slice)
     return slices
 
-def polyFitLimits(limits, degree=2):
+def polyFitLimits(limits, degree=2,constRegion=None, sigmaClipRounds=0):
     """
+    constRegion are limits to constrain the fit between two cutoff points. Useful for Hband.
     """
 
     polyLimits = []
@@ -550,11 +551,32 @@ def polyFitLimits(limits, degree=2):
     x = np.arange(limits.shape[1])
     for i in range(limits.shape[0]):
         y = limits[i,:]
-        polyCoef = np.polyfit(x,y, degree)
+        if constRegion is not None:
+            xfit = x[constRegion[0]:constRegion[1]]
+            yfit = y[constRegion[0]:constRegion[1]]
+        else:
+            xfit = x
+            yfit = y
+
+        polyCoef = np.polyfit(xfit,yfit, degree)
         poly = np.poly1d(polyCoef)
+
+        if sigmaClipRounds > 0:
+            for rnd in range(sigmaClipRounds):
+                ypoly = poly(xfit)
+                diff = np.abs(ypoly - yfit)
+                med = np.nanmedian(yfit-ypoly)
+                std = np.nanstd(yfit-ypoly)
+                if (std > 1e-3):
+                    whr = np.where(diff <= med + std)[0]
+                    xfitRnd = xfit[whr]
+                    yfitRnd = yfit[whr]
+                    pcoef = np.polyfit(xfitRnd, yfitRnd,degree)
+                    poly = np.poly1d(pcoef)
+               
         polyFit = poly(x)
-        np.clip(polyFit, 0, x.shape[0]-1, out = polyFit)
-        polyLimits.append(polyFit.astype(int))
+        polyFit = np.clip(polyFit, 0, x.shape[0]-1)
+        polyLimits.append(np.round(polyFit).astype(int))
     return np.asarray(polyLimits)
         
 def medSmoothSlices(extSlices, nPix, MP=True, ncpus=None):
