@@ -313,11 +313,21 @@ for lstNum in range(len(waveLst)):
                 fwhmLst = results[1]
                 npts = waveCor[0].shape[1]
                 fwhmMapLst = waveSol.buildFWHMMap(pixCentLst, fwhmLst, npts)
-                #get max and min starting wavelength based on median of central slice (slice 8)
 
-                trimSlc = waveSol.trimWaveSlice([waveMap[8], flatSlices[8], 0.5])
-                waveMax = np.nanmedian(trimSlc[:,0])
-                waveMin = np.nanmedian(trimSlc[:,-1])
+                #get max and min starting wavelength based on median of central slice (slice 8)
+                if waveTrimThresh > 0:
+                    trimSlc = waveMapTrim[8]
+                else:
+                    trimSlc = waveMap[8]
+
+                #find median wavelength of first and last non-NaN columns
+                wCol = np.nanmedian(trimSlc, axis=0)
+
+                #find non-NaN columns
+                whr = np.where(np.isfinite(wCol))[0]
+        
+                waveMax = np.nanmedian(trimSlc[:,whr[0]])
+                waveMin = np.nanmedian(trimSlc[:,whr[-1]])
  
                 #determine length along spatial direction
                 ntot = 0
