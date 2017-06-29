@@ -1095,5 +1095,106 @@ def polyFitRonchiTrace(trace, goodReg, order=3, lngthConstraint=False, sigmaClip
 
     return polyTrace
 
+def extendTraceSlice2(input):
+    """
+    Routine to interpolate the Ronchi traces onto the provided pixel grid and extrapolate the fit towards regions that fall outside the Ronchi traces for a particular slice
+    Usage: z = extendTraceSlice(input), where input is a list containing:
+    trace - the tracing of the Ronchi mask
+    slc - the grid onto which the interpolation/extrapolation of the trace is applied
+    space - the physical spacing between Ronchi bands, in any unit
+    zero - the tracing of the zero-point of each slice, to provide better alignment between different slices
+    method - to determine the type of interpolation ("nearest" neighbour, bi-"linear" interpolation, "cubic" interpolation)
+    z is the interpolation/extrapolation of the Ronchi traces onto the grid
+    """
 
+    #rename input
+    trace = input[0]
+    slc = input[1]
+    space = input[2]
+    zero = input[3]
+    kind=input[4]
+    order =input[5]
+
+    z = np.empty(slc.shape, dtype=slc.dtype)
+    z[:] = np.nan
+    
+    for i in range(trace.shape[1]):
+        x = trace[:,i]
+        y = space*np.arange(trace.shape[0])
+        whr = np.where(np.isfinite(x))[0]
+        x=x[whr]
+        y=y[whr]
+        if kind.lower() == 'linear' or kind.lower() =='nearest':
+            fInter = interp1d(x,y, kind=kind, bounds_error=False, fill_value='extrapolate')
+        else:
+            fInter = interp1d(x,y, kind=kind, bounds_error=False, fill_value=np.nan)
+
+        z[:,i] = fInter(np.arange(slc.shape[0]))
+        
+    #check if the zero points are provided
+    if (zero is not None):
+        #use zeropoint trace to place grid on an absolute scale
+        #first determine spatial coordinate for each trace point
+        zeroInterp = np.empty(zero.shape)
+        zeroInterp[:] = np.nan
+
+        #zero pad z
+        zPad =np.zeros((z.shape[0]+2,z.shape[1]),dtype=z.dtype)
+        zPad[1:-1,:] = z
+        
+        #identify corresponding spatial coordinate from Ronchi interpolation
+        #using linear interpolation for increased precision (as trace likely falls between two grid points)
+        for i in range(zero.shape[0]):
+            
+            ia = np.floor(zero[i]).astype('int')
+            ib = ia+1
+            za= zPad[ia+1,i]
+            zb = zPad[ib+1,i]
+            zeroInterp[i] = (zero[i]-ia)*zb + (ib-zero[i])*za
+
+        #now subtract the zero value from each point to place on absoluate grid
+        z -= zeroInterp
+
+    return z
+
+def extendTraceAll2(traceLst, extSlices, zeroTraces,space=1/15.,order=4,method='linear', ncpus=None, MP=True):
+    """
+    Routine to interpolate the Ronchi traces onto the provided pixel grid and extrapolate the fit towards regions that fall outside the Ronchi traces for all slices
+    Usage: interpLst = extendTraceAll(traceLst, extSlices, zeroTraces, space=5., method='linear', ncpus=None, MP=True)
+    traceLst is a list providing the traces of the Ronchi mask for each individual slice
+    extSlices is a list providing a slice images that will be used as a grid onto which the interpolation/extrapolation of the trace is applied
+    space is the physical spacing between Ronchi bands, in any unit
+    zeroTraces is a list providing the tracing of the zero-point of each slice, to provide better alignment between different slices
+    method is a string indicating the type of interpolation to use ("nearest" neighbour, bi-"linear" interpolation, "cubic" interpolation)
+    ncpus is an integer indicating the number of simultanesously run processes, when in multiprocessing mode. An input of None allows the code to automatically determine this value
+    MP is a boolean indicating whether multiprocessing should be used
+    interpLst is the list of all traces interpolated onto the provided grid
+    """
+
+    #setup input list
+
+    if (MP ==False):
+        interpLst = []
+
+        for i in range(len(traceLst)):
+
+            if (zeroTraces is None):
+                interpLst.append(extendTraceSlice2([traceLst[i], extSlices[i], space, None, method,order]))
+            else:
+                interpLst.append(extendTraceSlice2([traceLst[i], extSlices[i], space, zeroTraces[i], method,order]))
+    else:
+        lst = []
+        for i in range(len(traceLst)):
+            if (zeroTraces is None):
+                lst.append([traceLst[i], extSlices[i], space, None, method, order])
+            else:        
+                lst.append([traceLst[i], extSlices[i], space, zeroTraces[i],method,order])
+
+        if (ncpus == None):
+            ncpus =mp.cpu_count()
+        pool = mp.Pool(ncpus)
+        interpLst = pool.map(extendTraceSlice2, lst)
+        pool.close()
+
+    return interpLst
 
