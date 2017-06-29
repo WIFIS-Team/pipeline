@@ -37,12 +37,19 @@ t0 = time.time()
 fileList = 'flat.lst' # a simple ascii file containing a list of the folder names that contain the ramp data
 darkListFile = None # list of processed dark ramps
 
+hband = True
+
 #mostly static input from here
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
 nlFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_NLCoeff.fits' # the non-linearity correction coefficients file        
 satFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_satCounts.fits' # the saturation limits file
 bpmFile = '/data/pipeline/external_data/bpm.fits' # the bad pixel mask
-distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_may/ronchiMap_limits.fits'
+
+if hband:
+    distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_june/hband/processed/20170607221050_flat_limits.fits'
+else:
+    distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_may/ronchiMap_limits.fits'
+
 
 #optional behaviour of pipeline
 plot = True #whether to plot the traces
@@ -50,13 +57,14 @@ crReject = False
 skipObsinfo = False
 skipDarkCheck = True
 
-hband = True
-
 #*****************************************************************************
 
 #NOTES
 #file list can be a 2D table: where all files to be coadded are on the same row and files to be processed separately are on different rows. *** NOT YET IMPLEMENTED
 
+if hband:
+    print('***WORKING ON H-BAND DATA***')
+    
 #first check if required input exists
 if not (os.path.exists(nlFile) and os.path.exists(satFile)):
     if not (os.path.exists(satFile)):
@@ -169,7 +177,7 @@ for lstNum in range(len(lst)):
             cont = wifisIO.userInput('Limits file already exists for ' +folder+', do you want to continue processing (y/n)?')
             if (not cont.lower() == 'y'):
                 print('Reading limits '+savename+'_flat_limits.fits instead')
-                limits, limitsHdr= wifisIO.readImgsFromFile(savename+'_flat_limits.fits')
+                finalLimits, limitsHdr= wifisIO.readImgsFromFile(savename+'_flat_limits.fits')
                 shft = limitsHdr['LIMSHIFT']
                 contProc2 = False
             else:
@@ -203,7 +211,7 @@ for lstNum in range(len(lst)):
             else:
                 finalLimits = polyLimits
                 shft = 0
-
+                
             #write distMapLimits + shft to file
             hdr.set('LIMSHIFT',shft, 'Limits shift relative to Ronchi slices')
             wifisIO.writeFits(finalLimits,savename+'_flat_limits.fits', hdr=hdr)
@@ -222,12 +230,12 @@ for lstNum in range(len(lst)):
                     plt.colorbar()
                     for l in range(limits.shape[0]):
                         plt.plot(limits[l], np.arange(limits.shape[1]),'k', linewidth=1) #drawn limits
-                        plt.plot(finalLimits[l]+shft, np.arange(limits.shape[1]),'r--', linewidth=1) #shifted ronchi limits, if provided, or polynomial fit
+                        plt.plot(np.clip(finalLimits[l]+shft,0, flatImg[4:-4,4:-4].shape[0]-1), np.arange(limits.shape[1]),'r--', linewidth=1) #shifted ronchi limits, if provided, or polynomial fit
                     pdf.savefig()
                     plt.close(fig)
 
         #get rid of reference pixels
-        flatImg = flatImg[4:-4, 4:4-4]
+        flatImg = flatImg[4:-4, 4:-4]
         sigmaImg = sigmaImg[4:-4, 4:-4]
         satFrame = satFrame[4:-4,4:-4]
 
@@ -251,7 +259,7 @@ for lstNum in range(len(lst)):
             sigmaSlices = slices.extSlices(sigmaImg, finalLimits, dispAxis=0, shft=shft)
 
             #extract saturation slices
-            satSlices = slices.extSlices(satFrame, finalLimits, dispAxis=0)
+            satSlices = slices.extSlices(satFrame, finalLimits, dispAxis=0, shft=shft)
 
             #write slices to file
             wifisIO.writeFits(flatSlices+sigmaSlices+satSlices,savename+'_flat_slices.fits',hdr=hdr)
