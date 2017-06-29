@@ -14,6 +14,7 @@ from astropy import convolution as conv
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib import gridspec
 from scipy.optimize import OptimizeWarning
+from scipy.interpolate import spline
 
 import warnings
 warnings.simplefilter('ignore', np.RankWarning)
@@ -115,8 +116,14 @@ def getSolQuick(input):
     sigmaLimit = input[14]
     allowSearch = input[15]
     sigmaClipRounds = input[16]
+    nMed = input[17]
     totPix = len(yRow)
 
+    #first make sure that the yRow isn't all NaNs
+
+    if np.all(~np.isfinite(yRow)):
+        return np.repeat(np.nan,mxorder+1), [],[], [],np.nan, np.repeat(np.nan,mxorder+1)
+    
     #get cross-correlation correction to correct any offsets to within 1 pixel
     #to improve search window and line identification
     if (mxCcor > 0):
@@ -133,24 +140,48 @@ def getSolQuick(input):
     #try to subtract any offset such that the noise level is at 0
     #using a recursive sigma clipping routine
     #may be unecessary if the proper processing already deals with this
-    
+
+    xFlr = np.arange(yRow.shape[0])
     tmp = yRow[np.isfinite(yRow)]
-    flr = np.nanmedian(tmp)
-    
-    for i in range(10):
-        whr = np.where((tmp-flr) < 3.*np.nanstd(tmp))
-        tmp = tmp[whr[0]]
+    xFlr = xFlr[np.isfinite(yRow)]
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore',RuntimeWarning)
         flr = np.nanmedian(tmp)
         
-    #measure the noise level - may be uneccessary if we can provide this from other routines
-    nse = np.nanstd(tmp)
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', RuntimeWarning)
-        nse = nse/(np.nanmax(yRow-flr))
+        for i in range(10):
+            whr = np.where((tmp-flr) < 3.*np.nanstd(tmp))
+            tmp = tmp[whr[0]]
+            xFlr = xFlr[whr[0]]
+            flr = np.nanmedian(tmp)
+
+        #get and subtract a cubic spline fitted to continuum
+        xSpline = [0]
+        ySpline = [np.nanmedian(yRow[0:int(nMed/2)])]
+
+        for i in range(0,yRow.shape[0]-nMed,nMed):
+            xSpline.append(i+nMed/2.)
+            ySpline.append(np.nanmedian(yRow[i:i+nMed]))
+
+        xSpline.append(yRow.shape[0]-1)
+        ySpline.append(np.nanmedian(yRow[-int(nMed/2):]))
+
+        tmp -= spline(xSpline,ySpline, xFlr, order=3)
+        flrFit = spline(xSpline,ySpline, np.arange(yRow.shape[0]), order=3)
+
+        #carry out one more round of pixel rejection after continuum subtraction
+        whr = np.where(tmp< 3.*np.nanstd(tmp))
+        tmp = tmp[whr[0]]
+                
+        #measure the noise level
+        nse = np.nanstd(tmp)
+        
+        #remove continuum from input spectrum
+        yRow -= flrFit
+        nse = nse/(np.nanmax(yRow))
     
         #normalize the spectra so that the predicted line strengths are on the same scale as the observed spectrum
-        yRow = (yRow-flr)/np.nanmax((yRow-flr))
-        template = template/np.nanmax(template)
+        yRow = yRow/np.nanmax(yRow)
+        template = template/np.nanmax(template) #for plotting purposes only
 
     #use this offset to determine window range and list of lines to use
     #base on provided dispersion solution from template, which is expected to be close enough
@@ -265,8 +296,8 @@ def getSolQuick(input):
                     
                     #check if S/N of range is sufficient for fitting
                     #requires at least two consecutive pixels > noise criteria
-                    if (yRng[mx] >= 3.*nse):
-                        if (yRng[mx-1] >= 3.*nse or yRng[mx+1] >= 3.*nse):
+                    if ((yRng[mx]-yRng.min()) >= sigmaLimit*nse):
+                        if ((yRng[mx-1]-yRng.min()) >= sigmaLimit*nse or (yRng[mx+1]-yRng.min()) >= sigmaLimit*nse):
                         #fit guassian to region to determine central location
                         #print('Trying to fit line', bestPix[i])
                             try:
@@ -450,7 +481,7 @@ def getSolQuick(input):
         return np.repeat(np.nan,mxorder+1), [],[], [],np.nan, np.repeat(np.nan,mxorder+1)
     
 
-def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None, allowLower=False, sigmaClip=2., lngthConstraint=False, MP=True, adjustFitWin=False, sigmaLimit=3, allowSearch=False, sigmaClipRounds=1):
+def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None, allowLower=False, sigmaClip=2., lngthConstraint=False, MP=True, adjustFitWin=False, sigmaLimit=3, allowSearch=False, sigmaClipRounds=1,nPixContFit=200):
     """
     Computes dispersion solution for each set of pixels along the dispersion axis in the provided image slices.
     Usage: output = getWaveSol(dataSlices, template, mxorder, prevSolution, winRng, mxCcor, weights, buildSol, ncpus, allowLower, sigmaClip, lngthConstraint)
@@ -547,11 +578,11 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
                         tmpSol = prevSol[i][j]
                         tmpTemp = tmpLst[i][j,:]
 
-                lst.append([dataLst[i][j,:],tmpTemp, bestLines, mxorder,tmpSol,winRng, mxCcor,weights, False, buildSol,allowLower,sigmaClip,lngthConstraint, adjustFitWin, sigmaLimit, allowSearch, sigmaClipRounds])
+                lst.append([dataLst[i][j,:],tmpTemp, bestLines, mxorder,tmpSol,winRng, mxCcor,weights, False, buildSol,allowLower,sigmaClip,lngthConstraint, adjustFitWin, sigmaLimit, allowSearch, sigmaClipRounds,nPixContFit])
                         
         else:
             for j in range(dataLst[i].shape[0]):
-                    lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, False, buildSol, allowLower, sigmaClip,lngthConstraint, adjustFitWin,sigmaLimit, allowSearch,sigmaClipRounds])
+                    lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, False, buildSol, allowLower, sigmaClip,lngthConstraint, adjustFitWin,sigmaLimit, allowSearch,sigmaClipRounds,nPixContFit])
 
     if (MP):
         #setup multiprocessing routines
@@ -731,7 +762,7 @@ def trimWaveSlice(input):
     slc is the trimmed wavelength mapped slice. All values outside of the trim limits are set to NaN
     """
 
-    slc = np.empty((input[0].shape))
+    slc = np.empty((input[0].shape), dtype=input[0].dtype)
     np.copyto(slc, input[0])
     flatSlc = np.empty(input[1].shape)
     np.copyto(flatSlc, input[1])
@@ -745,12 +776,12 @@ def trimWaveSlice(input):
         mx = np.nanmax(flatMed)
     
     #get rid of problematic values
-    flatSlc[~np.isfinite(flatSlc)] = 0.
+    #flatSlc[~np.isfinite(flatSlc)] = 0.
     with warnings.catch_warnings():
         warnings.simplefilter('ignore',RuntimeWarning)
-        whr = np.where(flatSlc < threshold*mx)
+        whr = np.where(flatMed < threshold*mx)[0]
         
-    slc[whr[0],whr[1]] = np.nan
+    slc[:,whr] = np.nan
 
     return slc
 
@@ -1123,3 +1154,194 @@ def cleanDispSol(result, plotFile=None, threshold=1.5):
                 plt.close()
                 
     return rmsClean, dispSolClean, pixSolClean
+
+def buildWaveMap2(dispSolLst, npts, fill_missing=True, extrapolate=False, MP=True, ncpus=None):
+    """
+    Routine to build a wavelength map from the provided dispersion solution list for each image slice
+    Usage: waveMapLst = buildWaveMap(dispSolLst, npts)
+    dispSolLst is a list of arrays providing the measured dispersion solution for each pixel in the image slice
+    npts sets the length of the resulting image
+    waveMapLst is the output image providing the wavelength at each pixel
+    """
+
+    x = np.arange(npts)
+
+    inpLst = []
+
+    if MP:
+        #build input list
+        for i in range(len(dispSolLst)):
+            inpLst.append([dispSolLst[i], x, fill_missing, extrapolate])
+
+        #setup multiprocessing routines
+        if (ncpus == None):
+            ncpus =mp.cpu_count()
+        pool = mp.Pool(ncpus)
+
+        #run code
+        waveMapLst = pool.map(buildWaveMap2Slice, inpLst)
+        pool.close()
+    else:
+        waveMapLst = []
+
+        for i in range(len(dispSolLst)):
+            waveMapLst.append(buildWaveMap2Slice([dispSolLst[i], x, fill_missing, extrapolate]))
+
+    return waveMapLst
+
+def buildWaveMap2Slice(input):
+    """
+    """
+
+    dispSol = input[0]
+    x = input[1]
+    npts = x.shape[0]
+    fill_missing = input[2]
+    extrapolate = input[3]
+    
+    #initialize wave map array
+    waveMap = np.zeros((len(dispSol),npts),dtype='float32')
+        
+    #populate map with solution
+    for i in range(len(dispSol)):
+        wave = 0.
+
+        for j in range(dispSol[i].shape[0]):
+            wave += dispSol[i][j]*x**j
+                
+        waveMap[i,:] = wave
+
+    #now fill in rows with missing solutions
+    if (fill_missing):
+        good = []
+        bad = []
+            
+        for i in range(waveMap.shape[0]):
+            #assume that either all points are NaN or none
+            if np.any(np.isfinite(waveMap[i,:])):
+                good.append(i)
+            else:
+                bad.append(i)
+                    
+        xint = np.asarray(good)
+        bad = np.asarray(bad)
+            
+        if (bad.shape[0]>0) :
+            finter = interp1d(xint,waveMap[good,:],kind='linear', bounds_error=False,axis=0)
+            waveMap[bad,:] = finter(bad)
+
+    if extrapolate:
+        #first check if extrapolation is needed
+        if np.any(~np.isfinite(waveMap)):
+            whrGood = np.where(np.isfinite(waveMap[:,j]))[0]
+            whrBad = np.where(~np.isfinite(waveMap[:,j]))[0]
+            
+            xfit = x[whrGood]
+            xBad = x[whrBad]
+                
+            for j in range(waveMap.shape[1]):
+                yfit = waveMap[whrGood,j]
+                pcoef = np.polyfit(xfit, yfit, 1)
+                poly = np.poly1d(pcoef)
+                waveMap[whrBad,j] = poly(xBad)
+                              
+    return waveMap
+    
+def smoothWaveMapAll(waveMapLst, smth=3, MP=True, ncpus=None):
+    """
+    """
+
+    inpLst = []
+
+    gKern = conv.Gaussian1DKernel(smth)
+    
+    if MP:
+        #build input list
+        for i in range(len(waveMapLst)):
+            inpLst.append([waveMapLst[i],gKern])
+
+        #setup multiprocessing routines
+        if (ncpus == None):
+            ncpus =mp.cpu_count()
+        pool = mp.Pool(ncpus)
+
+        #run code
+        waveMapOut = pool.map(smoothWaveMapSlice, inpLst)
+                        
+        pool.close()
+    else:
+        waveMapOut = []
+
+        for i in range(len(waveMapLst)):
+            waveMapOut.append(smoothWaveMapSlice([waveMapLst[i], gKern]))
+
+    return waveMapOut
+                               
+
+def smoothWaveMapSlice(input):
+    """
+    """
+
+    waveMap = input[0]
+    gKern = input[1]
+    
+    waveSmth = np.empty(waveMap.shape, dtype=waveMap.dtype)
+    waveSmth[:] = np.nan
+
+    
+    for i in range(waveMap.shape[1]):
+        waveSmth[:,i] = conv.convolve(waveMap[:,i],gKern,boundary='extend')
+    
+    return waveSmth
+
+def polyFitWaveMapSlice(input):
+    """
+    """
+
+    waveMap = input[0]
+    degree = input[1]
+    
+    waveFit = np.empty(waveMap.shape, dtype=waveMap.dtype)
+    waveFit[:] = np.nan
+
+    x = np.arange(waveMap.shape[0])
+    whr = np.where(np.isfinite(waveMap[:,0]))
+    whr = whr[0]
+    
+    xfit = x[whr]
+    
+    for i in range(waveMap.shape[1]):
+        pcoef = np.polyfit(xfit,waveMap[whr,i],degree)
+        poly = np.poly1d(pcoef)
+        waveFit[:,i] = poly(x)
+    
+    return waveFit
+
+def polyFitWaveMapAll(waveMapLst, degree=3, MP=True, ncpus=None):
+    """
+    """
+
+    inpLst = []
+
+    if MP:
+        #build input list
+        for i in range(len(waveMapLst)):
+            inpLst.append([waveMapLst[i],degree])
+
+        #setup multiprocessing routines
+        if (ncpus == None):
+            ncpus =mp.cpu_count()
+        pool = mp.Pool(ncpus)
+
+        #run code
+        waveMapOut = pool.map(polyFitWaveMapSlice, inpLst)
+                        
+        pool.close()
+    else:
+        waveMapOut = []
+
+        for i in range(len(waveMapLst)):
+            waveMapOut.append(polyFitWaveMapSlice([waveMapLst[i], degree]))
+
+    return waveMapOut
+                            
