@@ -177,13 +177,20 @@ def compWaveGrid(waveTrimSlices):
     wMax = []
     deltaW = []
     for w in waveTrimSlices:
-        wmin=np.nanmin(w)
-        wmax= np.nanmax(w)
+        #get a version of collapsed slice
+        wCol = np.nanmedian(w, axis=0)
+
+        #find first non-NaN column
+        whr = np.where(np.isfinite(wCol))[0]
+        wTmp = wCol[whr]
+        
+        wmin=np.nanmin(w[:,whr])
+        wmax= np.nanmax(w[:,whr])
 
         wMin.append(wmin)
         wMax.append(wmax)
 
-        n = w.shape[1]
+        n = wTmp.shape[0]
         deltaW.append((wmax-wmin)/(n-1))
         
     waveMin = np.min(wMin)
