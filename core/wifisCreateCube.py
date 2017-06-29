@@ -101,8 +101,8 @@ def distCorSlice1D(input):
         nSpat = float(spatGridProps[2])
     else:
         nSpat = dataSlc.shape[0]
-        minSpat = np.min(distSlc)
-        maxSpat = np.max(distSlc)
+        minSpat = np.nanmin(distSlc)
+        maxSpat = np.nanmax(distSlc)
 
     xout = np.linspace(minSpat,maxSpat, num=int(nSpat))
     
