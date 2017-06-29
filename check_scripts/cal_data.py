@@ -21,9 +21,12 @@ os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target
 #*****************************************************************************
 #REQUIRED INPUT
 #likely changes for each obs
+
+hband = False
+
 flatInfoFile = 'flat.lst'
 waveInfoFile = 'wave.lst'
-obsLstFile = 'obs.lst'
+obsLstFile = 'sky.lst'
 skyLstFile = None #'sky.lst'
 darkInfoFile = 'dark.lst'
 noFlat = False
@@ -31,21 +34,29 @@ noFlat = False
 #likely static
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
 
-#may
-distMapFile = '/home/jason/wifis/data/ronchi_map_may/distortionMap.fits'
-distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_may/ronchiMap_limits.fits'
-spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_may/spatGridProps.dat'
+if hband:
+    waveTempFile = '/data/pipeline/external_data/waveTemplate_hband.fits'
+    waveTempResultsFile = '/data/pipeline/external_data/waveTemplate_hband_fitResults.pkl'
+    distMapFile = '/home/jason/wifis/data/ronchi_map_june/hband/processed/20170607222050_ronchi_distMap.fits'
+    spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_june/hband/processed/20170607222050_ronchi_spatGridProps.dat'
 
-#june
-#distMapFile = '/home/jason/wifis/data/ronchi_map_june/20170607010313/processed/20170607001609_ronchi_distMap.fits'
-#distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_june/20170607010313/processed/20170607001828_flat_limits.fits'
-#spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_june/20170607010313/processed/20170607001609_ronchi_spatGridProps.dat'
+else:
+    waveTempFile = '/data/pipeline/external_data/waveTemplate.fits'
+    waveTempResultsFile = '/data/pipeline/external_data/waveTemplateFittingResults.pkl'
 
-satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits'
+    #may
+    distMapFile = '/home/jason/wifis/data/ronchi_map_may/distortionMap.fits'
+    distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_may/ronchiMap_limits.fits'
+    spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_may/spatGridProps.dat'
+
+    #june
+    #distMapFile = '/home/jason/wifis/data/ronchi_map_june/20170607010313/processed/20170607001609_ronchi_distMap.fits'
+    #distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_june/20170607010313/processed/20170607001828_flat_limits.fits'
+    #spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_june/20170607010313/processed/20170607001609_ronchi_spatGridProps.dat'
+
+nlFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_NLCoeff.fits'        
+satFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_satCounts.fits'
 bpmFile = '/data/pipeline/external_data/bpm.fits'
-nlFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_NLCoeff.fits'
-waveTempFile = '/data/pipeline/external_data/waveTemplate.fits'
-waveTempResultsFile = '/data/pipeline/external_data/waveTemplateFittingResults.pkl'
 atlasFile = '/data/pipeline/external_data/best_lines2.dat'
 
 #pixel scale
@@ -66,6 +77,18 @@ mxOrder = 3
 ndiv = 1
 if ndiv == 0:
     yScale = yScale*35/18.
+
+cleanDispSol = True
+if hband:
+    cleanDispThresh = 1.5
+    waveTrimThresh=0.25
+else:
+    cleanDispThresh = 1.5
+    waveTrimThresh = 0
+    
+sigmaClipRounds=2 #number of iterations when sigma-clipping of dispersion solution
+sigmaClip = 2 #sigma-clip cutoff when sigma-clipping dispersion solution
+sigmaLimit= 3 #relative noise limit (x * noise level) for which to reject lines
 
 #*****************************************************************************
 
@@ -112,7 +135,18 @@ if not os.path.exists('processed/'+flatFolder+'_flat_limits.fits'):
     #get limits
     print('Getting limits relative to distortion map')
     limits = slices.findLimits(flat,limSmth=20, rmRef=True)
-    shft = np.nanmedian(limits[1:-1,:] - distMapLimits[1:-1,:])
+
+    if hband:
+        #only use region with suitable flux
+        flatImgMed = np.nanmedian(flat[4:-4,4:-4], axis=1)
+        flatImgMedGrad = np.gradient(flatImgMed)
+        medMax = np.nanargmax(flatImgMed)
+        lim1 = np.nanargmax(flatImgMedGrad[:medMax])
+        lim2 = np.nanargmin(flatImgMedGrad[medMax:])+medMax
+        shft = int(np.nanmedian(limits[1:-1,lim1:lim2+1] - distMapLimits[1:-1,lim1:lim2+1]))
+    else:
+        shft = int(np.nanmedian(limits[1:-1,:] - distMapLimits[1:-1,:]))
+
     flatHdr.set('LIMSHIFT',shft, 'Limits shift relative to Ronchi slices')
     wifisIO.writeFits(limits, 'processed/'+flatFolder+'_flat_limits.fits', hdr=flatHdr)
 else:
@@ -123,7 +157,7 @@ if darkFolder is not None:
     print('subtracting dark from flat')
     flat -= dark
     
-flat = flat[4:2044, 4:2044]
+flat = flat[4:-4, 4:-4]
 
 #get shift compared to ronchi mask
 if not os.path.exists('processed/'+flatFolder+'_flat_slices.fits'):
@@ -133,7 +167,7 @@ if not os.path.exists('processed/'+flatFolder+'_flat_slices.fits'):
 else:
     flatSlices,flatHdr = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_slices.fits')
     
-if not os.path.exists('processed/'+flatFolder+'_flat_slcies_norm.fits'):
+if not os.path.exists('processed/'+flatFolder+'_flat_slices_norm.fits'):
     print('Getting normalized slices')
     #get normalized flat field slices
     flatNorm = slices.getResponseAll(flatSlices, 0, 0.1)
@@ -153,7 +187,7 @@ else:
     wave = wifisIO.readImgsFromFile('processed/'+waveFolder+'_wave.fits')[0]
     
 #remove reference pixels
-wave = wave[4:2044,4:2044]
+wave = wave[4:-4,4:-4]
 
 if not os.path.exists('processed/'+waveFolder+'wave_slices.fits'):
     print('extracting wave slices')
@@ -177,26 +211,37 @@ if not os.path.exists('processed/'+waveFolder+'_wave_fitResults.pkl'):
     templateResults = wifisIO.readPickle(waveTempResultsFile)
     prevSol = templateResults[5]
 
-    result = waveSol.getWaveSol(waveCor, template, atlasFile,mxOrder, prevSol, winRng=9, mxCcor=150, weights=False, buildSol=False, allowLower=False, sigmaClip=2, lngthConstraint = True, MP=True, adjustFitWin=False, allowSearch=False, sigmaClipRounds=1)
+    results = waveSol.getWaveSol(waveCor, template, atlasFile, 3, prevSol, winRng=9, mxCcor=150, weights=False, buildSol=False, sigmaClip=sigmaClip, allowLower=False, lngthConstraint=True, MP=True, adjustFitWin=True, sigmaLimit=sigmaLimit, allowSearch=False, sigmaClipRounds=sigmaClipRounds)
 
-    wifisIO.writePickle(result, 'processed/'+waveFolder+'_wave_fitResults.pkl')
+    wifisIO.writePickle(results, 'processed/'+waveFolder+'_wave_fitResults.pkl')
 else:
-    result = wifisIO.readPickle('processed/'+waveFolder+'_wave_fitResults.pkl')
+    results = wifisIO.readPickle('processed/'+waveFolder+'_wave_fitResults.pkl')
     
-if not os.path.exists('processed/'+waveFolder+'_wave_waveMap.fits'):
+if not os.path.exists('processed/'+waveFolder+'_wave_waveMap.fits') or not os.path.exists('processed/'+waveFolder+'_wave_waveGridProps.dat'):
     print('Building wavelegth map')
+    
     wifisIO.createDir('quality_control')
-    rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(result, plotFile='quality_control/'+waveFolder+'_wave_waveFit_rms.pdf')
+    rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(results, plotFile='quality_control/'+waveFolder+'_wave_waveFit_rms.pdf', threshold = cleanDispThresh)
 
-    #resultClean = [dispSolClean, result[1],result[2],result[3], rmsClean, pixSolClean]
-    #wifisIO.writePickle(resultClean, 'processed/'+waveFolder+'_waveFitResults_cleaned.pkl')
+    waveMapLst = waveSol.buildWaveMap2(dispSolClean, waveCor[0].shape[1],fill_missing=True, extrapolate=True)
 
-    waveMap = waveSol.buildWaveMap(dispSolClean, waveCor[0].shape[1], extrapolate=True)
+    #smooth waveMap solution to avoid pixel-to-pixel jumps
+    waveMap = waveSol.smoothWaveMapAll(waveMapLst,smth=1,MP=True )
+
     wifisIO.writeFits(waveMap, 'processed/'+waveFolder+'_wave_waveMap.fits', ask=False)
 
     #now trim wavemap if needed
-
-    waveGridProps = createCube.compWaveGrid(waveMap)
+    if waveTrimThresh > 0:
+        print('Trimming wavelength map to useful range')
+        #now trim wavemap if needed
+        #read in unnormalized flat field data
+        waveMapTrim = waveSol.trimWaveSliceAll(waveMap, flatSlices, waveTrimThresh)
+                
+        #get wave grid properties
+        waveGridProps = createCube.compWaveGrid(waveMapTrim)
+    else:
+        waveGridProps = createCube.compWaveGrid(waveMap) 
+           
     wifisIO.writeTable(waveGridProps, 'processed/'+waveFolder+'_wave_waveGridProps.dat')
 else:
     waveMap = wifisIO.readImgsFromFile('processed/'+waveFolder+'_wave_waveMap.fits')[0]
@@ -232,7 +277,7 @@ for i in range(len(obsLst)):
     data, sigmaImg, satFrame, hdr = processRamp.auto(dataFolder, rootFolder,'processed/'+dataFolder+'_obs.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=False)
     
     #remove reference pixels
-    data = data[4:2044,4:2044]
+    data = data[4:-4,4:-4]
 
     if skyLst is not None:
         skyFolder = skyLst[i]
@@ -240,14 +285,14 @@ for i in range(len(obsLst)):
         sky, sigmaImg, satFrame, hdrSky = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2,saveAll=False)
 
         #remove reference pixels
-        sky = sky[4:2044,4:2044]
+        sky = sky[4:-4,4:-4]
 
         #subtract sky from data at this stage
         print('Subtracting sky from obs')
         data -= sky
     else:
         if darkFolder is not None:
-            data -= dark[4:2044,4:2044]
+            data -= dark[4:-4,4:-4]
             
     print('Extracting slices')
     #extracting slices
