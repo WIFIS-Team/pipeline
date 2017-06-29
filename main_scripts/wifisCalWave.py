@@ -36,30 +36,40 @@ plt.ioff()
 waveList = 'wave.lst' 
 flatList = 'flat.lst'
 
-hband = False
+hband = True
 
 #mostly static input
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
 
 if hband:
-    templateFile = '/data/pipeline/external_data/hband_template.fits'
-    prevResultsFile = '/data/pipeline/external_data/hband_template.pkl'
+    templateFile = '/data/pipeline/external_data/waveTemplate_hband.fits'
+    prevResultsFile = '/data/pipeline/external_data/waveTemplate_hband_fitResults.pkl'
+    distMapFile = '/home/jason/wifis/data/ronchi_map_june/hband/processed/20170607222050_ronchi_distMap.fits'
+    spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_june/hband/processed/20170607222050_ronchi_spatGridProps.dat'
+
 else:
     templateFile = '/data/pipeline/external_data/waveTemplate.fits'
     prevResultsFile = '/data/pipeline/external_data/waveTemplateFittingResults.pkl'
+    distMapFile = '/home/jason/wifis/data/ronchi_map_may/distortionMap.fits'
+    spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_may/spatGridProps.dat'
+
     
 nlFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_NLCoeff.fits'        
 satFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_satCounts.fits'
 bpmFile = '/data/pipeline/external_data/bpm.fits'
 atlasFile = '/data/pipeline/external_data/best_lines2.dat'
-distMapFile = '/home/jason/wifis/data/ronchi_map_may/distortionMap.fits'
-spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_may/spatGridProps.dat'
 
 #optional behaviour
 plot = True
 crReject = False
 cleanDispSol = True
-waveTrimThresh=0.1
+if hband:
+    cleanDispThresh = 1.5
+    waveTrimThresh=0.25
+else:
+    cleanDispThresh = 1.5
+    waveTrimThresh = 0
+    
 sigmaClipRounds=2 #number of iterations when sigma-clipping of dispersion solution
 sigmaClip = 2 #sigma-clip cutoff when sigma-clipping dispersion solution
 sigmaLimit= 3 #relative noise limit (x * noise level) for which to reject lines
@@ -103,6 +113,7 @@ flatLst = wifisIO.readAsciiList(flatList)
 
 if (waveLst.ndim == 0):
     waveLst = np.asarray([waveLst])
+if (flatLst.ndim == 0):
     flatLst = np.asarray([flatLst])
     
 for lstNum in range(len(waveLst)):
@@ -173,7 +184,7 @@ for lstNum in range(len(waveLst)):
             sigmaSlices = slices.extSlices(sigmaImg, limits, dispAxis=0)
             satSlices = slices.extSlices(satFrame, limits, dispAxis=0)
 
-            wifisIO.writeFits(waveSlices + sigmaSlices + satSlices, savename+'_wave_slices.fits', ask=False)
+            wifisIO.writeFits(waveSlices + sigmaSlices + satSlices, savename+'_wave_slices.fits', hdr=hdr,ask=False)
 
             flatNormLst = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_slices_norm.fits')[0]
             flatNorm = flatNormLst[0:18]
@@ -212,10 +223,12 @@ for lstNum in range(len(waveLst)):
             #read in template results to extract lambda -> wavelength solution
             prevResults = wifisIO.readPickle(prevResultsFile)
             prevSol = prevResults[5]
-            
-            results = waveSol.getWaveSol(waveCor, template, atlasFile, 3, prevSol, winRng=9, mxCcor=150, weights=False, buildSol=False, sigmaClip=sigmaClip, allowLower=False, lngthConstraint=True, MP=True, adjustFitWin=True, sigmaLimit=sigmaLimit, allowSearch=False, sigmaClipRounds=sigmaClipRounds)
 
-            print(cheese)
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore', RuntimeWarning)
+
+                results = waveSol.getWaveSol(waveCor, template, atlasFile, 3, prevSol, winRng=9, mxCcor=150, weights=False, buildSol=False, sigmaClip=sigmaClip, allowLower=False, lngthConstraint=True, MP=True, adjustFitWin=True, sigmaLimit=sigmaLimit, allowSearch=False, sigmaClipRounds=sigmaClipRounds)
+
             #Save all results
             wifisIO.writePickle(results, savename+'_wave_fitResults.pkl')
 
@@ -238,9 +251,9 @@ for lstNum in range(len(waveLst)):
             if cleanDispSol:
                 print('Finding and replacing bad solutions')
                 if plot:
-                    rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(results, plotFile='quality_control/'+waveFolder+'_wave_waveFit_rms.pdf')
+                    rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(results, plotFile='quality_control/'+waveFolder+'_wave_waveFit_rms.pdf', threshold=cleanDispThresh)
                 else:
-                    rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(results, plotFile=None)
+                    rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(results, plotFile=None, threshold=cleanDispThresh)
             else:
                 dispSolClean = result[0]
 
@@ -259,9 +272,12 @@ for lstNum in range(len(waveLst)):
             
             print('Creating wavelength map')
             #Create wavemap
-            waveMap = waveSol.buildWaveMap(dispSolLst, waveCor[0].shape[1])
+            waveMapLst = waveSol.buildWaveMap2(dispSolLst, waveCor[0].shape[1], extrapolate=False, fill_missing=False)
+            waveMap = waveSol.smoothWaveMapAll(waveMapLst,smth=1,MP=True )
+            #waveMap = waveSol.polyFitWaveMapAll(waveMapLst, degree=1, MP=True)
 
             if waveTrimThresh > 0:
+                print('Trimming wavelength map to useful range')
                 #now trim wavemap if needed
                 #read in unnormalized flat field data
                 flatSlices = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_slices.fits')[0][0:18]
@@ -278,7 +294,7 @@ for lstNum in range(len(waveLst)):
             
             print('placing arc image on grid')
             waveGrid = createCube.waveCorAll(waveCor, waveMap, waveGridProps=waveGridProps)
-            wifisIO.writeFits(waveGrid, savename+'_wave_fullGrid.fits', ask=False)
+            wifisIO.writeFits(waveGrid, savename+'_wave_fullGrid.fits', hdr=hdr,ask=False)
             
             if plot:
                 print('Getting quality control checks')
@@ -323,8 +339,8 @@ for lstNum in range(len(waveLst)):
                     strt += f.shape[0]
 
                 #save results
-                wifisIO.writeFits(waveMapImg, 'quality_control/'+waveFolder+'_wave_wavelength_map.fits', ask=False)
-                wifisIO.writeFits(fwhmMap, 'quality_control/'+waveFolder+'_wave_fwhm_map.fits', ask=False)
+                wifisIO.writeFits(waveMapImg, 'quality_control/'+waveFolder+'_wave_wavelength_map.fits', hdr=hdr,ask=False)
+                wifisIO.writeFits(fwhmMap, 'quality_control/'+waveFolder+'_wave_fwhm_map.fits',hdr=hdr, ask=False)
 
                 #get improved clim for plotting
                 with warnings.catch_warnings():
