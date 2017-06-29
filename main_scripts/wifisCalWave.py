@@ -272,9 +272,20 @@ for lstNum in range(len(waveLst)):
             
             print('Creating wavelength map')
             #Create wavemap
-            waveMapLst = waveSol.buildWaveMap2(dispSolLst, waveCor[0].shape[1], extrapolate=False, fill_missing=False)
+            #use linear interpolation and extrapolation to fill in missing solutions
+            #waveMapLst = waveSol.buildWaveMap(dispSolLst, waveCor[0].shape[1], extrapolate=False, fill_missing=False)
+
+            #use linear interpolation and polynomial fitting to extrapolate for missing solutions
+            waveMapLst = waveSol.buildWaveMap2(dispSolLst, waveCor[0].shape[1], extrapolate=True, fill_missing=True)
+
+            #smooth waveMap solution to avoid pixel-to-pixel jumps
             waveMap = waveSol.smoothWaveMapAll(waveMapLst,smth=1,MP=True )
+
+            #replace wavemap with polynomial fit
             #waveMap = waveSol.polyFitWaveMapAll(waveMapLst, degree=1, MP=True)
+
+            #save wavemap solution
+            wifisIO.writeFits(waveMap, savename+'_wave_waveMap.fits',hdr=hdr, ask=False)
 
             if waveTrimThresh > 0:
                 print('Trimming wavelength map to useful range')
@@ -282,13 +293,12 @@ for lstNum in range(len(waveLst)):
                 #read in unnormalized flat field data
                 flatSlices = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_slices.fits')[0][0:18]
                 waveMapTrim = waveSol.trimWaveSliceAll(waveMap, flatSlices, waveTrimThresh)
-                waveMap = waveMapTrim
-
-            #save wavemap solution
-            wifisIO.writeFits(waveMap, savename+'_wave_waveMap.fits',hdr=hdr, ask=False)
-
-            #get wave grid properties
-            waveGridProps = createCube.compWaveGrid(waveMap)
+                
+                #get wave grid properties
+                waveGridProps = createCube.compWaveGrid(waveMapTrim)
+            else:
+                waveGridProps = createCube.compWaveGrid(waveMap) 
+           
             wifisIO.writeTable(waveGridProps, savename+'_wave_waveGridProps.dat')
 
             
