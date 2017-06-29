@@ -34,7 +34,7 @@ def crossCor (spectrum, template,mx):
     if (len(spectrum) != len(template)):
         raise InputError('spectrum and template MUST have same length')
 
-    rng = np.arange(spectrum.shape[0]*2-1)-spectrum.shape[0]
+    rng = np.arange(spectrum.shape[0]*2-1)-spectrum.shape[0]+1
     lag = np.correlate(spectrum, template, mode="full")
     whr = np.where(np.abs(rng) < mx)
     rng = rng[whr[0]]
