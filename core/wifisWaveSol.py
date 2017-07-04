@@ -116,7 +116,7 @@ def getSolQuick(input):
     sigmaLimit = input[14]
     allowSearch = input[15]
     sigmaClipRounds = input[16]
-    nMed = input[17]
+    nCont = input[17]
     totPix = len(yRow)
 
     #first make sure that the yRow isn't all NaNs
@@ -142,8 +142,12 @@ def getSolQuick(input):
     #may be unecessary if the proper processing already deals with this
 
     xFlr = np.arange(yRow.shape[0])
-    tmp = yRow[np.isfinite(yRow)]
-    xFlr = xFlr[np.isfinite(yRow)]
+    whr = np.where(np.isfinite(yRow))[0]
+    tmp = yRow[whr]
+    ytmp = yRow[whr]
+    xtmp = np.arange(yRow.shape[0])[whr]
+    xFlr = xFlr[whr]
+    
     with warnings.catch_warnings():
         warnings.simplefilter('ignore',RuntimeWarning)
         flr = np.nanmedian(tmp)
@@ -155,15 +159,15 @@ def getSolQuick(input):
             flr = np.nanmedian(tmp)
 
         #get and subtract a cubic spline fitted to continuum
-        xSpline = [0]
-        ySpline = [np.nanmedian(yRow[0:int(nMed/2)])]
+        xSpline = [xtmp[0]]
+        ySpline = [np.nanmedian(ytmp[0:int(nCont/2)])]
 
-        for i in range(0,yRow.shape[0]-nMed,nMed):
-            xSpline.append(i+nMed/2.)
-            ySpline.append(np.nanmedian(yRow[i:i+nMed]))
+        for i in range(0,yRow.shape[0]-nCont,nCont):
+            xSpline.append(i+nCont/2.)
+            ySpline.append(np.nanmedian(ytmp[i:i+nCont]))
 
-        xSpline.append(yRow.shape[0]-1)
-        ySpline.append(np.nanmedian(yRow[-int(nMed/2):]))
+        xSpline.append(xtmp[-1])
+        ySpline.append(np.nanmedian(ytmp[-int(nCont/2):]))
 
         tmp -= spline(xSpline,ySpline, xFlr, order=3)
         flrFit = spline(xSpline,ySpline, np.arange(yRow.shape[0]), order=3)
