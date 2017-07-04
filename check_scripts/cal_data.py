@@ -26,10 +26,11 @@ hband = False
 
 flatInfoFile = 'flat.lst'
 waveInfoFile = 'wave.lst'
-obsLstFile = 'sky.lst'
-skyLstFile = None #'sky.lst'
+obsLstFile = 'obs.lst'
+skyLstFile = 'sky.lst'
 darkInfoFile = 'dark.lst'
 noFlat = False
+skySubFirst = False
 
 #likely static
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
@@ -114,7 +115,7 @@ if darkInfoFile is not None:
     
     if not os.path.exists('processed/'+darkFolder+'_dark.fits'):
         darkFolder = wifisIO.readAsciiList(darkInfoFile).tostring()
-        print('processing dark')
+        print('Processing dark')
 
         dark, sigmaImg, satFrame, hdr = processRamp.auto(darkFolder, rootFolder,'processed/'+darkFolder+'_dark.fits', satCounts, nlCoeff, None, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=0, saveAll=False, ignoreBPM=True)
     else:
@@ -126,7 +127,7 @@ else:
 flatFolder = wifisIO.readAsciiList(flatInfoFile).tostring()
 
 if not os.path.exists('processed/'+flatFolder+'_flat.fits'):
-    print('processing flat')
+    print('Processing flat')
     flat, sigmaImg, satFrame, flatHdr = processRamp.auto(flatFolder, rootFolder,'processed/'+flatFolder+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=20, saveAll=False)
 else:
     flat,flatHdr = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat.fits')
@@ -154,7 +155,7 @@ else:
     shft = flatHdr['LIMSHIFT']
     
 if darkFolder is not None:
-    print('subtracting dark from flat')
+    print('Subtracting dark from flat')
     flat -= dark
     
 flat = flat[4:-4, 4:-4]
@@ -181,7 +182,7 @@ spatGridProps = wifisIO.readTable(spatGridPropsFile)
 
 waveFolder = wifisIO.readAsciiList(waveInfoFile).tostring()
 if not os.path.exists('processed/'+waveFolder+'_wave.fits'):
-    print('processing arc image')
+    print('Processing arc image')
     wave, sigmaImg, satFrame, hdr = processRamp.auto(waveFolder, rootFolder,'processed/'+waveFolder+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=0, saveAll=False)
 else:
     wave = wifisIO.readImgsFromFile('processed/'+waveFolder+'_wave.fits')[0]
@@ -190,7 +191,7 @@ else:
 wave = wave[4:-4,4:-4]
 
 if not os.path.exists('processed/'+waveFolder+'wave_slices.fits'):
-    print('extracting wave slices')
+    print('Extracting wave slices')
     waveSlices = slices.extSlices(wave,  distMapLimits, shft=shft)
     wifisIO.writeFits(waveSlices, 'processed/'+waveFolder+'_wave_slices.fits', ask=False)
 else:
@@ -206,7 +207,7 @@ else:
     waveCor = wifisIO.readImgsFromFile('processed/'+waveFolder+'_wave_slices_distCor.fits')[0]
 
 if not os.path.exists('processed/'+waveFolder+'_wave_fitResults.pkl'):
-    print('getting dispersion solution')
+    print('Getting dispersion solution')
     template = wifisIO.readImgsFromFile(waveTempFile)[0]
     templateResults = wifisIO.readPickle(waveTempResultsFile)
     prevSol = templateResults[5]
@@ -273,31 +274,128 @@ for i in range(len(obsLst)):
 
     print('Working on data folder ' + dataFolder)
 
-    print('Processing science data')
-    data, sigmaImg, satFrame, hdr = processRamp.auto(dataFolder, rootFolder,'processed/'+dataFolder+'_obs.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=False)
-    
+    if not os.path.exists('processed/'+dataFolder+'_obs.fits'):
+        print('Processing science data')
+        data, sigmaImg, satFrame, hdr = processRamp.auto(dataFolder, rootFolder,'processed/'+dataFolder+'_obs.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=False)
+    else:
+        print('Reading science data from file')
+        data, hdr = wifisIO.readImgsFromFile('processed/'+dataFolder+'_obs.fits')
+        
     #remove reference pixels
     data = data[4:-4,4:-4]
 
     if skyLst is not None:
         skyFolder = skyLst[i]
-        print('Processing sky data')
-        sky, sigmaImg, satFrame, hdrSky = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2,saveAll=False)
+        
+        if not os.path.exists('processed/'+skyFolder+'_sky.fits'):
+            print('Processing sky data')
+        
+            sky, sigmaImg, satFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2,saveAll=False)
+        else:
+            sky,skyHdr = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky.fits')
 
-        #remove reference pixels
-        sky = sky[4:-4,4:-4]
+        if skySubFirst:
+            #remove reference pixels
+            sky = sky[4:-4,4:-4]
 
-        #subtract sky from data at this stage
-        print('Subtracting sky from obs')
-        data -= sky
+            #subtract sky from data at this stage
+            print('Subtracting sky from obs')
+            data -= sky
+            skySwitch = '_skySub'
+        else:
+            sky = sky[4:-4,4:-4]
+            skySwitch = ''
+            
+            #slices stage
+            if not os.path.exists('processed/'+skyFolder+'_sky_slices.fits'):
+                print('Extracting sky slices')
+                #extracting slices
+                skySlices = slices.extSlices(sky, distMapLimits, shft=shft)
+                wifisIO.writeFits(skySlices, 'processed/'+skyFolder+'_sky_slices.fits', ask=False)
+            else:
+                skySlices = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky_slices.fits')[0]
+
+            #distortion correction stage
+            contProc2 = False
+            if noFlat:
+                if not os.path.exists('processed/'+skyFolder+'_sky_slices_distCor_noFlat.fits'):
+                    skyFlat = skySlices
+                    contProc2 = True
+                else:
+                    skyCor = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky_slices_distCor_noFlat.fits')[0]
+            else:
+                if not os.path.exists('processed/'+skyFolder+'_sky_slices_distCor.fits'):
+                    skyFlat = slices.ffCorrectAll(skySlices, flatNorm)
+                    contProc2 = True
+                else:
+                    skyCor = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky_slices_distCor.fits')[0]
+
+            if contProc2:
+                print('distortion correcting sky slices')
+                skyCor = createCube.distCorAll(skyFlat, distMap, spatGridProps=spatGridProps)
+
+                if noFlat:
+                    wifisIO.writeFits(skyCor, 'processed/'+skyFolder+'_sky_slices_distCor_noFlat.fits', ask=False)
+                else:
+                    wifisIO.writeFits(skyCor, 'processed/'+skyFolder+'_sky_slices_distCor.fits', ask=False)
+
+            #wavelength gridding stage
+            contProc2 = False
+            if noFlat:
+                if not os.path.exists('processed/'+skyFolder+'_sky_slices_fullGrid_noFlat.fits'):
+                    contProc2 = True
+                else:
+                    skyGrid = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky_slices_fullGrid_noFlat.fits')[0]
+            else:
+                if not os.path.exists('processed/'+skyFolder+'_sky_slices_fullGrid.fits'):
+                    contProc2 = True
+                else:
+                    skyGrid = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky_slices_fullGrid.fits')[0]
+
+            if contProc2:
+                print('placing sky slices on uniform wave grid')
+                skyGrid = createCube.waveCorAll(skyCor, waveMap, waveGridProps=waveGridProps)
+                if noFlat:
+                    wifisIO.writeFits(skyGrid, 'processed/'+skyFolder+'_sky_slices_fullGrid_noFlat.fits', ask=False)
+                else:
+                    wifisIO.writeFits(skyGrid, 'processed/'+skyFolder+'_sky_slices_fullGrid.fits', ask=False)
+
+            #create cube stage
+            contProc2 = False
+            if noFlat:
+                if not os.path.exists('processed/'+skyFolder+'_sky_cube_noFlat.fits'):
+                    contProc2 = True
+                else:
+                    skyCube = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky_cube_noFlat.fits')[0]
+            else:
+                if not os.path.exists('processed/'+skyFolder+'_sky_cube.fits'):
+                    contProc2 = True
+                else:
+                    skyCube = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky_cube.fits')[0]
+                    
+            if contProc2:
+                print('creating sky cube')
+
+                skyCube = createCube.mkCube(skyGrid, ndiv=ndiv)
+                    
+                #write WCS to header
+                headers.getWCSCube(skyCube, skyHdr, xScale, yScale, waveGridProps)
+
+                if noFlat:
+                    wifisIO.writeFits(skyCube, 'processed/'+skyFolder+'_sky_cube_noFlat.fits', hdr=skyHdr, ask=False)
+                else:
+                    wifisIO.writeFits(skyCube, 'processed/'+skyFolder+'_sky_cube.fits', hdr=skyHdr, ask=False)
+            
+                
     else:
         if darkFolder is not None:
+            print('subtracting dark')
             data -= dark[4:-4,4:-4]
             
-    print('Extracting slices')
+    print('Extracting data slices')
     #extracting slices
     dataSlices = slices.extSlices(data, distMapLimits, shft=shft)
-    wifisIO.writeFits(dataSlices, 'processed/'+dataFolder+'_obs_slices.fits', ask=False)
+    wifisIO.writeFits(dataSlices, 'processed/'+dataFolder+'_obs_slices'+skySwitch+'.fits', ask=False)
 
     #apply flat-field correction
     #print('Applying flat field corrections')
@@ -310,17 +408,17 @@ for i in range(len(obsLst)):
     #distortion correct data
     dataCor = createCube.distCorAll(dataFlat, distMap, spatGridProps=spatGridProps)
     if noFlat:
-        wifisIO.writeFits(dataCor, 'processed/'+dataFolder+'_obs_slices_distCor_noFlat.fits', ask=False)
+        wifisIO.writeFits(dataCor, 'processed/'+dataFolder+'_obs_slices_distCor'+skySwitch+'_noFlat.fits', ask=False)
     else:
-        wifisIO.writeFits(dataCor, 'processed/'+dataFolder+'_obs_slices_distCor.fits', ask=False)
+        wifisIO.writeFits(dataCor, 'processed/'+dataFolder+'_obs_slices_distCor'+skySwitch+'.fits', ask=False)
 
     print('placing on uniform wave grid')
     #place on uniform wavelength grid
     dataGrid = createCube.waveCorAll(dataCor, waveMap, waveGridProps=waveGridProps)
     if noFlat:
-        wifisIO.writeFits(dataGrid, 'processed/'+dataFolder+'_obs_slices_grid_noFlat.fits', ask=False)
+        wifisIO.writeFits(dataGrid, 'processed/'+dataFolder+'_obs_slices_grid'+skySwitch+'_noFlat.fits', ask=False)
     else:
-        wifisIO.writeFits(dataGrid, 'processed/'+dataFolder+'_obs_slices_grid.fits', ask=False)
+        wifisIO.writeFits(dataGrid, 'processed/'+dataFolder+'_obs_slices_grid'+skySwitch+'.fits', ask=False)
                 
     print('creating cube')
     #create cube
@@ -329,23 +427,32 @@ for i in range(len(obsLst)):
     dataImg = np.nansum(dataCube, axis=2)
 
     #write WCS to header
-    hdrImg = hdr[:]
+    hdrImg = copy.copy(hdr[:])
     hdrCube = hdr
     
     headers.getWCSImg(dataImg, hdrImg, xScale, yScale)
     if noFlat:
-        wifisIO.writeFits(dataImg, 'processed/'+dataFolder+'_obs_cubeImg_noFlat.fits',hdr=hdrImg, ask=False)
+        wifisIO.writeFits(dataImg, 'processed/'+dataFolder+'_obs_cubeImg'+skySwitch+'_noFlat.fits',hdr=hdrImg, ask=False)
     else:
-        wifisIO.writeFits(dataImg, 'processed/'+dataFolder+'_obs_cubeImg.fits',hdr=hdrImg, ask=False)
+        wifisIO.writeFits(dataImg, 'processed/'+dataFolder+'_obs_cubeImg'+skySwitch+'.fits',hdr=hdrImg, ask=False)
 
     headers.getWCSCube(dataCube, hdrCube, xScale, yScale, waveGridProps)
 
+    if skyLst is not None:
+        if not skySubFirst:
+            dataCube -= skyCube
+            skySwitch = '_skySub'
+        else:
+            skySwitch = '_skySubFirst'
+        
     if noFlat:
-        wifisIO.writeFits(dataCube, 'processed/'+dataFolder+'_obs_cube_noFlat.fits', hdr=hdrCube, ask=False)
+        wifisIO.writeFits(dataCube, 'processed/'+dataFolder+'_obs_cube'+skySwitch+'_noFlat.fits', hdr=hdrCube, ask=False)
     else:
-        wifisIO.writeFits(dataCube, 'processed/'+dataFolder+'_obs_cube.fits', hdr=hdrCube, ask=False)
+        wifisIO.writeFits(dataCube, 'processed/'+dataFolder+'_obs_cube'+skySwitch+'.fits', hdr=hdrCube, ask=False)
 
     cubeLst.append(dataCube)
+
+print('Median averaging all cubes')
 
 #get object name
 objectName = hdrCube['Object']
@@ -358,16 +465,16 @@ combCube /= float(len(cubeLst))
 #now save combined cube
 
 if noFlat:
-    wifisIO.writeFits(combCube, 'processed/'+objectName+'_combined_cube_noFlat.fits', hdr=hdrCube, ask=False)
+    wifisIO.writeFits(combCube, 'processed/'+objectName+'_combined_cube'+skySwitch+'_noFlat.fits', hdr=hdrCube, ask=False)
 else:
-    wifisIO.writeFits(combCube, 'processed/'+objectName+'_combined_cube.fits', hdr=hdrCube, ask=False)
+    wifisIO.writeFits(combCube, 'processed/'+objectName+'_combined_cube'+skySwitch+'.fits', hdr=hdrCube, ask=False)
 
 combImg = np.nansum(combCube, axis=2)
 
 if noFlat:
-    wifisIO.writeFits(combImg, 'processed/'+objectName+'_combined_cubeImg_noFlat.fits', hdr=hdrImg, ask=False)
+    wifisIO.writeFits(combImg, 'processed/'+objectName+'_combined_cubeImg'+skySwitch+'_noFlat.fits', hdr=hdrImg, ask=False)
 else:
-    wifisIO.writeFits(combImg, 'processed/'+objectName+'_combined_cubeImg.fits', hdr=hdrImg, ask=False)
+    wifisIO.writeFits(combImg, 'processed/'+objectName+'_combined_cubeImg'+skySwitch+'.fits', hdr=hdrImg, ask=False)
 
     
     
