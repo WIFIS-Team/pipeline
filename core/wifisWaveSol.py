@@ -716,8 +716,9 @@ def buildFWHMMap(pixCentLst,fwhmLst,npts):
             y = fwhm[j]
             if (len(y) > 1):
                 x = cent[j]
-                finter = interp1d(x,y, kind='linear', bounds_error=False)
-                fwhmMap[j,:] = finter(xgrid)
+                argsort = np.argsort(x)
+                #finter = interp1d(x,y, kind='linear', bounds_error=False)
+                fwhmMap[j,:] = np.interp(xgrid, x[argsort], y[argsort], left=np.nan, right=np.nan)#finter(xgrid)
         
         fwhmMapLst.append(fwhmMap)
         
