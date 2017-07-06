@@ -18,11 +18,11 @@ rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319/'
 pipelineFolder = '/data/pipeline/'
 
 #change here
-rampFolder = '20170607233730' #must point to location of folder containing the ramp
-flatFolder = '20170607235216' #must point to location flat field folder associated with observation
+rampFolder = wifisIO.readAsciiList('obs.lst')#'20170607233730' #must point to location of folder containing the ramp
+flatFolder = wifisIO.readAsciiList('flat.lst')#20170607235216' #must point to location flat field folder associated with observation
 
 #optional
-skyFolder = '20170607234619' #None # must be set to folder or None
+skyFolder = wifisIO.readAsciiList('sky.lst')#'20170607234619' #None # must be set to folder or None
 
 #(mostly) static input
 
@@ -31,6 +31,10 @@ distLimitsFile = pipelineFolder + 'external_data/distMap_limits.fits' #must poin
 satFile = pipelineFolder + 'external_data/master_detLin_satCounts.fits' #must point to location of saturation limits file, from detector linearity measurements
 spatGridProps = wifisIO.readTable(pipelineFolder+'external_data/distMap_spatGridProps.dat')
 bpmFile = pipelineFolder+'external_data/bpm.fits'
+
+#set the pixel scale
+xScale = 0.532021532706
+yScale = -0.545667026386 #valid for npix=1, i.e. 35 pixels spanning the 18 slices. This value needs to be updated in agreement with the choice of interpolation
 #******************************************************************************
 
 satCounts = wifisIO.readImgsFromFile(satFile)[0]
@@ -131,7 +135,7 @@ if os.path.exists(bpmFile):
         fluxImg[fluxImg < 0] = np.nan
         fluxImg[satFrame < 2] = np.nan
     
-fluxImg = fluxImg[4:2044, 4:2044]
+fluxImg = fluxImg[4:-4, 4:-4]
 
 
 #first check if limits already exists
@@ -215,10 +219,6 @@ dataCube = createCube.mkCube(dataGrid, ndiv=1)
 
 #create output image
 dataImg = createCube.collapseCube(dataCube)
-
-#set the pixel scale
-xScale = 0.532021532706
-yScale = -0.545667026386 #valid for npix=1, i.e. 35 pixels spanning the 18 slices. This value needs to be updated in agreement with the choice of interpolation
 
 print('Computing FWHM')
 #fit 2D Gaussian to image to determine FWHM of star's image
