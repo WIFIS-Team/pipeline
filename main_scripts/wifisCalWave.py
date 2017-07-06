@@ -368,7 +368,7 @@ for lstNum in range(len(waveLst)):
                     cMax = np.nanmax(fwhmMap[fwhmMap < 0.9*np.nanmax(fwhmMap)])
                     
                 fig = plt.figure()
-                plt.imshow(fwhmMap, aspect='auto', cmap='jet', clim=[0, cMax])
+                plt.imshow(fwhmMap, aspect='auto', cmap='jet', clim=[0, cMax], origin='lower')
                 plt.colorbar()
                 plt.title('Median FWHM is '+'{:3.1f}'.format(fwhmMed) +', min wave is '+'{:6.1f}'.format(waveMin)+', max wave is '+'{:6.1f}'.format(waveMax))
                 plt.savefig('quality_control/'+waveFolder+'_wave_fwhm_map.png', dpi=300)
