@@ -28,7 +28,7 @@ import wifisCombineData as combData
 import warnings
 import wifisUncertainties
 
-os.environ['PYOPENCL_COMPILER_OUTPUT'] = '1' # Used to show compile errors for debugging, can be removed
+os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
 os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
 
 t0 = time.time()
@@ -188,7 +188,7 @@ if (contProc):
             fig = plt.figure()
             plt.hist(ron.flatten(),range=[medRon-5.*stdRon,medRon+5.*stdRon],bins=100)
             plt.title('Median RON of ' + '{: e}'.format(medRon))
-            plt.xlabel('Flux')
+            plt.xlabel('counts')
             plt.ylabel('# of pixels')
             plt.savefig('quality_control/'+folder+'_dark_ron_hist.png',dpi=300)
             plt.close()
@@ -252,7 +252,7 @@ if (contProc):
     fig = plt.figure()
     plt.hist(ron.flatten(),range=[medRon-5.*stdRon,medRon+5.*stdRon],bins=100)
     plt.title('Median RON of ' + '{: e}'.format(medRon))
-    plt.xlabel('Flux')
+    plt.xlabel('Counts')
     plt.ylabel('# of pixels')
     plt.savefig('quality_control/'+folder+'_dark_ron_hist.png',dpi=300)
     plt.close()
