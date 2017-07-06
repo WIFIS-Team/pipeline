@@ -142,6 +142,8 @@ for fle in range(len(waveLst)):
         print ('getting distortion corrected slices')
         waveCor = createCube.distCorAll(waveSlices, distMap, spatGridProps=spatGridProps)
 
+        #save data
+        wifisIO.writeFits(waveCor, 'quick_reduction/'+waveFolder+'_wave_slices_distCor.fits')
         print('Getting dispersion solution')
 
         result = waveSol.getWaveSol(waveCor, template, atlasFile, 3, prevSol, winRng=9, mxCcor=150, weights=False, buildSol=False, sigmaClip=sigmaClip, allowLower=False, lngthConstraint=True, MP=True, adjustFitWin=True, sigmaLimit=sigmaLimit, allowSearch=False, sigmaClipRounds=sigmaClipRounds)        
@@ -213,8 +215,8 @@ for fle in range(len(waveLst)):
             strt += f.shape[0]
 
         #save results
-        wifisIO.writeFits(waveMap, 'quick_reduction/'+waveFolder+'_wavelength_map.fits', ask=False)
-        wifisIO.writeFits(fwhmMap, 'quick_reduction/'+waveFolder+'_fwhm_map.fits', ask=False)
+        wifisIO.writeFits(waveMap, 'quick_reduction/'+waveFolder+'_wave_wavelength_map.fits', ask=False)
+        wifisIO.writeFits(fwhmMap, 'quick_reduction/'+waveFolder+'_wave_fwhm_map.fits', ask=False)
 
         print('plotting results')
         fig = plt.figure()
