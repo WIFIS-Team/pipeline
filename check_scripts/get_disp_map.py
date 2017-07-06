@@ -12,6 +12,7 @@ import os
 import wifisGetSatInfo as satInfo
 import wifisCombineData as combData
 import warnings
+import wifisCreateCube as createCube
 
 os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
 warnings.simplefilter('ignore', RuntimeWarning)
@@ -20,26 +21,37 @@ warnings.simplefilter('ignore', RuntimeWarning)
 #required input!
 
 hband = False
+pipelineFolder = '/data/pipeline'
+rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
+colorbarLims = [0,10]
+
+waveFileLst = 'wave.lst'
+flatFileLst = 'flat.lst'
 
 if hband:
-    lst = 'hband_arc.lst'
+    #needs updating
     templateFile = '/data/pipeline/external_data/hband_template.fits'
     prevResultsFile = '/data/pipeline/external_data/hband_template.pkl'
-    lngthConstraint = False
-    mxOrder = 2
+    lngthConstraint = True
+    mxOrder = 3
 else:
     #TB band
     lst = 'tb_arc.lst'
-    templateFile = '/data/pipeline/external_data/waveTemplate.fits'
-    prevResultsFile = '/data/pipeline/external_data/waveTemplateFittingResults.pkl'
     lngthConstraint = True
+    templateFile = pipelineFolder+'/external_data/waveTemplate.fits'
+    prevResultsFile = pipelineFolder+'/external_data/waveTemplateFittingResults.pkl'
+    distMapFile = pipelineFolder + '/external_data/distMap.fits'
+    spatGridPropsFile = pipelineFolder + '/external_data/distMap_spatGridProps.dat'
+    distMapLimitsFile = pipelineFolder+'/external_data/distMap_limits.fits'
     mxOrder = 3
 
 #should be (mostly) static
-rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
-atlasFile = '/data/pipeline/external_data/best_lines2.dat'
-satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits'
+atlasFile = pipelineFolder + '/external_data/best_lines2.dat'
+satFile = pipelineFolder + '/external_data/master_detLin_satCounts.fits'
 
+sigmaClipRounds=1 #number of iterations when sigma-clipping of dispersion solution
+sigmaClip = 3 #sigma-clip cutoff when sigma-clipping dispersion solution
+sigmaLimit= 3 #relative noise limit (x * noise level) for which to reject lines
 #*******************************************************************************
 
 print('getting ready')
@@ -49,14 +61,23 @@ wifisIO.createDir('quick_reduction')
 template = wifisIO.readImgsFromFile(templateFile)[0]
 prevResults = wifisIO.readPickle(prevResultsFile)
 prevSol = prevResults[5]
+distMap = wifisIO.readImgsFromFile(distMapFile)[0]
+spatGridProps = wifisIO.readTable(spatGridPropsFile)
 
 print('Reading input data')
-fileLst = wifisIO.readAsciiList(lst)
+waveLst = wifisIO.readAsciiList(waveFileLst)
+flatLst = wifisIO.readAsciiList(flatFileLst)
+
+if (waveLst.ndim == 0):
+    waveLst = np.asarray([waveLst])
+if (flatLst.ndim == 0):
+    flatLst = np.asarray([flatLst])
+    
 satCounts = wifisIO.readImgsFromFile(satFile)[0]
 
-for fle in range(len(fileLst)):
-    waveFolder = fileLst[fle,0]
-    flatFolder = fileLst[fle,1]
+for fle in range(len(waveLst)):
+    waveFolder = waveLst[fle]
+    flatFolder = flatLst[fle]
 
     if (os.path.exists('quick_reduction/'+waveFolder+'_fwhm_map.png') and os.path.exists('quick_reduction/'+waveFolder+'_fwhm_map.fits') and os.path.exists('quick_reduction/'+waveFolder+'_wavelength_map.fits')):
         pass
@@ -77,17 +98,18 @@ for fle in range(len(fileLst)):
             wave = wave[4:2044,4:2044]
 
         if (os.path.exists('quick_reduction/'+flatFolder+'_flat_limits.fits') and os.path.exists('quick_reduction/'+flatFolder+'_flat_slices.fits')):
-            limits = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_limits.fits')[0]
+            limits, limitsHdr = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_limits.fits')
             flatSlices = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_slices.fits')[0]
+            shft = limitsHdr['LIMSHIFT']
         else:
             print('Processing flat file')
             #check the type of raw data, only assumes CDS or up-the-ramp
             if (os.path.exists(rootFolder + '/CDSReference/'+flatFolder+'/Result/CDSResult.fits')):
                 #CDS image
-                flat = wifisIO.readImgsFromFile(rootFolder + '/CDSReference/'+flatFolder+'/Result/CDSResult.fits')[0]
+                flat, flatHdr = wifisIO.readImgsFromFile(rootFolder + '/CDSReference/'+flatFolder+'/Result/CDSResult.fits')
             else:
                 #assume up-the-ramp
-                data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + '/UpTheRamp/'+flatFolder)
+                data, inttime, flatHdr = wifisIO.readRampFromFolder(rootFolder + '/UpTheRamp/'+flatFolder)
                 satCounts = wifisIO.readImgsFromFile(satFile)[0]
                 satFrame = satInfo.getSatFrameCL(data, satCounts,32)
                 #get processed ramp
@@ -95,16 +117,19 @@ for fle in range(len(fileLst)):
 
             print('Finding flat limits')
             limits = slices.findLimits(flat, dispAxis=0, winRng=51, imgSmth=5, limSmth=20,rmRef=True)
+            distMapLimits = wifisIO.readImgsFromFile(distMapLimitsFile)[0]
+            shft = int(np.nanmedian(limits[1:-1,:] - distMapLimits[1:-1,:]))
+            limits = distMapLimits
             flatSlices = slices.extSlices(flat[4:2044,4:2044], limits)
-            
-            wifisIO.writeFits(limits,'quick_reduction/'+flatFolder+'_flat_limits.fits')
-            wifisIO.writeFits(flatSlices,'quick_reduction/'+flatFolder+'_flat_slices.fits')
 
+            flatHdr.set('LIMSHIFT',shft, 'Limits shift relative to Ronchi slices')
+            wifisIO.writeFits(limits,'quick_reduction/'+flatFolder+'_flat_limits.fits',hdr=flatHdr)
+            wifisIO.writeFits(flatSlices,'quick_reduction/'+flatFolder+'_flat_slices.fits')
                 
         print('extracting wave slices')
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", "RuntimeWarning")
-        waveSlices = slices.extSlices(wave, limits, dispAxis=0)
+            waveSlices = slices.extSlices(wave, limits, dispAxis=0, shft=shft)
 
         print('getting normalized wave slices')
         if hband:
@@ -113,9 +138,13 @@ for fle in range(len(fileLst)):
             flatNorm = slices.getResponseAll(flatSlices, 0, 0.1)
 
         waveNorm = slices.ffCorrectAll(waveSlices, flatNorm)
+
+        print ('getting distortion corrected slices')
+        waveCor = createCube.distCorAll(waveSlices, distMap, spatGridProps=spatGridProps)
+
         print('Getting dispersion solution')
 
-        result = waveSol.getWaveSol(waveNorm, template, atlasFile,mxOrder, prevSol, winRng=20, mxCcor=150, weights=False, buildSol=False, allowLower=True, sigmaClip=2., lngthConstraint = lngthConstraint, MP=True, adjustFitWin=True)
+        result = waveSol.getWaveSol(waveCor, template, atlasFile, 3, prevSol, winRng=9, mxCcor=150, weights=False, buildSol=False, sigmaClip=sigmaClip, allowLower=False, lngthConstraint=True, MP=True, adjustFitWin=True, sigmaLimit=sigmaLimit, allowSearch=False, sigmaClipRounds=sigmaClipRounds)        
        
         print('Extracting solution results')
         dispSolLst = result[0]
@@ -189,8 +218,9 @@ for fle in range(len(fileLst)):
 
         print('plotting results')
         fig = plt.figure()
-        
-        plt.imshow(fwhmMap, aspect='auto', cmap='jet', clim=[0,20])
+
+        plt.imshow(fwhmMap, aspect='auto', cmap='jet', clim=colorbarLims, origin='lower')
+
         plt.colorbar()
         plt.title('Median FWHM is '+'{:3.1f}'.format(fwhmMed) +', min wave is '+'{:6.1f}'.format(waveMin)+', max wave is '+'{:6.1f}'.format(waveMax))
         plt.savefig('quick_reduction/'+waveFolder+'_fwhm_map.png', dpi=300)
