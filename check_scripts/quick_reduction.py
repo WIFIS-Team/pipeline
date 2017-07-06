@@ -1,3 +1,8 @@
+import matplotlib
+#*******************************************************************
+matplotlib.use('gtkagg') #default is agg, but using gtkagg can speed up window creation on some systems
+#*******************************************************************
+
 import wifisIO
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,6 +14,9 @@ import wifisGetSatInfo as satInfo
 from astropy import wcs 
 import os
 from astropy.modeling import models, fitting
+import glob
+import warnings
+from wifisIO import sorted_nicely
 
 os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
 
@@ -16,13 +24,34 @@ os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target
 #required user input
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319/'
 pipelineFolder = '/data/pipeline/'
+noProc = False
 
 #change here
-rampFolder = wifisIO.readAsciiList('obs.lst')#'20170607233730' #must point to location of folder containing the ramp
-flatFolder = wifisIO.readAsciiList('flat.lst')#20170607235216' #must point to location flat field folder associated with observation
+rampFolderFile = 'obsQuick.inp' # ascii file containing the name of the folder containing the target ramp
+flatFolderFile = 'flatQuick.inp' # ascii containing the name of the flat ramp folder associated with the target ramp
 
 #optional
-skyFolder = wifisIO.readAsciiList('sky.lst')#'20170607234619' #None # must be set to folder or None
+skyFolderFile = 'skyQuick.inp' # ascii containing the name of the sky ramp folder associated with the target ramp
+
+if os.path.exists(rampFolderFile):
+    rampFolder = wifisIO.readAsciiList(rampFolderFile).tostring()  
+else:
+    raise SystemExit('*** '+ rampFolderFile + ' does not exist ***')
+
+if os.path.exists(flatFolderFile):
+    flatFolder = wifisIO.readAsciiList(flatFolderFile).tostring()
+else:
+    raise SystemExit('*** ' + flatFolderFile + ' does not exist ***')
+
+if os.path.exists(skyFolderFile):
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', UserWarning)
+        skyFolder = wifisIO.readAsciiList(skyFolderFile).tostring()
+
+    if skyFolder == '':
+        skyFolder = None
+else:
+    skyFolder = None
 
 #(mostly) static input
 
@@ -67,14 +96,27 @@ elif os.path.exists(rootFolder+'/FSRamp/'+rampFolder):
 elif os.path.exists(rootFolder + '/UpTheRamp/'+rampFolder):
     UTR = True
     folderType = '/UpTheRamp/'
-    data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + rampFolder)
 
-    #find if any pixels are saturated and avoid usage
-    satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+    if noProc:
+        lst = glob.glob(rootFolder+folderType+rampFolder + '/H2*fits')
+        lst = sorted_nicely(lst)
 
-    #get processed ramp
-    fluxImg = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
+        img1,hdr1 = wifisIO.readImgsFromFile(lst[-1])
+        img0,hdr0 = wifisIO.readImgsFromFile(lst[0])
+        t0 = hdr0['INTTIME']
+        t1 = hdr1['INTTIME']
+        
+        fluxImg = ((img1-img0)/(t1-t0)).astype('float32')
+        hdr = hdr1
+   
+    else:
+        data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + rampFolder)
 
+        #find if any pixels are saturated and avoid usage
+        satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+
+        #get processed ramp
+        fluxImg = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
 else:
     raise SystemExit('*** Ramp folder ' + rampFolder + ' does not exist ***')
 
@@ -110,13 +152,25 @@ if (skyFolder is not None):
     elif os.path.exists(rootFolder + '/UpTheRamp/'+skyFolder):
         UTR = True
         folderType = '/UpTheRamp/'
-        data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + skyFolder)
+
+        if noProc:
+            lst = glob.glob(rootFolder+folderType+skyFolder + '/H2*fits')
+            lst = sorted_nicely(lst)
+            
+            img1,hdr1 = wifisIO.readImgsFromFile(lst[-1])
+            img0,hdr0 = wifisIO.readImgsFromFile(lst[0])
+            t0 = hdr0['INTTIME']
+            t1 = hdr1['INTTIME']
         
-        #find if any pixels are saturated and avoid usage
-        satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+            skyImg = ((img1-img0)/(t1-t0)).astype('float32')
+        else:
+            data, inttime, hdrSky = wifisIO.readRampFromFolder(rootFolder + folderType + skyFolder)
+            
+            #find if any pixels are saturated and avoid usage
+            satFrame = satInfo.getSatFrameCL(data, satCounts,32)
         
-        #get processed ramp
-        skyImg = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
+            #get processed ramp
+            skyImg = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
 
     else:
         raise SystemExit('*** sky Ramp folder ' + skyFolder + ' does not exist ***')
@@ -124,19 +178,19 @@ if (skyFolder is not None):
     #subtract
     fluxImg -= skyImg
 
-
 #remove bad pixels
 if os.path.exists(bpmFile):
     print('Removing bad pixels')
     bpm = wifisIO.readImgsFromFile(bpmFile)[0]
-    
-    fluxImg[bpm.astype(bool)] = np.nan
-    if UTR:
-        fluxImg[fluxImg < 0] = np.nan
-        fluxImg[satFrame < 2] = np.nan
-    
-fluxImg = fluxImg[4:-4, 4:-4]
 
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        fluxImg[bpm.astype(bool)] = np.nan
+        if UTR and not noProc:
+            fluxImg[fluxImg < 0] = np.nan
+            fluxImg[satFrame < 2] = np.nan
+            
+fluxImg = fluxImg[4:-4, 4:-4]
 
 #first check if limits already exists
 if os.path.exists('quick_reduction/'+flatFolder+'_limits.fits'):
@@ -170,13 +224,25 @@ else:
     elif os.path.exists(rootFolder + '/UpTheRamp/'+flatFolder):
         folderType = '/UpTheRamp/'
         UTR = True
-        data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + flatFolder)
 
-        #find if any pixels are saturated and avoid usage
-        satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+        if noProc:
+            lst = glob.glob(rootFolder+folderType+flatFolder + '/H2*fits')
+            lst = sorted_nicely(lst)
+            
+            img1,hdr1 = wifisIO.readImgsFromFile(lst[-1])
+            img0,hdr0 = wifisIO.readImgsFromFile(lst[0])
+            t0 = hdr0['INTTIME']
+            t1 = hdr1['INTTIME']
         
-        #get processed ramp
-        flat = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
+            flat = ((img1-img0)/(t1-t0)).astype('float32')
+        else:
+            data, inttime, hdrFlat = wifisIO.readRampFromFolder(rootFolder + folderType + flatFolder)
+            
+            #find if any pixels are saturated and avoid usage
+            satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+            
+            #get processed ramp
+            flat = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
 
     else:
         raise SystemExit('*** flat folder ' + flatFolder + ' does not exist ***')
@@ -184,10 +250,12 @@ else:
     
     if os.path.exists(bpmFile):
         print('removing bad pixels')
-        flat[bpm.astype(bool)] = np.nan
-        if(UTR):
-            flat[satFrame < 2] = np.nan
-            flat[flat<0] = np.nan
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', RuntimeWarning)
+            flat[bpm.astype(bool)] = np.nan
+            if UTR and not noProc:
+                flat[satFrame < 2] = np.nan
+                flat[flat<0] = np.nan
 
         #flatCor = np.empty(flat.shape, dtype=flat.dtype)
         #flatCor[4:2044,4:2044] = badPixels.corBadPixelsAll(flat[4:2044,4:2044], mxRng=20)
@@ -228,21 +296,6 @@ gInit = models.Gaussian2D(np.nanmax(dataImg), cent[1],cent[0])
 fitG = fitting.LevMarLSQFitter()
 gFit = fitG(gInit, x,y,dataImg)
 
-#y,x = np.mgrid[0:dataImg.shape[0]:0.1,0:dataImg.shape[1]:0.1]
-#gMod = gFit(x,y)
-#
-#r = np.sqrt((x-cent[1])**2+(y-cent[0])**2)
-#gMod /= np.max(gMod)
-#whr = np.where(gMod < 0.5)
-#fwhm2 = np.min(r[whr[0],whr[1]])
-
-#get average FWHM
-#sigPix = (gFit.x_stddev+gFit.y_stddev)/2.
-#fwhmPix = 2.*np.sqrt(2.* np.log(2))*sigPix
-
-#sigDeg = (np.abs(gFit.x_stddev*xScale)+np.abs(gFit.y_stddev*yScale))/2.
-#fwhmDeg = 2.*np.sqrt(2.* np.log(2))*sigDeg
-
 #fill in header info
 headers.addTelInfo(hdr, obsinfoFile)
 
@@ -259,7 +312,7 @@ WCS = wcs.WCS(hdr)
 
 print('Plotting data')
 fig = plt.figure()
-fig.add_subplot(111, projection=WCS)
+ax = fig.add_subplot(111, projection=WCS)
 plt.imshow(dataImg, origin='lower', cmap='jet')
 r = np.arange(360)*np.pi/180.
 fwhmX = np.abs(2.3548*gFit.x_stddev*xScale)
@@ -267,6 +320,10 @@ fwhmY = np.abs(2.3548*gFit.y_stddev*yScale)
 x = fwhmX*np.cos(r) + gFit.x_mean
 y = fwhmY*np.sin(r) + gFit.y_mean
 plt.plot(x,y, 'r--')
+ax.set_ylim([0, dataImg.shape[0]-1])
+ax.set_xlim([0, dataImg.shape[1]-1])
+
 plt.title(hdr['Object'] + ': FWHM of object is: '+'{:4.2f}'.format(fwhmX)+' in x and ' + '{:4.2f}'.format(fwhmY)+' in y, in arcsec')
 plt.savefig('quick_reduction/'+rampFolder+'_quickRedImg.png', dpi=300)
 plt.show()
+plt.close('all')
