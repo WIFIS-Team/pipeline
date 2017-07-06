@@ -15,6 +15,7 @@ os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target
 #******************************************************************************
 #required user input
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319/'
+pipelineFolder = '/data/pipeline/'
 
 #change here
 rampFolder = '20170607233730' #must point to location of folder containing the ramp
@@ -25,11 +26,11 @@ skyFolder = '20170607234619' #None # must be set to folder or None
 
 #(mostly) static input
 
-distMapFile = '/data/pipeline/external_data/distortionMap.fits' #must point to location of distortion map file
-distLimitsFile = '/data/pipeline/external_data/ronchiMap_limits.fits' #must point to the location of the flat-field associated with the Ronchi mask image
-satFile = '/data/WIFIS/H2RG-G17084-ASIC-08-319/UpTheRamp/20170504201819/processed/master_detLin_satCounts.fits' #must point to location of saturation limits file, from detector linearity measurements
-spatGridProps = wifisIO.readTable('/data/pipeline/external_data/spatGridProps.dat')
-bpmFile = '/data/pipeline/external_data/bpm.fits'
+distMapFile = pipelineFolder + 'external_data/distMap.fits' #must point to location of distortion map file
+distLimitsFile = pipelineFolder + 'external_data/distMap_limits.fits' #must point to the location of the flat-field associated with the Ronchi mask image
+satFile = pipelineFolder + 'external_data/master_detLin_satCounts.fits' #must point to location of saturation limits file, from detector linearity measurements
+spatGridProps = wifisIO.readTable(pipelineFolder+'external_data/distMap_spatGridProps.dat')
+bpmFile = pipelineFolder+'external_data/bpm.fits'
 #******************************************************************************
 
 satCounts = wifisIO.readImgsFromFile(satFile)[0]
