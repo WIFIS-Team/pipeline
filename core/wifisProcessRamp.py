@@ -26,20 +26,25 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSp
     refCor.channelCL(data, nChannel)
     print("Subtracting reference pixel row bias")
     refCor.rowCL(data, nRows,rowSplit)
-        
-    satFrame = satInfo.getSatFrameCL(data, satCounts,satSplit, ignoreRefPix=True)
+
+    if satCounts is None:
+        satFrame = np.empty((data.shape[0],data.shape[1]),dtype='float32')
+        satFrame[:] = data.shape[2]
+    else:
+        satFrame = satInfo.getSatFrameCL(data, satCounts,satSplit, ignoreRefPix=True)
 
     #******************************************************************************
     #apply non-linearity correction
     print("Correcting for non-linearity")
     
     #find NL coefficient file
-    NLCor.applyNLCorCL(data, nlCoeff, nlSplit)
+    if nlCoeff is not None:
+        NLCor.applyNLCorCL(data, nlCoeff, nlSplit)
     
     #******************************************************************************
     #Combine data cube into single image
     if (crReject):
-        fluxImg = combData.upTheRampCRRejectCL(inttime, data, satFrame, combSplit)
+        fluxImg = combData.upTheRampCRRejectCL(inttime, data, satFrame, combSplit)[0]
     else:
         fluxImg  = combData.upTheRampCL(inttime, data, satFrame, combSplit)[0]
         
@@ -79,8 +84,8 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSp
         imgCor = np.empty(fluxImg.shape, dtype = fluxImg.dtype)
         sigmaCor = np.empty(sigmaImg.shape, dtype= sigmaImg.dtype)
     
-        imgCor[4:2044,4:2044] = badPixels.corBadPixelsAll(fluxImg[4:2044,4:2044], dispAxis=0, mxRng=bpmCorRng, MP=True) 
-        sigmaCor[4:2044, 4:2044]  = badPixels.corBadPixelsAll(sigmaImg[4:2044,4:2044], dispAxis=0, mxRng=bpmCorRng, MP=True, sigma=True)
+        imgCor[4:-4,4:-4] = badPixels.corBadPixelsAll(fluxImg[4:-4,4:-4], dispAxis=0, mxRng=bpmCorRng, MP=True) 
+        sigmaCor[4:-4, 4:-4]  = badPixels.corBadPixelsAll(sigmaImg[4:-4,4:-4], dispAxis=0, mxRng=bpmCorRng, MP=True, sigma=True)
     else:
         if not ignoreBPM:
             cont = wifisIO.userInput('*** WARNING: No bad pixel mask provided. Do you want to continue? *** (y/n)?')
@@ -110,16 +115,21 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,ro
     refCor.channelCL(data, nChannel)
     print("Subtracting reference pixel row bias")
     refCor.rowCL(data, nRows,rowSplit)
-        
-    satFrame = satInfo.getSatFrameCL(data, satCounts,satSplit, ignoreRefPix=True)
+
+    if satFrame is None:
+        satFrame = np.empty((data.shape[0],data.shape[1]),dtype='float32')
+        satFrame[:] = data.shape[2]
+    else:
+        satFrame = satInfo.getSatFrameCL(data, satCounts,satSplit, ignoreRefPix=True)
 
     #******************************************************************************
     #apply non-linearity correction
     print("Correcting for non-linearity")
-            
+    
     #find NL coefficient file
-    NLCor.applyNLCorCL(data, nlCoeff, nlSplit)
-        
+    if nlCoef is not None:
+        NLCor.applyNLCorCL(data, nlCoeff, nlSplit)
+
     #******************************************************************************
     #Combine data cube into single image
     fluxImg = combData.fowlerSamplingCL(inttime, data, satFrame, combSplit)
@@ -159,8 +169,8 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,ro
         imgCor = np.empty(fluxImg.shape, dtype = fluxImg.dtype)
         sigmaCor = np.empty(sigmaImg.shape, dtype= sigmaImg.dtype)
         
-        imgCor[4:2044,4:2044] = badPixels.corBadPixelsAll(fluxImg[4:2044,4:2044], dispAxis=0, mxRng=bpmCorRng, MP=True) 
-        sigmaCor[4:2044, 4:2044]  = badPixels.corBadPixelsAll(sigmaImg[4:2044,4:2044], dispAxis=0, mxRng=bpmCorRng, MP=True, sigma=True)
+        imgCor[4:-4,4:-4] = badPixels.corBadPixelsAll(fluxImg[4:-4,4:-4], dispAxis=0, mxRng=bpmCorRng, MP=True) 
+        sigmaCor[4:-4, 4:-4]  = badPixels.corBadPixelsAll(sigmaImg[4:-4,4:-4], dispAxis=0, mxRng=bpmCorRng, MP=True, sigma=True)
     else:
         if not ignoreBPM:
             cont = wifisIO.userInput('*** WARNING: No bad pixel mask provided. Do you want to continue? *** (y/n)?')
