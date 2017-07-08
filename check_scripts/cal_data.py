@@ -90,6 +90,7 @@ else:
 sigmaClipRounds=2 #number of iterations when sigma-clipping of dispersion solution
 sigmaClip = 2 #sigma-clip cutoff when sigma-clipping dispersion solution
 sigmaLimit= 3 #relative noise limit (x * noise level) for which to reject lines
+crReject = False
 
 #*****************************************************************************
 
@@ -117,7 +118,7 @@ if darkInfoFile is not None:
         darkFolder = wifisIO.readAsciiList(darkInfoFile).tostring()
         print('Processing dark')
 
-        dark, sigmaImg, satFrame, hdr = processRamp.auto(darkFolder, rootFolder,'processed/'+darkFolder+'_dark.fits', satCounts, nlCoeff, None, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=0, saveAll=False, ignoreBPM=True)
+        dark, sigmaImg, satFrame, hdr = processRamp.auto(darkFolder, rootFolder,'processed/'+darkFolder+'_dark.fits', satCounts, nlCoeff, None, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=0, saveAll=False, ignoreBPM=True)
     else:
         dark = wifisIO.readImgsFromFile('processed/'+darkFolder+'_dark.fits')[0]
 else:
@@ -128,7 +129,7 @@ flatFolder = wifisIO.readAsciiList(flatInfoFile).tostring()
 
 if not os.path.exists('processed/'+flatFolder+'_flat.fits'):
     print('Processing flat')
-    flat, sigmaImg, satFrame, flatHdr = processRamp.auto(flatFolder, rootFolder,'processed/'+flatFolder+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=20, saveAll=False)
+    flat, sigmaImg, satFrame, flatHdr = processRamp.auto(flatFolder, rootFolder,'processed/'+flatFolder+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=20, saveAll=False)
 else:
     flat,flatHdr = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat.fits')
 
@@ -183,7 +184,7 @@ spatGridProps = wifisIO.readTable(spatGridPropsFile)
 waveFolder = wifisIO.readAsciiList(waveInfoFile).tostring()
 if not os.path.exists('processed/'+waveFolder+'_wave.fits'):
     print('Processing arc image')
-    wave, sigmaImg, satFrame, hdr = processRamp.auto(waveFolder, rootFolder,'processed/'+waveFolder+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=0, saveAll=False)
+    wave, sigmaImg, satFrame, hdr = processRamp.auto(waveFolder, rootFolder,'processed/'+waveFolder+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=0, saveAll=False)
 else:
     wave = wifisIO.readImgsFromFile('processed/'+waveFolder+'_wave.fits')[0]
     
@@ -260,7 +261,7 @@ obsLst = wifisIO.readAsciiList(obsLstFile)
 if obsLst.ndim == 0:
     obsLst = np.asarray([obsLst])
 
-if skyLstFile is not None:
+if skyLstFile is not None and os.path.exists(skyLstFile):
     skyLst = wifisIO.readAsciiList(skyLstFile)
     if skyLst.ndim == 0:
         skyLst = np.asarray([skyLst])
@@ -276,7 +277,7 @@ for i in range(len(obsLst)):
 
     if not os.path.exists('processed/'+dataFolder+'_obs.fits'):
         print('Processing science data')
-        data, sigmaImg, satFrame, hdr = processRamp.auto(dataFolder, rootFolder,'processed/'+dataFolder+'_obs.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=False)
+        data, sigmaImg, satFrame, hdr = processRamp.auto(dataFolder, rootFolder,'processed/'+dataFolder+'_obs.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=2, saveAll=False)
     else:
         print('Reading science data from file')
         data, hdr = wifisIO.readImgsFromFile('processed/'+dataFolder+'_obs.fits')
@@ -290,7 +291,7 @@ for i in range(len(obsLst)):
         if not os.path.exists('processed/'+skyFolder+'_sky.fits'):
             print('Processing sky data')
         
-            sky, sigmaImg, satFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2,saveAll=False)
+            sky, sigmaImg, satFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=2,saveAll=False)
         else:
             sky,skyHdr = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky.fits')
 
@@ -388,6 +389,7 @@ for i in range(len(obsLst)):
             
                 
     else:
+        skySwitch = ''
         if darkFolder is not None:
             print('subtracting dark')
             data -= dark[4:-4,4:-4]
