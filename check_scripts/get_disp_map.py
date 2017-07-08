@@ -34,6 +34,9 @@ if hband:
     prevResultsFile = '/data/pipeline/external_data/hband_template.pkl'
     lngthConstraint = True
     mxOrder = 3
+    distMapFile = pipelineFolder + '/external_data/distMap.fits'
+    spatGridPropsFile = pipelineFolder + '/external_data/distMap_spatGridProps.dat'
+    distMapLimitsFile = pipelineFolder+'/external_data/distMap_limits.fits'
 else:
     #TB band
     lst = 'tb_arc.lst'
