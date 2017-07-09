@@ -24,16 +24,17 @@ os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target
 
 hband = False
 
-flatInfoFile = 'flat.lst'
-waveInfoFile = 'wave.lst'
+flatLstFile = 'flat.lst'
+waveLstFile = 'wave.lst'
 obsLstFile = 'obs.lst'
 skyLstFile = 'sky.lst'
-darkInfoFile = 'dark.lst'
+darkLstFile = 'dark.lst'
 noFlat = False
 skySubFirst = False
 
 #likely static
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
+pipelineFolder = '/data/pipeline/'
 
 if hband:
     waveTempFile = '/data/pipeline/external_data/waveTemplate_hband.fits'
@@ -110,156 +111,19 @@ if os.path.exists(bpmFile):
 else:
     BPM = None
 
-#deal with darks
-if darkInfoFile is not None:
-    darkFolder = wifisIO.readAsciiList(darkInfoFile).tostring()
-    
-    if not os.path.exists('processed/'+darkFolder+'_dark.fits'):
-        darkFolder = wifisIO.readAsciiList(darkInfoFile).tostring()
-        print('Processing dark')
-
-        dark, sigmaImg, satFrame, hdr = processRamp.auto(darkFolder, rootFolder,'processed/'+darkFolder+'_dark.fits', satCounts, nlCoeff, None, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=0, saveAll=False, ignoreBPM=True)
-    else:
-        dark = wifisIO.readImgsFromFile('processed/'+darkFolder+'_dark.fits')[0]
-else:
-    darkFolder=None
-    
-#deal with flats first
-flatFolder = wifisIO.readAsciiList(flatInfoFile).tostring()
-
-if not os.path.exists('processed/'+flatFolder+'_flat.fits'):
-    print('Processing flat')
-    flat, sigmaImg, satFrame, flatHdr = processRamp.auto(flatFolder, rootFolder,'processed/'+flatFolder+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=20, saveAll=False)
-else:
-    flat,flatHdr = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat.fits')
-
-if not os.path.exists('processed/'+flatFolder+'_flat_limits.fits'):
-    #get limits
-    print('Getting limits relative to distortion map')
-    limits = slices.findLimits(flat,limSmth=20, rmRef=True)
-
-    if hband:
-        #only use region with suitable flux
-        flatImgMed = np.nanmedian(flat[4:-4,4:-4], axis=1)
-        flatImgMedGrad = np.gradient(flatImgMed)
-        medMax = np.nanargmax(flatImgMed)
-        lim1 = np.nanargmax(flatImgMedGrad[:medMax])
-        lim2 = np.nanargmin(flatImgMedGrad[medMax:])+medMax
-        shft = int(np.nanmedian(limits[1:-1,lim1:lim2+1] - distMapLimits[1:-1,lim1:lim2+1]))
-    else:
-        shft = int(np.nanmedian(limits[1:-1,:] - distMapLimits[1:-1,:]))
-
-    flatHdr.set('LIMSHIFT',shft, 'Limits shift relative to Ronchi slices')
-    wifisIO.writeFits(limits, 'processed/'+flatFolder+'_flat_limits.fits', hdr=flatHdr)
-else:
-    limits, flatHdr = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_limits.fits')
-    shft = flatHdr['LIMSHIFT']
-    
-if darkFolder is not None:
-    print('Subtracting dark from flat')
-    flat -= dark
-    
-flat = flat[4:-4, 4:-4]
-
-#get shift compared to ronchi mask
-if not os.path.exists('processed/'+flatFolder+'_flat_slices.fits'):
-    print('Extracting flat slices')
-    flatSlices = slices.extSlices(flat, distMapLimits, shft=shft)
-    wifisIO.writeFits(flatSlices,'processed/'+flatFolder+'_flat_slices.fits', ask=False, hdr=flatHdr)
-else:
-    flatSlices,flatHdr = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_slices.fits')
-    
-if not os.path.exists('processed/'+flatFolder+'_flat_slices_norm.fits'):
-    print('Getting normalized slices')
-    #get normalized flat field slices
-    flatNorm = slices.getResponseAll(flatSlices, 0, 0.1)
-    wifisIO.writeFits(flatNorm, 'processed/'+flatFolder+'_flat_slices_norm.fits',ask=False)
-else:
-    flatNorm = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_slices_norm.fits')[0]
-    
 #read in ronchi mask
 distMap = wifisIO.readImgsFromFile(distMapFile)[0]
 spatGridProps = wifisIO.readTable(spatGridPropsFile)
 
-waveFolder = wifisIO.readAsciiList(waveInfoFile).tostring()
-if not os.path.exists('processed/'+waveFolder+'_wave.fits'):
-    print('Processing arc image')
-    wave, sigmaImg, satFrame, hdr = processRamp.auto(waveFolder, rootFolder,'processed/'+waveFolder+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=0, saveAll=False)
+#print read input lists
+if os.path.exists(obsLstFile):
+    obsLst = wifisIO.readAsciiList(obsLstFile)
+
+    if obsLst.ndim == 0:
+        obsLst = np.asarray([obsLst])
 else:
-    wave = wifisIO.readImgsFromFile('processed/'+waveFolder+'_wave.fits')[0]
-    
-#remove reference pixels
-wave = wave[4:-4,4:-4]
+    raise SystemExit('observation list file ' + obsLstFile + ' does not exist')
 
-if not os.path.exists('processed/'+waveFolder+'wave_slices.fits'):
-    print('Extracting wave slices')
-    waveSlices = slices.extSlices(wave,  distMapLimits, shft=shft)
-    wifisIO.writeFits(waveSlices, 'processed/'+waveFolder+'_wave_slices.fits', ask=False)
-else:
-    waveSlices = wifisIO.readImgsFromFile('processed/'+waveFolder+'_wave_slices.fits')[0]
-
-waveFlat = slices.ffCorrectAll(waveSlices, flatNorm)
-    
-if not os.path.exists('processed/'+waveFolder+'wave_slices_distCor.fits'):
-    print('Distortion correcting flat slices')
-    waveCor = createCube.distCorAll(waveSlices, distMap, spatGridProps=spatGridProps)
-    wifisIO.writeFits(waveCor,'processed/'+waveFolder+'_wave_slices_distCor.fits', ask=False)
-else:
-    waveCor = wifisIO.readImgsFromFile('processed/'+waveFolder+'_wave_slices_distCor.fits')[0]
-
-if not os.path.exists('processed/'+waveFolder+'_wave_fitResults.pkl'):
-    print('Getting dispersion solution')
-    template = wifisIO.readImgsFromFile(waveTempFile)[0]
-    templateResults = wifisIO.readPickle(waveTempResultsFile)
-    prevSol = templateResults[5]
-
-    results = waveSol.getWaveSol(waveCor, template, atlasFile, 3, prevSol, winRng=9, mxCcor=150, weights=False, buildSol=False, sigmaClip=sigmaClip, allowLower=False, lngthConstraint=True, MP=True, adjustFitWin=True, sigmaLimit=sigmaLimit, allowSearch=False, sigmaClipRounds=sigmaClipRounds)
-
-    wifisIO.writePickle(results, 'processed/'+waveFolder+'_wave_fitResults.pkl')
-else:
-    results = wifisIO.readPickle('processed/'+waveFolder+'_wave_fitResults.pkl')
-    
-if not os.path.exists('processed/'+waveFolder+'_wave_waveMap.fits') or not os.path.exists('processed/'+waveFolder+'_wave_waveGridProps.dat'):
-    print('Building wavelegth map')
-    
-    wifisIO.createDir('quality_control')
-    rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(results, plotFile='quality_control/'+waveFolder+'_wave_waveFit_rms.pdf', threshold = cleanDispThresh)
-
-    waveMapLst = waveSol.buildWaveMap2(dispSolClean, waveCor[0].shape[1],fill_missing=True, extrapolate=True)
-
-    #smooth waveMap solution to avoid pixel-to-pixel jumps
-    waveMap = waveSol.smoothWaveMapAll(waveMapLst,smth=1,MP=True )
-
-    wifisIO.writeFits(waveMap, 'processed/'+waveFolder+'_wave_waveMap.fits', ask=False)
-
-    #now trim wavemap if needed
-    if waveTrimThresh > 0:
-        print('Trimming wavelength map to useful range')
-        #now trim wavemap if needed
-        #read in unnormalized flat field data
-        waveMapTrim = waveSol.trimWaveSliceAll(waveMap, flatSlices, waveTrimThresh)
-                
-        #get wave grid properties
-        waveGridProps = createCube.compWaveGrid(waveMapTrim)
-    else:
-        waveGridProps = createCube.compWaveGrid(waveMap) 
-           
-    wifisIO.writeTable(waveGridProps, 'processed/'+waveFolder+'_wave_waveGridProps.dat')
-else:
-    waveMap = wifisIO.readImgsFromFile('processed/'+waveFolder+'_wave_waveMap.fits')[0]
-    waveGridProps = wifisIO.readTable('processed/'+waveFolder+'_wave_waveGridProps.dat')
-
-if not os.path.exists('processed/'+waveFolder+'_wave_slices_fullGrid.fits'):
-    print('placing arc image on grid')
-    waveGrid = createCube.waveCorAll(waveCor, waveMap, waveGridProps=waveGridProps)
-    wifisIO.writeFits(waveGrid, 'processed/'+waveFolder+'_wave_slices_fullGrid.fits', ask=False)
-
-print('processing observations')
-
-obsLst = wifisIO.readAsciiList(obsLstFile)
-
-if obsLst.ndim == 0:
-    obsLst = np.asarray([obsLst])
 
 if skyLstFile is not None and os.path.exists(skyLstFile):
     skyLst = wifisIO.readAsciiList(skyLstFile)
@@ -267,10 +131,182 @@ if skyLstFile is not None and os.path.exists(skyLstFile):
         skyLst = np.asarray([skyLst])
 else:
     skyLst = None
-    
+
+if darkLstFile is not None and os.path.exists(darkLstFile):
+    darkLst = wifisIO.readAsciiList(darkLstFile)
+    if darkLst.ndim == 0:
+        darkLst = np.asarray([darkLst])
+else:
+    darkLst = None   
+
+if os.path.exists(flatLstFile):
+    flatLst = wifisIO.readAsciiList(flatLstFile)
+
+    if flatLst.ndim == 0:
+        flatLst = np.asarray([waveLst])
+else:
+    raise SystemExit('flat list file ' + flatLstFile + ' does not exist')
+
+if os.path.exists(waveLstFile):
+    waveLst = wifisIO.readAsciiList(waveLstFile)
+
+    if waveLst.ndim == 0:
+        waveLst = np.asarray([waveLst])
+else:
+    raise SystemExit('wave/arc list file ' + waveLstFile + ' does not exist')
+
 cubeLst = []
 for i in range(len(obsLst)):
+    
+    #**************************************************************************************************
+    #deal with darks
+    if darkLst is not None:
+        darkFolder = darkLst[i]
+        
+        if not os.path.exists('processed/'+darkFolder+'_dark.fits'):
+            darkFolder = wifisIO.readAsciiList(darkInfoFile).tostring()
+            print('Processing dark')
+            
+            dark, sigmaImg, satFrame, hdr = processRamp.auto(darkFolder, rootFolder,'processed/'+darkFolder+'_dark.fits', satCounts, nlCoeff, None, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=0, saveAll=False, ignoreBPM=True)
+        else:
+            dark = wifisIO.readImgsFromFile('processed/'+darkFolder+'_dark.fits')[0]
+    else:
+        darkFolder=None
+    #**************************************************************************************************
 
+    #deal with flats
+    flatFolder = flatLst[i]
+
+    if not os.path.exists('processed/'+flatFolder+'_flat.fits'):
+        print('Processing flat')
+        flat, sigmaImg, satFrame, flatHdr = processRamp.auto(flatFolder, rootFolder,'processed/'+flatFolder+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=20, saveAll=False)
+    else:
+        flat,flatHdr = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat.fits')
+
+    if not os.path.exists('processed/'+flatFolder+'_flat_limits.fits'):
+        #get limits
+        print('Getting limits relative to distortion map')
+        limits = slices.findLimits(flat,limSmth=20, rmRef=True)
+
+        #get shift compared to ronchi mask
+        if hband:
+            #only use region with suitable flux
+            flatImgMed = np.nanmedian(flat[4:-4,4:-4], axis=1)
+            flatImgMedGrad = np.gradient(flatImgMed)
+            medMax = np.nanargmax(flatImgMed)
+            lim1 = np.nanargmax(flatImgMedGrad[:medMax])
+            lim2 = np.nanargmin(flatImgMedGrad[medMax:])+medMax
+            shft = int(np.nanmedian(limits[1:-1,lim1:lim2+1] - distMapLimits[1:-1,lim1:lim2+1]))
+        else:
+            shft = int(np.nanmedian(limits[1:-1,:] - distMapLimits[1:-1,:]))
+
+        flatHdr.set('LIMSHIFT',shft, 'Limits shift relative to Ronchi slices')
+        wifisIO.writeFits(limits, 'processed/'+flatFolder+'_flat_limits.fits', hdr=flatHdr)
+    else:
+        limits, flatHdr = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_limits.fits')
+        shft = flatHdr['LIMSHIFT']
+    
+    if darkFolder is not None:
+        print('Subtracting dark from flat')
+        flat -= dark
+    
+    flat = flat[4:-4, 4:-4]
+
+    #extract slices and save
+    if not os.path.exists('processed/'+flatFolder+'_flat_slices.fits'):
+        print('Extracting flat slices')
+        flatSlices = slices.extSlices(flat, distMapLimits, shft=shft)
+        wifisIO.writeFits(flatSlices,'processed/'+flatFolder+'_flat_slices.fits', ask=False, hdr=flatHdr)
+    else:
+        flatSlices,flatHdr = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_slices.fits')
+    
+    if not os.path.exists('processed/'+flatFolder+'_flat_slices_norm.fits'):
+        print('Getting normalized slices')
+        #get normalized flat field slices
+        flatNorm = slices.getResponseAll(flatSlices, 0, 0.1)
+        wifisIO.writeFits(flatNorm, 'processed/'+flatFolder+'_flat_slices_norm.fits',ask=False)
+    else:
+        flatNorm = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_slices_norm.fits')[0]
+    
+    #**************************************************************************************************
+    #deal with wavelength calibration
+
+    waveFolder = waveLst[i]
+    if not os.path.exists('processed/'+waveFolder+'_wave.fits'):
+        print('Processing arc image')
+        wave, sigmaImg, satFrame, hdr = processRamp.auto(waveFolder, rootFolder,'processed/'+waveFolder+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=0, saveAll=False)
+    else:
+        wave = wifisIO.readImgsFromFile('processed/'+waveFolder+'_wave.fits')[0]
+    
+    #remove reference pixels
+    wave = wave[4:-4,4:-4]
+
+    if not os.path.exists('processed/'+waveFolder+'wave_slices.fits'):
+        print('Extracting wave slices')
+        waveSlices = slices.extSlices(wave,  distMapLimits, shft=shft)
+        wifisIO.writeFits(waveSlices, 'processed/'+waveFolder+'_wave_slices.fits', ask=False)
+    else:
+        waveSlices = wifisIO.readImgsFromFile('processed/'+waveFolder+'_wave_slices.fits')[0]
+
+    waveFlat = slices.ffCorrectAll(waveSlices, flatNorm)
+    
+    if not os.path.exists('processed/'+waveFolder+'wave_slices_distCor.fits'):
+        print('Distortion correcting flat slices')
+        waveCor = createCube.distCorAll(waveSlices, distMap, spatGridProps=spatGridProps)
+        wifisIO.writeFits(waveCor,'processed/'+waveFolder+'_wave_slices_distCor.fits', ask=False)
+    else:
+        waveCor = wifisIO.readImgsFromFile('processed/'+waveFolder+'_wave_slices_distCor.fits')[0]
+
+    if not os.path.exists('processed/'+waveFolder+'_wave_fitResults.pkl'):
+        print('Getting dispersion solution')
+        template = wifisIO.readImgsFromFile(waveTempFile)[0]
+        templateResults = wifisIO.readPickle(waveTempResultsFile)
+        prevSol = templateResults[5]
+
+        results = waveSol.getWaveSol(waveCor, template, atlasFile, 3, prevSol, winRng=9, mxCcor=150, weights=False, buildSol=False, sigmaClip=sigmaClip, allowLower=False, lngthConstraint=True, MP=True, adjustFitWin=True, sigmaLimit=sigmaLimit, allowSearch=False, sigmaClipRounds=sigmaClipRounds)
+
+        wifisIO.writePickle(results, 'processed/'+waveFolder+'_wave_fitResults.pkl')
+    else:
+        results = wifisIO.readPickle('processed/'+waveFolder+'_wave_fitResults.pkl')
+    
+    if not os.path.exists('processed/'+waveFolder+'_wave_waveMap.fits') or not os.path.exists('processed/'+waveFolder+'_wave_waveGridProps.dat'):
+        print('Building wavelegth map')
+    
+        wifisIO.createDir('quality_control')
+        rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(results, plotFile='quality_control/'+waveFolder+'_wave_waveFit_rms.pdf', threshold = cleanDispThresh)
+
+        waveMapLst = waveSol.buildWaveMap2(dispSolClean, waveCor[0].shape[1],fill_missing=True, extrapolate=True)
+        
+        #smooth waveMap solution to avoid pixel-to-pixel jumps
+        waveMap = waveSol.smoothWaveMapAll(waveMapLst,smth=1,MP=True )
+
+        wifisIO.writeFits(waveMap, 'processed/'+waveFolder+'_wave_waveMap.fits', ask=False)
+
+        #now trim wavemap if needed
+        if waveTrimThresh > 0:
+            print('Trimming wavelength map to useful range')
+            #now trim wavemap if needed
+            #read in unnormalized flat field data
+            waveMapTrim = waveSol.trimWaveSliceAll(waveMap, flatSlices, waveTrimThresh)
+                
+            #get wave grid properties
+            waveGridProps = createCube.compWaveGrid(waveMapTrim)
+        else:
+            waveGridProps = createCube.compWaveGrid(waveMap) 
+           
+        wifisIO.writeTable(waveGridProps, 'processed/'+waveFolder+'_wave_waveGridProps.dat')
+    else:
+        waveMap = wifisIO.readImgsFromFile('processed/'+waveFolder+'_wave_waveMap.fits')[0]
+        waveGridProps = wifisIO.readTable('processed/'+waveFolder+'_wave_waveGridProps.dat')
+
+    if not os.path.exists('processed/'+waveFolder+'_wave_slices_fullGrid.fits'):
+        print('placing arc image on grid')
+        waveGrid = createCube.waveCorAll(waveCor, waveMap, waveGridProps=waveGridProps)
+        wifisIO.writeFits(waveGrid, 'processed/'+waveFolder+'_wave_slices_fullGrid.fits', ask=False)
+
+    #**************************************************************************************************
+
+    print('processing observations')
     dataFolder = obsLst[i]
 
     print('Working on data folder ' + dataFolder)
