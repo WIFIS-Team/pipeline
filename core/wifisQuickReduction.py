@@ -17,58 +17,67 @@ from astropy.modeling import models, fitting
 import glob
 import warnings
 from wifisIO import sorted_nicely
+import wifisWaveSol as waveSol
 
-os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
 
-def plotImage(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRange=None):
+#******************************************************************************
+
+def initPaths(hband=False):
     """
     """
+
+    #create global variables
+    global rootFolder
+    global pipelineFolder
+    global distMapFile
+    global distMapLimitsFile
+    global satFile
+    global spatGridPropsFile
+    global bpmFile
+    global xScale
+    global yScale
+    global templateFile
+    global prevResultsFile
+    global atlasFile
+       
+
+    #set paths here
     
-    #******************************************************************************
-    #required user input
     rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319/'
     pipelineFolder = '/data/pipeline/'
 
-    #noProc = False
+    if hband:
+        #needs updating
+        templateFile = '/data/pipeline/external_data/hband_template.fits'
+        prevResultsFile = '/data/pipeline/external_data/hband_template.pkl'
+        distMapFile = pipelineFolder + '/external_data/distMap.fits'
+        spatGridPropsFile = pipelineFolder + '/external_data/distMap_spatGridProps.dat'
+        distMapLimitsFile = pipelineFolder+'/external_data/distMap_limits.fits'
+    else:
+        #TB band
+        templateFile = pipelineFolder+'/external_data/waveTemplate.fits'
+        prevResultsFile = pipelineFolder+'/external_data/waveTemplateFittingResults.pkl'
+        distMapFile = pipelineFolder + '/external_data/distMap.fits'
+        spatGridPropsFile = pipelineFolder + '/external_data/distMap_spatGridProps.dat'
+        distMapLimitsFile = pipelineFolder+'/external_data/distMap_limits.fits'
 
-    #change here
-    #rampFolderFile = 'obsQuick.inp' # ascii file containing the name of the folder containing the target ramp
-    #flatFolderFile = 'flatQuick.inp' # ascii containing the name of the flat ramp folder associated with the target ramp
+        #should be (mostly) static
+        atlasFile = pipelineFolder + '/external_data/best_lines2.dat'
+        satFile = pipelineFolder + '/external_data/master_detLin_satCounts.fits'
+        bpmFile = pipelineFolder+'external_data/bpm.fits'
 
-    #optional
-    #skyFolderFile = 'skyQuick.inp' # ascii containing the name of the sky ramp folder associated with the target ramp
+        #set the pixel scale
+        xScale = 0.532021532706
+        yScale = -0.545667026386 #valid for npix=1, i.e. 35 pixels spanning the 18 slices. This value needs to be updated in agreement with the choice of interpolation
 
-    #if os.path.exists(rampFolderFile):
-    #    rampFolder = wifisIO.readAsciiList(rampFolderFile).tostring()  
-    #else:
-    #    raise SystemExit('*** '+ rampFolderFile + ' does not exist ***')
-    #
-    #if os.path.exists(flatFolderFile):
-    #    flatFolder = wifisIO.readAsciiList(flatFolderFile).tostring()
-    #else:
-    #    raise SystemExit('*** ' + flatFolderFile + ' does not exist ***')
-    #
-    #if os.path.exists(skyFolderFile):
-    #    skyFolder = wifisIO.readAsciiList(skyFolderFile).tostring()
-    #else:
-    #    skyFolder = None
-    #
-    #if skyFolder == '':
-    #    skyFolder = None
+    return
+#*******************************************************************************
 
-    #(mostly) static input
 
-    distMapFile = pipelineFolder + 'external_data/distMap.fits' #must point to location of distortion map file
-    distLimitsFile = pipelineFolder + 'external_data/distMap_limits.fits' #must point to the location of the flat-field associated with the Ronchi mask image
-    satFile = pipelineFolder + 'external_data/master_detLin_satCounts.fits' #must point to location of saturation limits file, from detector linearity measurements
-    spatGridProps = wifisIO.readTable(pipelineFolder+'external_data/distMap_spatGridProps.dat')
-    bpmFile = pipelineFolder+'external_data/bpm.fits'
-
-    #set the pixel scale
-    xScale = 0.532021532706
-    yScale = -0.545667026386 #valid for npix=1, i.e. 35 pixels spanning the 18 slices. This value needs to be updated in agreement with the choice of interpolation
-    #******************************************************************************
-
+def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRange=None):
+    """
+    """
+    
     satCounts = wifisIO.readImgsFromFile(satFile)[0]
 
     wifisIO.createDir('quick_reduction')
@@ -95,7 +104,8 @@ def plotImage(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRan
             satFrame = satInfo.getSatFrameCL(data, satCounts,32)
 
             #get processed ramp
-            fluxImg = combData.FowlerSamplingCL(inttime, data, satFrame, 32)[0]  
+            fluxImg = combData.FowlerSamplingCL(inttime, data, satFrame, 32)[0]
+            data = 0
     elif os.path.exists(rootFolder + '/UpTheRamp/'+rampFolder):
         UTR = True
         folderType = '/UpTheRamp/'
@@ -120,6 +130,7 @@ def plotImage(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRan
 
             #get processed ramp
             fluxImg = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
+            data = 0
     else:
         raise SystemExit('*** Ramp folder ' + rampFolder + ' does not exist ***')
 
@@ -150,7 +161,8 @@ def plotImage(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRan
                 satFrame = satInfo.getSatFrameCL(data, satCounts,32)
 
                 #get processed ramp
-                skyImg = combData.FowlerSamplingCL(inttime, data, satFrame, 32)[0]  
+                skyImg = combData.FowlerSamplingCL(inttime, data, satFrame, 32)[0]
+                data = 0
         elif os.path.exists(rootFolder + '/UpTheRamp/'+skyFolder):
             UTR = True
             folderType = '/UpTheRamp/'
@@ -173,7 +185,7 @@ def plotImage(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRan
                 
                 #get processed ramp
                 skyImg = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
-                
+                data = 0
         else:
             raise SystemExit('*** sky Ramp folder ' + skyFolder + ' does not exist ***')
 
@@ -213,7 +225,7 @@ def plotImage(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRan
             folderType = '/FSRamp/'
             UTR =  False
             if os.path.exists(rootFolder + folderType + flatFolder+'/Result/CDSResult.fits'):
-                flat, hdr = wifisIO.readImgsFromFile(rootFolder + folderType + rampFolder+'/Result/CDSResult.fits')
+                flat, hdr = wifisIO.readImgsFromFile(rootFolder + folderType + flatFolder+'/Result/CDSResult.fits')
             else:
                 data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + flatFolder)
 
@@ -222,7 +234,7 @@ def plotImage(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRan
                 
                 #get processed ramp
                 flat = combData.FowlerSamplingCL(inttime, data, satFrame, 32)[0]  
-
+                data = 0
         elif os.path.exists(rootFolder + '/UpTheRamp/'+flatFolder):
             folderType = '/UpTheRamp/'
             UTR = True
@@ -245,7 +257,7 @@ def plotImage(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRan
                 
                 #get processed ramp
                 flat = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
-
+                data = 0 
         else:
             raise SystemExit('*** flat folder ' + flatFolder + ' does not exist ***')
     
@@ -262,10 +274,10 @@ def plotImage(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRan
 
         print('Getting slice limits')
         limits = slices.findLimits(flat, dispAxis=0, rmRef=True)
-        wifisIO.writeFits(limits, 'quick_reduction/'+flatFolder+'_limits.fits')
+        wifisIO.writeFits(limits, 'quick_reduction/'+flatFolder+'_limits.fits', ask=False)
 
     #get ronchi slice limits
-    distLimits = wifisIO.readImgsFromFile(distLimitsFile)[0]
+    distLimits = wifisIO.readImgsFromFile(distMapLimitsFile)[0]
 
     #determine shift
     shft = np.median(limits[1:-1, :] - distLimits[1:-1,:])
@@ -276,6 +288,7 @@ def plotImage(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRan
     #place on uniform spatial grid
     print('Distortion correcting')
     distMap = wifisIO.readImgsFromFile(distMapFile)[0]
+    spatGridProps = wifisIO.readTable(spatGridPropsFile)
     dataGrid = createCube.distCorAll(dataSlices, distMap, spatGridProps=spatGridProps)
 
     #create cube
@@ -342,3 +355,208 @@ def plotImage(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRan
     plt.close('all')
     return
 
+def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None):
+    """
+    """
+
+    sigmaClipRounds=1 #number of iterations when sigma-clipping of dispersion solution
+    sigmaClip = 3 #sigma-clip cutoff when sigma-clipping dispersion solution
+    sigmaLimit= 3 #relative noise limit (x * noise level) for which to reject lines
+    mxOrder = 3
+
+    
+    wifisIO.createDir('quick_reduction')
+
+    #read in previous results and template
+    template = wifisIO.readImgsFromFile(templateFile)[0]
+    prevResults = wifisIO.readPickle(prevResultsFile)
+    prevSol = prevResults[5]
+    distMap = wifisIO.readImgsFromFile(distMapFile)[0]
+    spatGridProps = wifisIO.readTable(spatGridPropsFile)
+    
+    satCounts = wifisIO.readImgsFromFile(satFile)[0]
+
+    if (os.path.exists('quick_reduction/'+waveFolder+'_wave_fwhm_map.png') and os.path.exists('quick_reduction/'+waveFolder+'_wave_fwhm_map.fits') and os.path.exists('quick_reduction/'+waveFolder+'_wave_wavelength_map.fits')):
+        print('*** ' + waveFolder + ' arc/wave data already processed, skipping ***')
+    else:
+        print('Processing arc file '+ waveFolder)
+        #check the type of raw data, only assumes CDS or up-the-ramp
+        if (os.path.exists(rootFolder + '/CDSReference/'+waveFolder+'/Result/CDSResult.fits')):
+            #CDS image
+            wave = wifisIO.readImgsFromFile(rootFolder + '/CDSReference/'+waveFolder+'/Result/CDSResult.fits')[0]
+            wave = wave[4:-4, 4:-4] #trim off reference pixels
+        elif os.path.exists(rootFolder+'/FSRamp/'+waveFolder):
+            folderType = '/FSRamp/'
+            UTR =  False
+            if os.path.exists(rootFolder + folderType + waveFolder+'/Result/CDSResult.fits'):
+                wave, hdr = wifisIO.readImgsFromFile(rootFolder + folderType + waveFolder+'/Result/CDSResult.fits')
+            else:
+                data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + waveFolder)
+
+                #find if any pixels are saturated and avoid usage
+                satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+
+                #get processed ramp
+                wave = combData.FowlerSamplingCL(inttime, data, satFrame, 32)[0]
+                data = 0
+        elif os.path.exists(rootFolder+'/UpTheRamp/'+wavefolder):
+            #assume up-the-ramp
+            data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + '/UpTheRamp/'+waveFolder)
+            satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+            
+            #get processed ramp
+            wave = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
+            wave = wave[4:-4,4:-4]
+            data = 0
+        else:
+            raise SystemExit('*** Wave folder ' + waveFolder + ' does not exist ***')
+
+        if (os.path.exists('quick_reduction/'+flatFolder+'_flat_limits.fits') and os.path.exists('quick_reduction/'+flatFolder+'_flat_slices.fits')):
+            limits, limitsHdr = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_limits.fits')
+            flatSlices = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_slices.fits')[0]
+            shft = limitsHdr['LIMSHIFT']
+        else:
+            print('Processing flat file')
+            #check the type of raw data, only assumes CDS or up-the-ramp
+            if (os.path.exists(rootFolder + '/CDSReference/'+flatFolder+'/Result/CDSResult.fits')):
+                #CDS image
+                flat, flatHdr = wifisIO.readImgsFromFile(rootFolder + '/CDSReference/'+flatFolder+'/Result/CDSResult.fits')
+            elif os.path.exists(rootfolder+'/FSRamp/'+flatFolder):
+                folderType = '/FSRamp/'
+                UTR =  False
+                if os.path.exists(rootFolder + folderType + flatFolder+'/Result/CDSResult.fits'):
+                    flat, hdr = wifisIO.readImgsFromFile(rootFolder + folderType + flatFolder+'/Result/CDSResult.fits')
+                else:
+                    data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + flatFolder)
+                    
+                    #find if any pixels are saturated and avoid usage
+                    satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+
+                    #get processed ramp
+                    flat = combData.FowlerSamplingCL(inttime, data, satFrame, 32)[0]  
+                    data = 0
+            elif os.path.exists(rootFolder + '/UpTheRamp/'+flatFolder):
+                data, inttime, flatHdr = wifisIO.readRampFromFolder(rootFolder + '/UpTheRamp/'+flatFolder)
+                satCounts = wifisIO.readImgsFromFile(satFile)[0]
+                satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+                #get processed ramp
+                flat = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
+                data = 0
+            else:
+                raise SystemExit('*** Flat folder ' + flatFolder + ' does not exist ***')
+
+            print('Finding flat limits')
+            limits = slices.findLimits(flat, dispAxis=0, winRng=51, imgSmth=5, limSmth=20,rmRef=True)
+            distMapLimits = wifisIO.readImgsFromFile(distMapLimitsFile)[0]
+            shft = int(np.nanmedian(limits[1:-1,:] - distMapLimits[1:-1,:]))
+            limits = distMapLimits
+            flatSlices = slices.extSlices(flat[4:2044,4:2044], limits)
+
+            flatHdr.set('LIMSHIFT',shft, 'Limits shift relative to Ronchi slices')
+            wifisIO.writeFits(limits,'quick_reduction/'+flatFolder+'_flat_limits.fits',hdr=flatHdr, ask=False)
+            wifisIO.writeFits(flatSlices,'quick_reduction/'+flatFolder+'_flat_slices.fits', ask=False)
+                
+        print('extracting wave slices')
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", "RuntimeWarning")
+            waveSlices = slices.extSlices(wave, limits, dispAxis=0, shft=shft)
+
+        print('getting normalized wave slices')
+        if hband:
+            flatNorm = slices.getResponseAll(flatSlices, 0, 0.6)
+        else:
+            flatNorm = slices.getResponseAll(flatSlices, 0, 0.1)
+
+        waveNorm = slices.ffCorrectAll(waveSlices, flatNorm)
+
+        print ('getting distortion corrected slices')
+        waveCor = createCube.distCorAll(waveSlices, distMap, spatGridProps=spatGridProps)
+
+        #save data
+        wifisIO.writeFits(waveCor, 'quick_reduction/'+waveFolder+'_wave_slices_distCor.fits')
+        print('Getting dispersion solution')
+
+        result = waveSol.getWaveSol(waveCor, template, atlasFile, 3, prevSol, winRng=9, mxCcor=150, weights=False, buildSol=False, sigmaClip=sigmaClip, allowLower=False, lngthConstraint=True, MP=True, adjustFitWin=True, sigmaLimit=sigmaLimit, allowSearch=False, sigmaClipRounds=sigmaClipRounds)        
+       
+        print('Extracting solution results')
+        dispSolLst = result[0]
+        fwhmLst = result[1]
+        pixCentLst = result[2]
+        waveCentLst = result[3]
+        rmsLst = result[4]
+        pixSolLst = result[5]
+
+        print('Building maps of results')
+        npts = waveSlices[0].shape[1]
+        waveMapLst = waveSol.buildWaveMap(dispSolLst,npts)
+
+        for fwhm in fwhmLst:
+            for i in range(len(fwhm)):
+                fwhm[i] = np.abs(fwhm[i])
+        
+        fwhmMapLst = waveSol.buildFWHMMap(pixCentLst, fwhmLst, npts)
+        #get max and min starting wavelength based on median of central slice (slice 8)
+
+        if hband:
+            trimSlc = waveSol.trimWaveSlice([waveMapLst[8], flatSlices[8], 0.5])
+            waveMin = np.nanmin(trimSlc)
+            waveMax = np.nanmax(trimSlc)
+        else:
+            trimSlc = waveMapLst[8]
+            waveMax = np.nanmedian(trimSlc[:,0])
+            waveMin = np.nanmedian(trimSlc[:,-1])
+ 
+        print('*******************************************************')
+        print('*** Minimum median wavelength for slice 8 is ' + str(waveMin)+ ' ***')
+        print('*** Maximum median wavelength for slice 8 is ' + str(waveMax)+ ' ***')
+        print('*******************************************************')
+
+        
+        #determine length along spatial direction
+        ntot = 0
+        for j in range(len(rmsLst)):
+            ntot += len(rmsLst[j])
+
+        #get median FWHM
+        fwhmAll = []
+        for f in fwhmLst:
+            for i in range(len(f)):
+                for j in range(len(f[i])):
+                    fwhmAll.append(f[i][j])
+            
+        fwhmMed = np.nanmedian(fwhmAll)
+        print('**************************************')
+        print('*** MEDIAN FWHM IS '+ str(fwhmMed) + ' ***')
+        print('**************************************')
+
+        #build "detector" map images
+        #wavelength solution
+        waveMap = np.empty((npts,ntot),dtype='float32')
+        strt=0
+        for m in waveMapLst:
+            waveMap[:,strt:strt+m.shape[0]] = m.T
+            strt += m.shape[0]
+
+        #fwhm map
+        fwhmMap = np.empty((npts,ntot),dtype='float32')
+        strt=0
+        for f in fwhmMapLst:
+            fwhmMap[:,strt:strt+f.shape[0]] = f.T
+            strt += f.shape[0]
+
+        #save results
+        wifisIO.writeFits(waveMap, 'quick_reduction/'+waveFolder+'_wave_wavelength_map.fits', ask=False)
+        wifisIO.writeFits(fwhmMap, 'quick_reduction/'+waveFolder+'_wave_fwhm_map.fits', ask=False)
+
+        print('plotting results')
+        fig = plt.figure()
+
+        plt.imshow(fwhmMap, aspect='auto', cmap='jet', clim=colorbarLims, origin='lower')
+
+        plt.colorbar()
+        plt.title('Median FWHM is '+'{:3.1f}'.format(fwhmMed) +', min wave is '+'{:6.1f}'.format(waveMin)+', max wave is '+'{:6.1f}'.format(waveMax))
+        plt.savefig('quick_reduction/'+waveFolder+'_wave_fwhm_map.png', dpi=300)
+        plt.show()
+        plt.close()
+
+    return
