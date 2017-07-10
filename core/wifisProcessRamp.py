@@ -116,7 +116,7 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,ro
     print("Subtracting reference pixel row bias")
     refCor.rowCL(data, nRows,rowSplit)
 
-    if satFrame is None:
+    if satCounts is None:
         satFrame = np.empty((data.shape[0],data.shape[1]),dtype='float32')
         satFrame[:] = data.shape[2]
     else:
@@ -127,7 +127,7 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,ro
     print("Correcting for non-linearity")
     
     #find NL coefficient file
-    if nlCoef is not None:
+    if nlCoeff is not None:
         NLCor.applyNLCorCL(data, nlCoeff, nlSplit)
 
     #******************************************************************************
