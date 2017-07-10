@@ -222,12 +222,19 @@ def readRampFromFolder(folderName):
     folderName is the name of the folder from which to read files
     output is the data cube generated from the files contained in the specified folder.    
     """
-    list = glob.glob(folderName+'/H2*fits')
-    list = sorted_nicely(list)
+
+    #first make sure that only one set of ramps is present in folder
+    list = glob.glob(folderName+'/*N01.fits')
+
+    if len(list)>1:
+        raise SystemExit('*** ERROR: More than one set of ramps present in folder ' + folderName + '. Use readAsciiList instead. ***')
+    else:
+        list = glob.glob(folderName+'/H2*fits')
+        list = sorted_nicely(list)
     
-    output,outtime,hdr = readRampFromList(list)    
+        output,outtime,hdr = readRampFromList(list)    
     
-    return output,outtime,hdr
+        return output,outtime,hdr
 
 def readTable (filename):
     """
@@ -255,7 +262,10 @@ def readAsciiList (filename):
     return out
 
 def sorted_nicely( l ): 
-    """ Sort the given iterable in the way that humans expect.""" 
+    """ Sort the given iterable in the way that humans expect."""
+
+    #based on code from https://gist.github.com/limed/473a498641bbc7761a20
+    
     convert = lambda text: int(text) if text.isdigit() else text 
     alphanum_key = lambda key: [ convert(c) for c in re.split('([0-9]+)', key) ] 
     return sorted(l, key = alphanum_key)
