@@ -10,277 +10,101 @@ Produces:
 """
 import matplotlib
 matplotlib.use('gtkagg')
-import numpy as np
-import time
 import matplotlib.pyplot as plt
-import wifisNLCor as NLCor
-import wifisRefCor as refCor
 import os
 import wifisIO 
-import wifisCombineData as combData
-import wifisSlices as slices
-import wifisUncertainties
-import wifisBadPixels as badPixels
-import astropy.io.fits as fits
-import wifisHeaders as headers
-import wifisProcessRamp as processRamp
-from matplotlib.backends.backend_pdf import PdfPages
+import warnings
+import wifisCalFlatFunc as calFlat
 
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
 os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
-plt.ioff()
-
-t0 = time.time()
 
 #*****************************************************************************
 #******************************* Required input ******************************
-fileList = 'flat.lst' # a simple ascii file containing a list of the folder names that contain the ramp data
-darkListFile = None # list of processed dark ramps
 
-hband = True
+flatListFile = 'dome.lst' # a simple ascii file containing a list of the folder names that contain the ramp data
+darkListFile = '' #None # list of processed dark ramps
 
-#mostly static input from here
+hband = False
+
+#pipeline location and RAW data location
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
-nlFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_NLCoeff.fits' # the non-linearity correction coefficients file        
-satFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_satCounts.fits' # the saturation limits file
-bpmFile = '/data/pipeline/external_data/bpm.fits' # the bad pixel mask
+pipelineFolder = '/data/pipeline/'
+
+#location of calibration files
+nlFile = pipelineFolder + 'external_data/master_detLin_NLCoeff.fits' # the non-linearity correction coefficients file        
+satFile = pipelineFolder+'external_data/master_detLin_satCounts.fits' # the saturation limits file
+bpmFile = pipelineFolder+'external_data/bpm.fits' # the bad pixel mask
 
 if hband:
     distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_june/hband/processed/20170607221050_flat_limits.fits'
 else:
-    distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_may/ronchiMap_limits.fits'
+    distMapLimitsFile = pipelineFolder+'external_data/distMap_limits.fits'
 
-
+distMapLimitsFile = ''
 #optional behaviour of pipeline
 plot = True #whether to plot the traces
 crReject = False
 skipObsinfo = False
-skipDarkCheck = True
+winRng = 51
+imgSmth = 5
+polyFitDegree=2
+
+#parameters used for processing of ramps
+nChannel=32 #specifies the number of channels used during readout of detector
+bpmCorRng=20 #specifies the maximum separation of pixel search to use during bad pixel correction
+nRowAverage=4 # specifies the number of rows of reference pixels to use to correct for row bias (+/- nRowAverage)
+rowSplit=1 # specifies how many processing steps to use during reference row correction. Must be integer multiple of number of frames. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
+nlSplit=32 #specifies how many processing steps to use during non-linearity correction. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption. 
+combSplit=32 #specifies how many processing steps to use during creation of ramp image. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
 
 #*****************************************************************************
+#*****************************************************************************
 
-#NOTES
-#file list can be a 2D table: where all files to be coadded are on the same row and files to be processed separately are on different rows. *** NOT YET IMPLEMENTED
-
-if hband:
-    print('***WORKING ON H-BAND DATA***')
-    
 #first check if required input exists
-if not (os.path.exists(nlFile) and os.path.exists(satFile)):
-    if not (os.path.exists(satFile)):
-        print ('*** ERROR: Cannot continue, file saturation file ' + satFile + ' does not exist. Please process the a detector linearity calibration sequence and provide the necessary file ***')
-    if not (os.path.exists(nlFile)):
-        print ('*** ERROR: Cannot continue, file NL coefficient file ' + nlFile + ' does not exist. Please process the a detector linearity calibration sequence and provide the necessary file ***')
-    raise SystemExit('*** Missing calibration files required, exiting ***')
-
-#create processed directory, in case it doesn't exist
-wifisIO.createDir('processed')
-
-if (plot):
-    wifisIO.createDir('quality_control')
-
 print('Reading in calibration files')
-#open calibration files
-nlCoeff = wifisIO.readImgsFromFile(nlFile)[0]
-satCounts = wifisIO.readImgsFromFile(satFile)[0]
 
+#open calibration files
+if os.path.exists(nlFile):
+    nlCoef = wifisIO.readImgsFromFile(nlFile)[0]
+else:
+    nlCoef =None
+
+if os.path.exists(satFile):
+    satCounts = wifisIO.readImgsFromFile(satFile)[0]
+else:
+    satCounts = None
+    
 if (os.path.exists(bpmFile)):
     BPM = wifisIO.readImgsFromFile(bpmFile)[0]
 else:
     BPM = None
 
-#read file list
-lst= wifisIO.readAsciiList(fileList)
-
-if lst.ndim == 0:
-    lst = np.asarray([lst])
-
-if darkListFile is not None:
+if (darkListFile is not None) and os.path.exists(darkListFile):
     darkLst = wifisIO.readAsciiList(darkListFile)
     
     if darkLst.ndim == 0:
-        darkLst = np.asarray(darkLst)
+        darkLst = [darkLst]
     else:
         darkLst = None
 else:
     darkLst = None
+
+#read file list
+if os.path.exists(flatListFile):
+    flatLst= wifisIO.readAsciiList(flatListFile)
+else:
+    raise Warning('*** Flat file list ' + flatListFile + ' does not exist ***')
+
+if nlCoef is None:
+    warnings.warn('*** No non-linearity coefficient array provided, corrections will be skipped ***')
+
+if satCounts is None:
+    warnings.warn('*** No saturation counts array provided and will not be taken into account ***')
+
+if flatLst.ndim == 0:
+    flatLst = np.asarray([lst])
+
+calFlat.runCalFlat(flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=plot, nChannel=nChannel, nRowAverage=nRowAverage, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, bpmCorRng=bpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, imgSmth=imgSmth, polyFitDegree=2, avgRamps=True)
+
     
-procFlux = []
-procSigma = []
-procSatFrame = []
-
-#go through list and process each file individually
-#************
-#eventually need to add capability to create master flat from groups
-#************
-for lstNum in range(len(lst)):
-    t1 = time.time()
-    if (lst.ndim>1):
-        folder = lst[lstNum,0]
-    else:
-        folder = lst[lstNum].tostring()
-
-
-    if darkLst is not None:
-        if darkLst.ndim>1:
-            darkFile = darkLst[lstNum]
-        else:
-            darkFile = darkLst[lstNum].tostring() 
-    else:
-        darkFile = None
-        
-    savename = 'processed/'+folder
-    
-    #first check master flat and limits exists
-    
-    if(os.path.exists(savename+'_flat.fits') and os.path.exists(savename+'_flat_limits.fits') and os.path.exists(savename+'_flat_slices.fits') and os.path.exists(savename+'_flat_slices_norm.fits')):
-        cont = 'n'
-        cont = wifisIO.userInput('All processed flat field files already exists for ' +folder+', do you want to continue processing (y/n)?')
-    else:
-        cont = 'y'
-        
-    if (cont.lower() == 'y'):
-        print('*** Working on folder ' + folder + ' ***')
-
-        if (os.path.exists(savename+'_flat.fits')):
-            cont = wifisIO.userInput('Processed flat field file already exists for ' +folder+', do you want to continue processing (y/n)?')
-            if (not cont.lower() == 'y'):
-                print('Reading image '+savename+'_flat.fits instead')
-                flatImgs, hdr= wifisIO.readImgsFromFile(savename+'_flat.fits')
-                flatImg, sigmaImg, satFrame = flatImgs
-                if (type(hdr) is list):
-                    hdr = hdr[0]
-                contProc2=False
-            else:
-                contProc2=True
-        else:
-            contProc2=True
-
-        if contProc2:
-            print('Processing ramp')
-            flatImg, sigmaImg, satFrame, hdr = processRamp.auto(folder, rootFolder,savename+'_flat.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=20, skipObsinfo=skipObsinfo)
-            
-        #carry out dark subtraction
-        if darkFile is not None:
-            print('Subtracting dark ramp')
-            dark, darkSig, darkSat = wifisIO.readImgsFromFile(darkFile)[0]
-            flatImg -= dark
-            sigmaImg = np.sqrt(sigmaImg**2 + darkSig**2)
-        else:
-            if not skipDarkCheck:
-                cont = wifisIO.userInput('No dark ramp provided, do you want to proceed without dark subtraction (y/n)?')
-                if (not cont.lower()=='y'):
-                    raise SystemExit("*** EXIITING. NO DARK RAMP PROVIDED ***")
-
-            
-        if os.path.exists(savename+'_flat_limits.fits'):
-            cont = wifisIO.userInput('Limits file already exists for ' +folder+', do you want to continue processing (y/n)?')
-            if (not cont.lower() == 'y'):
-                print('Reading limits '+savename+'_flat_limits.fits instead')
-                finalLimits, limitsHdr= wifisIO.readImgsFromFile(savename+'_flat_limits.fits')
-                shft = limitsHdr['LIMSHIFT']
-                contProc2 = False
-            else:
-                contProc2 = True
-        else:
-            contProc2= True
-
-        if (contProc2):
-            print('Finding slice limits and extracting slices')
-            #find limits of each slice with the reference pixels, but the returned limits exclude them
-            limits = slices.findLimits(flatImg, dispAxis=0, winRng=51, imgSmth=5, limSmth=20, rmRef=True)
-
-            #get smoother limits, if desired, using polynomial fitting
-            polyLimits = slices.polyFitLimits(limits, degree=3)
-
-            if os.path.exists(distMapLimitsFile):
-                print('Finding slice limits relative to distortion map file')
-                distMapLimits = wifisIO.readImgsFromFile(distMapLimitsFile)[0]
-                if hband:
-                    #only use region with suitable flux
-                    flatImgMed = np.nanmedian(flatImg[4:-4,4:-4], axis=1)
-                    flatImgMedGrad = np.gradient(flatImgMed)
-                    medMax = np.nanargmax(flatImgMed)
-                    lim1 = np.nanargmax(flatImgMedGrad[:medMax])
-                    lim2 = np.nanargmin(flatImgMedGrad[medMax:])+medMax
-                    shft = int(np.nanmedian(polyLimits[1:-1,lim1:lim2+1] - distMapLimits[1:-1,lim1:lim2+1]))
-                else:
-                    shft = int(np.nanmedian(polyLimits[1:-1,:] - distMapLimits[1:-1,:]))
-                    
-                finalLimits = distMapLimits
-            else:
-                finalLimits = polyLimits
-                shft = 0
-                
-            #write distMapLimits + shft to file
-            hdr.set('LIMSHIFT',shft, 'Limits shift relative to Ronchi slices')
-            wifisIO.writeFits(finalLimits,savename+'_flat_limits.fits', hdr=hdr)
-            
-            #save figures of tracing results for quality control purposes
-            if (plot):
-                print('Plotting results')
-                plt.ioff()
-                wifisIO.createDir('quality_control')
-                with PdfPages('quality_control/'+folder+'_flat_slices_traces.pdf') as pdf:
-                    fig = plt.figure()
-                    med1= np.nanmedian(flatImg)
-                    
-                    plt.imshow(flatImg[4:-4,4:-4], aspect='auto', cmap='jet', clim=[0,2.*med1], origin='lower')
-                    plt.xlim=(0,2040)
-                    plt.colorbar()
-                    for l in range(limits.shape[0]):
-                        plt.plot(limits[l], np.arange(limits.shape[1]),'k', linewidth=1) #drawn limits
-                        plt.plot(np.clip(finalLimits[l]+shft,0, flatImg[4:-4,4:-4].shape[0]-1), np.arange(limits.shape[1]),'r--', linewidth=1) #shifted ronchi limits, if provided, or polynomial fit
-                    pdf.savefig()
-                    plt.close(fig)
-
-        #get rid of reference pixels
-        flatImg = flatImg[4:-4, 4:-4]
-        sigmaImg = sigmaImg[4:-4, 4:-4]
-        satFrame = satFrame[4:-4,4:-4]
-
-        if os.path.exists(savename+'_flat_slices.fits'):
-            cont = wifisIO.userInput('Flat slices file already exists for ' +folder+', do you want to continue processing (y/n)?')
-            if (not cont.lower() == 'y'):
-                print('Reading slices file '+savename+'_flat_slices.fits instead')
-                flatSlices = wifisIO.readImgsFromFile(savename+'_flat_slices.fits')[0]
-                contProc2 = False
-            else:
-                contProc2 = True
-        else:
-            contProc2= True
-            
-        if (contProc2):
-            print('Extracting slices')           
-            #now extract the individual slices
-            flatSlices = slices.extSlices(flatImg, finalLimits, dispAxis=0, shft=shft)
-            
-            #extract uncertainty slices
-            sigmaSlices = slices.extSlices(sigmaImg, finalLimits, dispAxis=0, shft=shft)
-
-            #extract saturation slices
-            satSlices = slices.extSlices(satFrame, finalLimits, dispAxis=0, shft=shft)
-
-            #write slices to file
-            wifisIO.writeFits(flatSlices+sigmaSlices+satSlices,savename+'_flat_slices.fits',hdr=hdr)
-
-        if os.path.exists(savename+'_flat_slices_norm.fits'):
-            cont = wifisIO.userInput('Normalized flat slices file already exists for ' +folder+', do you want to continue processing (y/n)?')
-            if (cont.lower() == 'n'):
-                contProc2 = False
-            else:
-                contProc2 = True
-        else:
-            contProc2= True
-            
-        if (contProc2):
-            print('Getting normalized flat field')
-            #now get smoothed and normalized response function
-            flatNorm = slices.getResponseAll(flatSlices, 0, 0.1)
-            sigmaNorm = slices.ffCorrectAll(sigmaSlices, flatNorm)
-            
-            #write normalized images to file
-            wifisIO.writeFits(flatNorm + sigmaNorm + satSlices,savename+'_flat_slices_norm.fits',hdr=hdr)
-        print('*** Finished processing ' + folder + ' in ' + str(time.time()-t1) + ' seconds ***')
-        
-print('Total time to run entire script: ' + str(time.time()-t0) + ' seconds')
