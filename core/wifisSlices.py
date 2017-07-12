@@ -21,17 +21,8 @@ def limFit1(input):
     limMeas is a list the limits of the slices
     """
     
-    #this should be updated once WIFIS is in near final alignment/state.
-    #values are currently for 4kx4k optical CCD
-
-    #centGuess=[100,311,530,754,978,1198,1420,1650,1875,2097,2323,2551,2774,3002,3222,3462,3669,3907]
-    #centGuess = [34, 255, 466, 694, 915, 1142, 1363, 1593, 1812, 2041,2265,2492,2715, 2943,3167, 3392,3610,3834,4044]
-    #centGuess = [85, 195,308,422,535,654,763,877,986,1100,1218,1332, 1442,1564,1669, 1792,1896,2015]
-    #centGuess = [13, 122, 232, 345, 458, 570, 683, 795, 908, 1019, 1132, 1245, 1359, 1469, 1582, 1693, 1807, 1919, 2037]
-    #from first commissioning run
-    #centGuess = [44, 153, 267, 381, 495, 613, 718, 831, 945, 1059, 1173, 1287, 1400, 1515,1628,1742,1855, 1970,2040]
-    #from first commissioning run, better alignment
-    centGuess = [11, 124, 238, 352, 464, 579, 692, 804, 918, 1032, 1146, 1262, 1371, 1487, 1601, 1715, 1828, 1941, 2044]
+    #from third commissioning run, better alignment
+    centGuess = [25, 138, 252, 366, 479, 594, 706, 820, 935, 1048, 1163, 1278, 1390, 1506, 1620, 1735, 1849, 1965, 2044]
     y = input[0]
     nRng = input[1]
    
@@ -167,13 +158,15 @@ def getResponseFuncPoly(input):
     NOT CURRENTLY USED FOR ANYTHING
     """
 
-    slice = input[0]
+    slc = input[0]
     nOrd = input[1]
-    
+
     pInit = models.Polynomial2D(degree=nOrd)
-    fitP = fitting.LevMarLSQFitter()
-    x,y = np.mgrid[:s.shape[0], :s.shape[1]]
-    p = fitP(pInit,x,y,z)
+    fitP = fitting.LinearLSQFitter()
+    x,y = np.mgrid[:slc.shape[0], :slc.shape[1]]
+
+    whr = np.where(~np.isfinite(slc))
+    p = fitP(pInit,x,y,slc)
     
     return p.parameters
 
@@ -655,3 +648,78 @@ def getMedLevelSlice(slc):
 
     return out
 
+def getResponse2DMed(input):
+    """
+    Returns a possibly smoothed and normalized response function for the provided slice
+    Usage: norm = getResponse2D(input)
+    input is a list containing the image slice, the width of the Gaussian kernel to use for smoothing, and the cutoff for which the normalized response function is just set to 1.
+    """
+
+    slc = input[0]
+    sigma = input[1]
+    cutoff = input[2]
+    nrmValue = input[3]
+    winRng2 = int(np.round(sigma/2.))
+    x = np.arange(slc.shape[1])
+    y = np.arange(slc.shape[0])
+    
+    if (sigma>0):
+        #use a moving window to compute median average in box about pixel
+        sliceSmth = np.empty(slc.shape, dtype=slc.dtype)
+        sliceSmth[:] = np.nan
+        
+        for i in range(slc.shape[0]):
+            for j in range(slc.shape[1]):
+                x1 =  np.clip(j-winRng2,0,slc.shape[1]-1)
+                x2 =  np.clip(j+winRng2,0,slc.shape[1]-1)
+                y1 =  np.clip(i-winRng2,0,slc.shape[0]-1)
+                y2 =  np.clip(i+winRng2,0,slc.shape[0]-1)
+
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore', RuntimeWarning)
+                    sliceSmth[i,j] = np.nanmedian(slc[y1:y2, x1:x2])
+    else:
+        sliceSmth = slc
+
+    norm = sliceSmth/nrmValue
+    norm[np.isfinite(norm)][norm[np.isfinite(norm)]<cutoff] = np.nan
+
+    return norm
+
+def getResponseAllMed(flatSlices, sigma, cutoff, MP=True, ncpus=None):
+    """
+    Returns a possibly smoothed and normalized response function for all slices in the provided list
+    Usage: result = getResponseAll(slices, sigma, cutoff, MP=)
+    slices is a list of image slices from which to derive the response function
+    sigma is the Gaussian width of the kernel to use for smoothing the input data
+    cutoff is a value for which all pixels with normalized values less than this value are set to 1.
+    MP is a keyword used to enable multiprocessing routines that may improve performance
+    """
+
+    #first determine the normalization weight, based on the maximum median value along each slice
+    medSlice = getMedLevelAll(flatSlices, MP=True, ncpus=None)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore",RuntimeWarning)
+        nrmValue = np.nanmax(medSlice)
+        
+    #multiprocessing may improve performance
+    if (MP):
+        #set up the input list
+
+        lst = []
+        for s in flatSlices:
+            lst.append([s, sigma, cutoff, nrmValue])
+
+        #setup and run the MP code for finding the limits
+        if (ncpus == None):
+            ncpus =mp.cpu_count()
+        pool = mp.Pool(ncpus)
+        result = pool.map(getResponse2DMed, lst)
+        pool.close()
+    else:
+        result=[]
+        for s in slices:
+            result.append(getResponse2DMed([s,sigma, cutoff,nrmValue]))
+            
+    return result
