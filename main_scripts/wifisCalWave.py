@@ -26,6 +26,7 @@ import wifisProcessRamp as processRamp
 import wifisCreateCube as createCube
 from matplotlib.backends.backend_pdf import PdfPages
 import warnings
+import wifisCalWaveFunc as calWave
 
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
 os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target
@@ -33,36 +34,47 @@ plt.ioff()
 
 #*****************************************************************************
 #************************** Required input ***********************************
-waveList = 'wave.lst' 
-flatList = 'flat.lst'
+waveListFile = 'wave.lst' 
+flatListFile = 'flat.lst'
 
-hband = True
+hband = False
 
 #mostly static input
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
+pipelineFolder = '/data/pipeline/'
 
+#location of calibration files
 if hband:
-    templateFile = '/data/pipeline/external_data/waveTemplate_hband.fits'
-    prevResultsFile = '/data/pipeline/external_data/waveTemplate_hband_fitResults.pkl'
-    distMapFile = '/home/jason/wifis/data/ronchi_map_june/hband/processed/20170607222050_ronchi_distMap.fits'
+    templateFile = pipelineFolder+'external_data/waveTemplate_hband.fits'
+    prevResultsFile = pipelineFolder + 'external_data/waveTemplate_hband_fitResults.pkl'
+    distMapFile =  ''
     spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_june/hband/processed/20170607222050_ronchi_spatGridProps.dat'
+    distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_june/hband/processed/20170607221050_flat_limits.fits'
 
 else:
-    templateFile = '/data/pipeline/external_data/waveTemplate.fits'
-    prevResultsFile = '/data/pipeline/external_data/waveTemplateFittingResults.pkl'
-    distMapFile = '/home/jason/wifis/data/ronchi_map_may/distortionMap.fits'
-    spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_may/spatGridProps.dat'
-
+    templateFile = pipelineFolder+'external_data/waveTemplate.fits'
+    prevResultsFile = pipelineFolder+'external_data/waveTemplateFittingResults.pkl'
+    distMapFile = pipelineFolder+'external_data/distMap.fits'
+    spatGridPropsFile = pipelineFolder+'external_data/distMap_spatGridProps.dat'
+    distMapLimitsFile = pipelineFolder+'external_data/distMap_limits.fits'
+    darkListFile = None
     
-nlFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_NLCoeff.fits'        
-satFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_satCounts.fits'
-bpmFile = '/data/pipeline/external_data/bpm.fits'
-atlasFile = '/data/pipeline/external_data/best_lines2.dat'
+nlFile = pipelineFolder + 'external_data/master_detLin_NLCoeff.fits' # the non-linearity correction coefficients file        
+satFile = pipelineFolder+'external_data/master_detLin_satCounts.fits' # the saturation limits file
+bpmFile = pipelineFolder+'external_data/bpm.fits' # the bad pixel mask   
+atlasFile = pipelineFolder+'external_data/best_lines2.dat'
 
 #optional behaviour
 plot = True
 crReject = False
 cleanDispSol = True
+skipObsinfo = False
+
+#flat field specific options
+flatWinRng = 51
+flatImgSmth = 5
+flatPolyFitDegree=2
+
 if hband:
     cleanDispThresh = 1.5
     waveTrimThresh=0.25
@@ -74,306 +86,79 @@ sigmaClipRounds=2 #number of iterations when sigma-clipping of dispersion soluti
 sigmaClip = 2 #sigma-clip cutoff when sigma-clipping dispersion solution
 sigmaLimit= 3 #relative noise limit (x * noise level) for which to reject lines
 
+#parameters used for processing of ramps
+nChannel=32 #specifies the number of channels used during readout of detector
+bpmCorRng=20 #specifies the maximum separation of pixel search to use during bad pixel correction
+nRowAverage=4 # specifies the number of rows of reference pixels to use to correct for row bias (+/- nRowAverage)
+rowSplit=1 # specifies how many processing steps to use during reference row correction. Must be integer multiple of number of frames. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
+nlSplit=32 #specifies how many processing steps to use during non-linearity correction. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption. 
+combSplit=32 #specifies how many processing steps to use during creation of ramp image. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
+
 #*****************************************************************************
 #*****************************************************************************
-
-t0 = time.time()
-
-#first check if required input exists
-if not (os.path.exists(nlFile) and os.path.exists(satFile) and os.path.exists(atlasFile) and os.path.exists(distMapFile) and os.path.exists(spatGridPropsFile)):
-    if not (os.path.exists(satFile)):
-        print ('*** ERROR: Cannot continue, saturation file ' + satFile + ' does not exist. Please process a detector linearity calibration sequence or provide the necessary file ***')
-    if not (os.path.exists(nlFile)):
-        print ('*** ERROR: Cannot continue, NL coefficients file ' + nlFile + ' does not exist. Please process a detector linearity calibration sequence or provide the necessary file ***')
-    if not (os.path.exists(atlasFile)):
-        print ('*** ERROR: Cannot continue, line atlas file ' + atlasFile + ' does not exist. Please provide the necessary atlas file***')
-    if not (os.path.exists(distMapFile)):
-        print ('*** ERROR: Cannot continue, distorion map file ' + distMapFile + ' does not exist. Please process a Ronchi calibration sequence or provide the necessary file ***')
-    if not (os.path.exists(spatGridPropsFile)):
-        print ('*** ERROR: Cannot continue, spatial propertites grid file ' + spatGridPropsFile + ' does not exist. Please process a Ronchi calibration sequence or provide the necessary file ***')
-    raise SystemExit('*** Missing required calibration files, exiting ***')
-
-#create processed directory, in case it doesn't exist
-wifisIO.createDir('processed')
-wifisIO.createDir('quality_control')
 
 print('Reading in calibration files')
+
+#first check if required input exists
+
+#read file list
+if os.path.exists(waveListFile):
+    waveLst= wifisIO.readAsciiList(waveListFile)
+    if waveLst.ndim ==0:
+        waveLst = np.asarray([waveLst])
+else:
+    raise Warning('*** Wave file list ' + waveListFile + ' does not exist ***')
+
+if os.path.exists(flatListFile):
+    flatLst= wifisIO.readAsciiList(flatListFile)
+    if flatLst.ndim ==0:
+        flatLst = np.asarray([waveLst])
+else:
+    raise Warning('*** Flat file list ' + flatListFile + ' does not exist ***')
+
+if len(waveLst) != len(flatLst):
+    raise Warning('*** Length of wave file list is different from flat file list ***')
+
 #open calibration files
-nlCoeff = wifisIO.readImgsFromFile(nlFile)[0]
-satCounts = wifisIO.readImgsFromFile(satFile)[0]
+if os.path.exists(nlFile):
+    nlCoef = wifisIO.readImgsFromFile(nlFile)[0]
+else:
+    nlCoef =None
+    warnings.warn('*** No non-linearity coefficient array provided, corrections will be skipped ***')
+
+if os.path.exists(satFile):
+    satCounts = wifisIO.readImgsFromFile(satFile)[0]
+else:
+    satCounts = None
+    warnings.warn('*** No saturation counts array provided and will not be taken into account ***')
 
 if (os.path.exists(bpmFile)):
     BPM = wifisIO.readImgsFromFile(bpmFile)[0]
 else:
     BPM = None
 
-#read file list
-waveLst= wifisIO.readAsciiList(waveList)
-flatLst = wifisIO.readAsciiList(flatList)
-
-if (waveLst.ndim == 0):
-    waveLst = np.asarray([waveLst])
-if (flatLst.ndim == 0):
-    flatLst = np.asarray([flatLst])
+if (darkListFile is not None) and os.path.exists(darkListFile):
+    darkLst = wifisIO.readAsciiList(darkListFile)
     
-for lstNum in range(len(waveLst)):
-    waveFolder = waveLst[lstNum]
-    flatFolder = flatLst[lstNum]
-    
-    savename = 'processed/'+waveFolder
-    
-    if(os.path.exists(savename+'_wave.fits') and os.path.exists(savename+'_wave_waveMap.fits') and os.path.exists(savename+'_wave_fitResults.pkl') and os.path.exists(savename+'_wave_distCor.fits') and os.path.exists(savename+'_wave_waveGridProps.dat')):
-        cont = 'n'
-        cont = wifisIO.userInput('Processed wavelength calibration files already exists for ' +waveFolder+', do you want to continue processing (y/n)?')
-        if (not cont.lower() == 'y'):
-            contProc = False
-        else:
-            contProc = True
+    if darkLst.ndim == 0:
+        darkLst = np.asarray([darkLst])
     else:
-        contProc = True
+        darkLst = None
+else:
+    darkLst = None
+
+if not (os.path.exists(atlasFile)):
+    raise Warning('*** Cannot continue, line atlas file ' + atlasFile + ' does not exist. Please provide the necessary atlas file***')
+
+if not (os.path.exists(distMapFile)):
+    raise Warning('*** Cannot continue, distorion map file ' + distMapFile + ' does not exist. Please process a Ronchi calibration sequence or provide the necessary file ***')
+
+if not (os.path.exists(spatGridPropsFile)):
+    raise Warning ('*** Cannot continue, spatial propertites grid file ' + spatGridPropsFile + ' does not exist. Please process a Ronchi calibration sequence or provide the necessary file ***')
+
+#create processed directory, in case it doesn't exist
+wifisIO.createDir('processed')
+wifisIO.createDir('quality_control')
+
+calWave.runCalWave(waveLst, flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=plot, nChannel=nChannel, nRowAverage=nRowAverage, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, bpmCorRng=bpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, flatWinRng=flatWinRng,flatImgSmth=flatImgSmth, flatPolyFitDegree=3, distMapFile=distMapFile, spatGridPropsFile=spatGridPropsFile, atlasFile=atlasFile, templateFile=templateFile, prevResultsFile=prevResultsFile,  sigmaClip=sigmaClip, sigmaClipRounds=sigmaClipRounds, sigmaLimit=sigmaLimit, cleanDispSol=cleanDispSol,cleanDispThresh = cleanDispThresh, waveTrimThresh=waveTrimThresh)
     
-    if (contProc):
-        print('*** Working on folder ' + waveFolder + ' ***')
-
-        if (os.path.exists(savename+'_wave.fits')):
-            cont = 'n'
-            cont = wifisIO.userInput('Processed arc lamp file already exists for ' + waveFolder+', do you want to continue processing (y/n)?')
-            if (not cont.lower() == 'y'):
-                print('Reading image'+savename+'_wave.fits instead')
-                [wave, sigmaImg, satFrame],hdr= wifisIO.readImgsFromFile(savename+'_wave.fits')
-                hdr = hdr[0]
-                contProc2 = False
-            else:
-                contProc2 = True
-        else:
-            contProc2 = True
-        
-        if (contProc2):
-            wave, sigmaImg, satFrame,hdr = processRamp.auto(waveFolder, rootFolder, savename+'_wave.fits', satCounts, nlCoeff, BPM, nChannel=32, rowSplit=1, nlSplit=32, combSplit=32, crReject=crReject, bpmCorRng=2)
-
-        if not os.path.exists('processed/'+flatFolder+'_flat_limits.fits'):
-            raise SystemExit('*** CANNOT PROCEED WITHOUT PROCESSED FLAT FIELDS. PROCESS FLAT FIELDS FIRST ***')
-
-        if os.path.exists(savename+'_wave_distCor.fits'):
-            cont = 'n'
-            cont = wifisIO.userInput('Distortion corrected wave slices file already exists for ' +waveFolder+', do you want to continue processing (y/n)?')
-            if (not cont.lower() == 'y'):
-                print('Reading in distortion corrected wave slices file '+savename+'_wave_distCor.fits instead')
-                waveSlicesLst = wifisIO.readImgsFromFile(savename+'_wave_distCor.fits')[0]
-                waveCor = waveSlicesLst[0:18]
-                sigmaCor = waveSlicesLst[18:36]
-                satSlices = waveSlicesLst[36:]
-                
-                contProc2 = False
-            else:
-                contProc2 = True
-        else:
-            contProc2= True
-
-        if (contProc2):
-            print('Extracting slices')
-            #first get rid of reference pixels
-            wave = wave[4:2044,4:2044]
-            sigmaImg = sigmaImg[4:2044, 4:2044]
-            satFrame = satFrame[4:2044, 4:2044]
-        
-            limits, limHdr = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_limits.fits')
-            limShift = limHdr['LIMSHIFT']
-        
-            waveSlices = slices.extSlices(wave, limits, dispAxis=0, shft=limShift)
-            sigmaSlices = slices.extSlices(sigmaImg, limits, dispAxis=0)
-            satSlices = slices.extSlices(satFrame, limits, dispAxis=0)
-
-            wifisIO.writeFits(waveSlices + sigmaSlices + satSlices, savename+'_wave_slices.fits', hdr=hdr,ask=False)
-
-            flatNormLst = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_slices_norm.fits')[0]
-            flatNorm = flatNormLst[0:18]
-            flatSigmaNorm = flatNormLst[18:36]
-        
-            waveFlat = slices.ffCorrectAll(waveSlices, flatNorm)
-            sigmaFlat = wifisUncertainties.multiplySlices(waveSlices, sigmaSlices, flatNorm, flatSigmaNorm)
-            
-            print('Distortion correcting slices')
-            distMap = wifisIO.readImgsFromFile(distMapFile)[0]
-            spatGridProps = wifisIO.readTable(spatGridPropsFile)
-            waveCor = createCube.distCorAll(waveSlices, distMap, spatGridProps=spatGridProps)
-
-            #save distortion corrected arc image
-            wifisIO.writeFits(waveCor, savename+'_wave_distCor.fits',hdr=hdr, ask=False)
-
-        if os.path.exists(savename+'_wave_fitResults.pkl'):
-            cont = 'n'
-            cont = wifisIO.userInput('Wavlength fitting results already exists for ' +waveFolder+', do you want to continue processing (y/n)?')
-            if (not cont.lower() == 'y'):
-                print('Reading in results '+savename+'_wave_fitResults.pkl instead')
-                results = wifisIO.readPickle(savename+'_wave_fitResults.pkl')
-                
-                contProc2 = False
-            else:
-                contProc2 = True
-        else:
-            contProc2= True
-
-        if (contProc2):
-            #Determine dispersion solution
-            print('Determining dispersion solution')
-            #read in template
-            template = wifisIO.readImgsFromFile(templateFile)[0]
-
-            #read in template results to extract lambda -> wavelength solution
-            prevResults = wifisIO.readPickle(prevResultsFile)
-            prevSol = prevResults[5]
-
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore', RuntimeWarning)
-
-                results = waveSol.getWaveSol(waveCor, template, atlasFile, 3, prevSol, winRng=9, mxCcor=150, weights=False, buildSol=False, sigmaClip=sigmaClip, allowLower=False, lngthConstraint=True, MP=True, adjustFitWin=True, sigmaLimit=sigmaLimit, allowSearch=False, sigmaClipRounds=sigmaClipRounds)
-
-            #Save all results
-            wifisIO.writePickle(results, savename+'_wave_fitResults.pkl')
-
-        if os.path.exists(savename+'_wave_waveMap.fits') and os.path.exists(savename+'_wave_waveGridProps.dat'):
-            cont = 'n'
-            cont = wifisIO.userInput('Wavlength map already exists for ' +waveFolder+', do you want to continue processing (y/n)?')
-            if (not cont.lower() == 'y'):
-                print('Reading in map '+savename+'_wave_waveMap.fits instead')
-                waveMap = wifisIO.readImgsFromFile(savename+'_wave_waveMap.fits')
-                waveGridProps = wifisIO.readTable(savename+'_wave_waveGridProps.dat')
-                
-                contProc2 = False
-            else:
-                contProc2 = True
-        else:
-            contProc2= True
-
-        if (contProc2):
-            print('Building wavelegth map')
-            if cleanDispSol:
-                print('Finding and replacing bad solutions')
-                if plot:
-                    rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(results, plotFile='quality_control/'+waveFolder+'_wave_waveFit_rms.pdf', threshold=cleanDispThresh)
-                else:
-                    rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(results, plotFile=None, threshold=cleanDispThresh)
-            else:
-                dispSolClean = result[0]
-
-                if plot:
-                    rms = results[4]
-                    with PdfPages('quality_control/'+waveFolder+'_wave_RMS.pdf') as pdf:
-                        for r in rms:
-                            fig = plt.figure()
-                            plt.plot(r)
-                            plt.xlabel('Column #')
-                            plt.ylabel('RMS in pixels')
-                            pdf.savefig(dpi=300)
-                            plt.close()
-                
-            dispSolLst = dispSolClean
-            
-            print('Creating wavelength map')
-            #Create wavemap
-            #use linear interpolation and extrapolation to fill in missing solutions
-            #waveMapLst = waveSol.buildWaveMap(dispSolLst, waveCor[0].shape[1], extrapolate=False, fill_missing=False)
-
-            #use linear interpolation and polynomial fitting to extrapolate for missing solutions
-            waveMapLst = waveSol.buildWaveMap2(dispSolLst, waveCor[0].shape[1], extrapolate=True, fill_missing=True)
-
-            #smooth waveMap solution to avoid pixel-to-pixel jumps
-            waveMap = waveSol.smoothWaveMapAll(waveMapLst,smth=1,MP=True )
-
-            #replace wavemap with polynomial fit
-            #waveMap = waveSol.polyFitWaveMapAll(waveMapLst, degree=1, MP=True)
-
-            #save wavemap solution
-            wifisIO.writeFits(waveMap, savename+'_wave_waveMap.fits',hdr=hdr, ask=False)
-
-            if waveTrimThresh > 0:
-                print('Trimming wavelength map to useful range')
-                #now trim wavemap if needed
-                #read in unnormalized flat field data
-                flatSlices = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_slices.fits')[0][0:18]
-                waveMapTrim = waveSol.trimWaveSliceAll(waveMap, flatSlices, waveTrimThresh)
-                
-                #get wave grid properties
-                waveGridProps = createCube.compWaveGrid(waveMapTrim)
-            else:
-                waveGridProps = createCube.compWaveGrid(waveMap) 
-           
-            wifisIO.writeTable(waveGridProps, savename+'_wave_waveGridProps.dat')
-
-            
-            print('placing arc image on grid')
-            waveGrid = createCube.waveCorAll(waveCor, waveMap, waveGridProps=waveGridProps)
-            wifisIO.writeFits(waveGrid, savename+'_wave_fullGrid.fits', hdr=hdr,ask=False)
-            
-            if plot:
-                print('Getting quality control checks')
-                rms = results[4]
-                pixCentLst = results[2]
-                fwhmLst = results[1]
-                npts = waveCor[0].shape[1]
-                fwhmMapLst = waveSol.buildFWHMMap(pixCentLst, fwhmLst, npts)
-
-                #get max and min starting wavelength based on median of central slice (slice 8)
-                if waveTrimThresh > 0:
-                    trimSlc = waveMapTrim[8]
-                else:
-                    trimSlc = waveMap[8]
-
-                #find median wavelength of first and last non-NaN columns
-                wCol = np.nanmedian(trimSlc, axis=0)
-
-                #find non-NaN columns
-                whr = np.where(np.isfinite(wCol))[0]
-        
-                waveMax = np.nanmedian(trimSlc[:,whr[0]])
-                waveMin = np.nanmedian(trimSlc[:,whr[-1]])
- 
-                #determine length along spatial direction
-                ntot = 0
-                for j in range(len(rms)):
-                    ntot += len(rms[j])
-
-                #get median FWHM
-                fwhmAll = []
-                for f in fwhmLst:
-                    for i in range(len(f)):
-                        for j in range(len(f[i])):
-                            fwhmAll.append(f[i][j])
-            
-                fwhmMed = np.nanmedian(fwhmAll)
-
-                #build "detector" map images
-                #wavelength solution
-                waveMapImg = np.empty((npts,ntot),dtype='float32')
-                strt=0
-                for m in waveMap:
-                    waveMapImg[:,strt:strt+m.shape[0]] = m.T
-                    strt += m.shape[0]
-
-                #fwhm map
-                fwhmMap = np.empty((npts,ntot),dtype='float32')
-                strt=0
-                for f in fwhmMapLst:
-                    fwhmMap[:,strt:strt+f.shape[0]] = f.T
-                    strt += f.shape[0]
-
-                #save results
-                wifisIO.writeFits(waveMapImg, 'quality_control/'+waveFolder+'_wave_wavelength_map.fits', hdr=hdr,ask=False)
-                wifisIO.writeFits(fwhmMap, 'quality_control/'+waveFolder+'_wave_fwhm_map.fits',hdr=hdr, ask=False)
-
-                #get improved clim for plotting
-                with warnings.catch_warnings():
-                    warnings.simplefilter('ignore', RuntimeWarning)
-                    cMax = np.nanmax(fwhmMap[fwhmMap < 0.9*np.nanmax(fwhmMap)])
-                    
-                fig = plt.figure()
-                plt.imshow(fwhmMap, aspect='auto', cmap='jet', clim=[0, cMax], origin='lower')
-                plt.colorbar()
-                plt.title('Median FWHM is '+'{:3.1f}'.format(fwhmMed) +', min wave is '+'{:6.1f}'.format(waveMin)+', max wave is '+'{:6.1f}'.format(waveMax))
-                plt.savefig('quality_control/'+waveFolder+'_wave_fwhm_map.png', dpi=300)
-                plt.close()
-                                
-                           
-print ("Total time to run entire script: ",time.time()-t0)
-
