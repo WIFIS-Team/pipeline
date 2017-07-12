@@ -215,7 +215,7 @@ def writeFits_old(data, filename, hdr=None):
     else:
         hdu.writeto(filename,clobber=True)
 
-def readRampFromFolder(folderName):
+def readRampFromFolder(folderName, rampNum=None):
     """
     read all H2RG files from specified folder.
     Usage: output = readRampFromFolder(folderName)
@@ -223,18 +223,23 @@ def readRampFromFolder(folderName):
     output is the data cube generated from the files contained in the specified folder.    
     """
 
-    #first make sure that only one set of ramps is present in folder
-    list = glob.glob(folderName+'/*N01.fits')
+    if rampNum is None:
+        #Make sure that only one set of ramps is present in folder
+        lst = glob.glob(folderName+'/*N01.fits')
 
-    if len(list)>1:
-        raise SystemExit('*** ERROR: More than one set of ramps present in folder ' + folderName + '. Use readAsciiList instead. ***')
+        if len(lst)>1:
+            raise Warning('*** More than one set of ramps present in folder ' + folderName + '. Use readAsciiList instead. ***')
+
+        else:
+            lst = glob.glob(folderName+'/H2*fits*')
+            lst = sorted_nicely(lst)
     else:
-        list = glob.glob(folderName+'/H2*fits')
-        list = sorted_nicely(list)
+        lst = glob.glob(folderName+'/H2*'+'R'+'{:02d}'.format(rampNum)+'*.fits')
+        lst = sorted_nicely(lst)
     
-        output,outtime,hdr = readRampFromList(list)    
+    output,outtime,hdr = readRampFromList(lst)    
     
-        return output,outtime,hdr
+    return output,outtime,hdr
 
 def readTable (filename):
     """
@@ -426,7 +431,6 @@ def writePickle(objct, filename, protocol=-1):
     protocol is the protocol to use for pickling (default is the highest version).
     """
 
-
     fileout = open(filename, 'w')
 
     cPickle.dump(objct, fileout,protocol)
@@ -447,3 +451,25 @@ def readPickle(filename):
     filein.close()
 
     return objct
+
+def getNumRamps(folder, rootFolder=''):
+    """
+    """
+
+    #CDS
+    if os.path.exists(rootFolder+'/CDSReference/'+folder):
+        rampLst = glob.glob(rootFolder+'/CDSReference/'+folder+'/*N01.fits')
+        nRamps = len(rampLst)
+ 
+    #Fowler
+    elif os.path.exists(rootFolder+'/FSRamp/'+folder):
+        rampLst = glob.glob(rootFolder+'/FSRamp/'+folder+'/*N01.fits')
+        nRamps = len(rampLst)
+        
+    elif os.path.exists(rootFolder + '/UpTheRamp/'+folder):
+        rampLst = glob.glob(rootFolder+'/UpTheRamp/'+folder+'/*N01.fits')
+        nRamps = len(rampLst)
+    else:
+        raise Warning('*** Folder ' + folder +' does not exist ***')
+
+    return nRamps
