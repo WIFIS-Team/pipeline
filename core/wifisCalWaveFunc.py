@@ -26,7 +26,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 import warnings
 import wifisCalFlatFunc as calFlat
 
-def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowAverage=4,rowSplit=1,nlSplit=1, combSplit=1,bpmCorRng=2, crReject=False, skipObsinfo=False, darkLst=None, flatWinRng=51, flatImgSmth=5, flatPolyFitDegree=3, rootFolder='', distMapFile='', spatGridPropsFile='', atlasFile='', templateFile='', prevResultsFile='', sigmaClip=2, sigmaClipRounds=2, sigmaLimit=3,cleanDispSol=False,cleanDispThresh = 0, waveTrimThresh=0):
+def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowAverage=4,rowSplit=1,nlSplit=1, combSplit=1,bpmCorRng=2, crReject=False, skipObsinfo=False, darkLst=None, flatWinRng=51, flatImgSmth=5, flatPolyFitDegree=3, rootFolder='', distMapFile='', spatGridPropsFile='', atlasFile='', templateFile='', prevResultsFile='', sigmaClip=2, sigmaClipRounds=2, sigmaLimit=3,cleanDispSol=False,cleanDispThresh = 0, waveTrimThresh=0, smoothSol=False):
     """
     """
       
@@ -221,11 +221,11 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                     if cleanDispSol:
                         print('Finding and replacing bad solutions')
                         if plot:
-                            rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(results, plotFile='quality_control/'+waveFolder+'_wave_waveFit_rms.pdf', threshold=cleanDispThresh)
+                            rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(results, plotFile='quality_control/'+waveFolder+'_wave_waveFit_RMS.pdf', threshold=cleanDispThresh)
                         else:
                             rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(results, plotFile=None, threshold=cleanDispThresh)
                     else:
-                        dispSolClean = result[0]
+                        dispSolClean = results[0]
 
                         if plot:
                             rms = results[4]
@@ -250,8 +250,12 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                     waveMapLst = waveSol.buildWaveMap2(dispSolLst, waveCor[0].shape[1], extrapolate=True, fill_missing=True)
 
                     #smooth waveMap solution to avoid pixel-to-pixel jumps
-                    waveMap = waveSol.smoothWaveMapAll(waveMapLst,smth=1,MP=True )
-
+                    if smoothSol:
+                        print('Smooth wavelength map')
+                        waveMap = waveSol.smoothWaveMapAll(waveMapLst,smth=1,MP=True )
+                    else:
+                        waveMap = waveMapLst
+                        
                     #replace wavemap with polynomial fit
                     #waveMap = waveSol.polyFitWaveMapAll(waveMapLst, degree=1, MP=True)
 
