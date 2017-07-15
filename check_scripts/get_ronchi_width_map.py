@@ -1,45 +1,38 @@
+import matplotlib
+matplotlib.use('gtkagg')
 import wifisIO
-import wifisSpatialCor as spatialCor
-import wifisBadPixels as badPixels
 import wifisSlices as slices
+import wifisSpatialCor as spatialCor
 import matplotlib.pyplot as plt
 import numpy as np
+import wifisBadPixels as badPixels
+import wifisCreateCube as createCube
+from matplotlib.backends.backend_pdf import PdfPages
+import os
+import wifisProcessRamp as processRamp
+import warnings
+import wifisQuickReduction as quickReduction
 
-print('Reading in data')
+os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
 
-limits = wifisIO.readImgsFromFile('limits.fits')[0]
-BPM = wifisIO.readImgsFromFile('bad_pixel_mask.fits')[0]
-ronchi = wifisIO.readImgsFromFile('CDSResult.fits')[0]
+#****************************************************************************************
+#REQUIRED INPUT FILES
+ronchiLstFile = 'ronchi.lst'
+flatLstFile = 'flat.lst'
 
-#trim ronchi mask to match that of BPM
-ronchi = ronchi[4:2044,4:2044]
+hband = False
 
-#use bad pixel mask to correct for bad pixels
-ronchiCor = badPixels.corBadPixelsAll(ronchi, BPM, mxRng=15,dispAxis=0)
+#****************************************************************************************
 
-#extract individual slices
-ronchiSlices = slices.extSlices(ronchiCor, limits, dispAxis=0)
+ronchiLst = wifisIO.readAsciiList(ronchiLstFile)
+if ronchiLst.ndim==0:
+    ronchiLst = np.asarray([ronchiLst])
 
-print('Getting ronchi trace')
-ronchiTraces, ronchiWidths = spatialCor.traceRonchiAll(ronchiSlices, nbin=4, winRng=5, mxWidth=2,smth=10, bright=False)
+flatLst = wifisIO.readAsciiList(flatLstFile)    
+if flatLst.ndim == 0:
+    flatLst = np.asarray([flatLst])
 
-print('creating width map')
-widthMapLst = spatialCor.buildWidthMap(ronchiTraces, ronchiWidths, ronchiSlices)
-
-ntot = 0
-for r in ronchiSlices:
-    ntot += r.shape[0]
+quickReduction.initPaths()
+for fle in range(len(ronchiLst)):
+    quickReduction.procRonchiData(ronchiLst[fle], flatLst[fle], colorbarLims=[1.75,4.75])
     
-fwhmMap = np.empty((r.shape[1],ntot),dtype='float32')
-
-strt=0
-for w in widthMapLst:
-    fwhmMap[:,strt:strt+w.shape[0]] = 2.*np.sqrt(2*np.log(2.))*w.T
-    strt += w.shape[0]
-
-plt.imshow(fwhmMap)
-plt.colorbar()
-plt.savefig('ronchi_fwhm_map.png', dpi=300)
-plt.show
-
-wifisIO.writeFits(fwhmMap, 'ronchi_fwhm_map.fits')
