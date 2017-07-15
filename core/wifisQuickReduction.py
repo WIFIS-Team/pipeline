@@ -18,7 +18,9 @@ import glob
 import warnings
 from wifisIO import sorted_nicely
 import wifisWaveSol as waveSol
-
+import wifisProcessRamp as processRamp
+from matplotlib.backends.backend_pdf import PdfPages
+import wifisSpatialCor as spatialCor
 
 #******************************************************************************
 
@@ -39,11 +41,12 @@ def initPaths(hband=False):
     global templateFile
     global prevResultsFile
     global atlasFile
-       
+    global nlFile
 
     #set paths here
-    
+
     rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319/'
+
     pipelineFolder = '/data/pipeline/'
 
     if hband:
@@ -53,6 +56,7 @@ def initPaths(hband=False):
         distMapFile = pipelineFolder + '/external_data/distMap.fits'
         spatGridPropsFile = pipelineFolder + '/external_data/distMap_spatGridProps.dat'
         distMapLimitsFile = pipelineFolder+'/external_data/distMap_limits.fits'
+
     else:
         #TB band
         templateFile = pipelineFolder+'/external_data/waveTemplate.fits'
@@ -65,6 +69,7 @@ def initPaths(hband=False):
         atlasFile = pipelineFolder + '/external_data/best_lines2.dat'
         satFile = pipelineFolder + '/external_data/master_detLin_satCounts.fits'
         bpmFile = pipelineFolder+'external_data/bpm.fits'
+        nlFile = pipelineFolder + 'external_data/master_detLin_NLCoeff.fits' 
 
         #set the pixel scale
         xScale = 0.532021532706
@@ -473,7 +478,7 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None):
         waveCor = createCube.distCorAll(waveSlices, distMap, spatGridProps=spatGridProps)
 
         #save data
-        wifisIO.writeFits(waveCor, 'quick_reduction/'+waveFolder+'_wave_slices_distCor.fits')
+        wifisIO.writeFits(waveCor, 'quick_reduction/'+waveFolder+'_wave_slices_distCor.fits', ask=False)
         print('Getting dispersion solution')
 
         result = waveSol.getWaveSol(waveCor, template, atlasFile, 3, prevSol, winRng=9, mxCcor=150, weights=False, buildSol=False, sigmaClip=sigmaClip, allowLower=False, lngthConstraint=True, MP=True, adjustFitWin=True, sigmaLimit=sigmaLimit, allowSearch=False, sigmaClipRounds=sigmaClipRounds)        
@@ -559,4 +564,173 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None):
         plt.show()
         plt.close()
 
+    return
+
+def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None):
+    """
+    """
+
+    
+    #read in calibration data
+    satCounts = wifisIO.readImgsFromFile(satFile)[0]
+    nlCoeff = wifisIO.readImgsFromFile(nlFile)[0]
+    BPM = wifisIO.readImgsFromFile(bpmFile)[0]
+
+    #create processed directory, in case it doesn't exist
+    wifisIO.createDir('quick_reduction')
+
+    #process the flat
+    
+    if (os.path.exists('quick_reduction/'+flatFolder+'_flat.fits') and os.path.exists('quick_reduction/'+flatFolder+'_flat_limits.fits') and os.path.exists('quick_reduction/'+flatFolder+'_flat_slices.fits') and os.path.exists('quick_reduction/'+flatFolder+'_flat_slices_norm.fits')):
+        limits = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_limits.fits')[0]
+        flatSlices = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_slices.fits')[0][0:18]
+        flatNorm = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_slices_norm.fits')[0][0:18]
+    else:
+        print('processing flat ' + flatFolder)
+
+        flat, sigmaImg, satFrame, hdr = processRamp.auto(flatFolder, rootFolder,'quick_reduction/'+flatFolder+'_flat.fits', satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=20, saveAll=False)
+    
+        #find limits
+        print('finding limits and extracting flat slices')
+        limits = slices.findLimits(flat, dispAxis=0, limSmth=5, rmRef=True)
+
+        polyLims = slices.polyFitLimits(limits, degree=2, sigmaClipRounds=1)
+
+        with PdfPages('quick_reduction/'+flatFolder+'_flat_slices_traces.pdf') as pdf:
+            fig = plt.figure()
+            med1= np.nanmedian(flat)
+            
+            plt.imshow(flat[4:-4,4:-4], aspect='auto', cmap='jet', clim=[0,2.*med1], origin='lower')
+            plt.xlim=(0,2040)
+            plt.colorbar()
+            for l in range(limits.shape[0]):
+                plt.plot(limits[l], np.arange(limits.shape[1]),'k', linewidth=1) #drawn limits
+                plt.plot(np.clip(polyLims[l],0, flat[4:-4,4:-4].shape[0]-1), np.arange(limits.shape[1]),'r--', linewidth=1) #shifted ronchi limits, if provided, or polynomial fit
+            pdf.savefig()
+            plt.close(fig)
+           
+        flat = flat[4:-4,4:-4]
+        flatSlices = slices.extSlices(flat, polyLims)
+        flatNorm = slices.getResponseAll(flatSlices, 0, 0.1)
+
+        wifisIO.writeFits(polyLims, 'quick_reduction/'+flatFolder+'_flat_limits.fits', ask=False)
+        wifisIO.writeFits(flatSlices, 'quick_reduction/'+flatFolder+'_flat_slices.fits', ask=False)
+        wifisIO.writeFits(flatNorm, 'quick_reduction/'+flatFolder+'_flat_slices_norm.fits', ask=False)
+        limits = polyLims
+
+    if not os.path.exists('quick_reduction/'+ronchiFolder+'_ronchi_fwhm_map.png'):
+
+        print('Processing ronchi')
+        
+        #now process the Ronchi ramp
+        #check the type of raw data, only assumes CDS or up-the-ramp
+        ronchi, sigmaImg, satFrame, hdr = processRamp.auto(ronchiFolder, rootFolder,'quick_reduction/'+ronchiFolder+'_ronchi.fits', satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=20, saveAll=False)
+
+        print('extracting ronchi slices')
+        ronchi=ronchi[4:-4, 4:-4]
+        ronchiSlices = slices.extSlices(ronchi, limits, dispAxis=0)
+        ronchiFlat = slices.ffCorrectAll(ronchiSlices, flatNorm)
+        wifisIO.writeFits(ronchiSlices, 'quick_reduction/'+ronchiFolder+'_ronchi_slices.fits',ask=False)
+
+        print('Getting traces')
+        ronchiTraces = []
+        ronchiWidths =[]
+        for i in range(len(ronchiSlices)):
+            ronchiTraces.append([])
+            ronchiWidths.append([])
+
+        #easy traces
+        
+        inp = [ronchiSlices[0],ronchiSlices[1],ronchiSlices[2],ronchiSlices[3],ronchiSlices[4],ronchiSlices[5],ronchiSlices[6],ronchiSlices[7],ronchiSlices[8],ronchiSlices[9],ronchiSlices[10],ronchiSlices[11],ronchiSlices[14]]
+        out = spatialCor.traceRonchiAll(inp, nbin=2, winRng=7, mxWidth=3,smth=20, bright=False, flatSlices=None, MP=True)
+
+        ronchiTraces[:12] = out[0][:12]
+        ronchiTraces[14] = out[0][12]
+
+        ronchiWidths[:12] = out[1][:12]
+        ronchiWidths[14] = out[1][12]
+
+        #difficult slices
+        out = spatialCor.traceRonchiAll([ronchiFlat[12], ronchiFlat[13],ronchiFlat[15], ronchiFlat[16], ronchiFlat[17]], nbin=1, winRng=7, mxWidth=3,smth=20, bright=False, flatSlices=[flatSlices[12],flatSlices[13],flatSlices[15],flatSlices[16], flatSlices[17]], MP=True, threshold=0.75)
+        
+        [ronchiTraces[12], ronchiTraces[13], ronchiTraces[15], ronchiTraces[16], ronchiTraces[17]] = out[0]
+        [ronchiWidths[12], ronchiWidths[13], ronchiWidths[15], ronchiWidths[16], ronchiWidths[17]] = out[1]
+
+        #get rid of bad traces
+        for i in range(len(ronchiTraces)):
+            r = ronchiTraces[i]
+
+            whr = np.where(np.logical_or(r<0, r>=ronchiSlices[i].shape[0]))
+            ronchiTraces[i][whr] = np.nan
+            ronchiWidths[i][whr] = np.nan
+
+            
+        with PdfPages('quick_reduction/'+ronchiFolder+'_ronchi_slices_traces.pdf') as pdf:
+            for i in range(len(ronchiSlices)):
+                fig = plt.figure()
+                m = np.nanmedian(ronchiSlices[i])
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore',RuntimeWarning)
+                    s = np.nanstd(ronchiSlices[i][np.logical_and(ronchiSlices[i] < 5*m, ronchiSlices[i]>0)])
+            
+                plt.imshow(ronchiSlices[i], aspect='auto', clim=[0,m+1.5*s], origin='lower')
+
+                for j in range(len(ronchiTraces[i])):
+                    plt.plot(ronchiTraces[i][j,:], 'r--')
+                plt.title('Slices #'+str(i))
+                pdf.savefig(dpi=300)
+                plt.close()
+
+        print('plotting fwhm map')
+        #build resolution map
+        widthMapLst = spatialCor.buildWidthMap(ronchiTraces, ronchiWidths, ronchiSlices)
+
+        #get median FWHM
+        fwhmAll = []
+        for f in ronchiWidths:
+            for i in range(len(f)):
+                for j in range(len(f[i])):
+                    fwhmAll.append(f[i][j])
+            
+        fwhmMed = np.nanmedian(fwhmAll)*2.355
+
+
+        print('**************************************')
+        print('*** MEDIAN FWHM IS '+ str(fwhmMed) + ' ***')
+        print('**************************************')
+        
+        ntot = 0
+        for r in ronchiSlices:
+            ntot += r.shape[0]
+    
+        fwhmMap = np.empty((r.shape[1],ntot),dtype='float32')
+    
+        strt=0
+        for w in widthMapLst:
+            fwhmMap[:,strt:strt+w.shape[0]] = 2.355*w.T
+            strt += w.shape[0]
+
+        fig = plt.figure()
+        m = np.nanmedian(fwhmMap)
+        s = np.nanstd(fwhmMap)
+
+        if colorbarLims is None:
+            clim = [m-3*s, m+3*s]
+        else:
+            clim=colorbarLims
+        
+        plt.imshow(fwhmMap, origin='lower', aspect='auto', clim=clim,cmap='jet')
+        plt.title('Ronchi FWHM map - Med FWHM ' + '{:4.2f}'.format(fwhmMed))
+        
+        plt.colorbar()
+        plt.savefig('quick_reduction/'+ronchiFolder+'_ronchi_fwhm_map.png',dpi=300)
+        plt.close()
+        
+        
+        print('saving results')
+        #write results!
+        wifisIO.writeFits(ronchiTraces, 'quick_reduction/'+ronchiFolder+'_ronchi_traces.fits', ask=False)
+        wifisIO.writeFits(fwhmMap, 'quick_reduction/'+ronchiFolder+'_ronchi_fwhm_map.fits', ask=False)
+    else:
+        print('Ronchi ' + ronchiFolder + ' already processed')
     return
