@@ -65,6 +65,10 @@ def initPaths(hband=False):
         spatGridPropsFile = pipelineFolder + '/external_data/distMap_spatGridProps.dat'
         distMapLimitsFile = pipelineFolder+'/external_data/distMap_limits.fits'
 
+        distMapFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707175840_ronchi_distMap.fits'
+        spatGridPropsFile ='/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707175840_ronchi_spatGridProps.dat'
+        distMapLimitsFile ='/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707180443_flat_limits.fits'
+        
         #should be (mostly) static
         atlasFile = pipelineFolder + '/external_data/best_lines2.dat'
         satFile = pipelineFolder + '/external_data/master_detLin_satCounts.fits'
@@ -404,7 +408,7 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None):
                 #get processed ramp
                 wave = combData.FowlerSamplingCL(inttime, data, satFrame, 32)[0]
                 data = 0
-        elif os.path.exists(rootFolder+'/UpTheRamp/'+wavefolder):
+        elif os.path.exists(rootFolder+'/UpTheRamp/'+waveFolder):
             #assume up-the-ramp
             data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + '/UpTheRamp/'+waveFolder)
             satFrame = satInfo.getSatFrameCL(data, satCounts,32)
@@ -566,7 +570,7 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None):
 
     return
 
-def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None):
+def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxWidth=4):
     """
     """
 
@@ -618,7 +622,7 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None):
         wifisIO.writeFits(flatNorm, 'quick_reduction/'+flatFolder+'_flat_slices_norm.fits', ask=False)
         limits = polyLims
 
-    if not os.path.exists('quick_reduction/'+ronchiFolder+'_ronchi_fwhm_map.png'):
+    if not os.path.exists('quick_reduction/'+ronchiFolder+'_ronchi_amp_map.png'):
 
         print('Processing ronchi')
         
@@ -634,27 +638,27 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None):
 
         print('Getting traces')
         ronchiTraces = []
-        ronchiWidths =[]
+        ronchiAmps =[]
         for i in range(len(ronchiSlices)):
             ronchiTraces.append([])
-            ronchiWidths.append([])
+            ronchiAmps.append([])
 
         #easy traces
         
         inp = [ronchiSlices[0],ronchiSlices[1],ronchiSlices[2],ronchiSlices[3],ronchiSlices[4],ronchiSlices[5],ronchiSlices[6],ronchiSlices[7],ronchiSlices[8],ronchiSlices[9],ronchiSlices[10],ronchiSlices[11],ronchiSlices[14]]
-        out = spatialCor.traceRonchiAll(inp, nbin=2, winRng=7, mxWidth=3,smth=20, bright=False, flatSlices=None, MP=True)
+        out = spatialCor.traceRonchiAll(inp, nbin=2, winRng=7, mxWidth=mxWidth,smth=20, bright=False, flatSlices=None, MP=True)
 
         ronchiTraces[:12] = out[0][:12]
         ronchiTraces[14] = out[0][12]
 
-        ronchiWidths[:12] = out[1][:12]
-        ronchiWidths[14] = out[1][12]
+        ronchiAmps[:12] = out[1][:12]
+        ronchiAmps[14] = out[1][12]
 
         #difficult slices
-        out = spatialCor.traceRonchiAll([ronchiFlat[12], ronchiFlat[13],ronchiFlat[15], ronchiFlat[16], ronchiFlat[17]], nbin=1, winRng=7, mxWidth=3,smth=20, bright=False, flatSlices=[flatSlices[12],flatSlices[13],flatSlices[15],flatSlices[16], flatSlices[17]], MP=True, threshold=0.75)
+        out = spatialCor.traceRonchiAll([ronchiFlat[12], ronchiFlat[13],ronchiFlat[15], ronchiFlat[16], ronchiFlat[17]], nbin=1, winRng=7, mxWidth=mxWidth,smth=20, bright=False, flatSlices=[flatSlices[12],flatSlices[13],flatSlices[15],flatSlices[16], flatSlices[17]], MP=True, threshold=0.75)
         
         [ronchiTraces[12], ronchiTraces[13], ronchiTraces[15], ronchiTraces[16], ronchiTraces[17]] = out[0]
-        [ronchiWidths[12], ronchiWidths[13], ronchiWidths[15], ronchiWidths[16], ronchiWidths[17]] = out[1]
+        [ronchiAmps[12], ronchiAmps[13], ronchiAmps[15], ronchiAmps[16], ronchiAmps[17]] = out[1]
 
         #get rid of bad traces
         for i in range(len(ronchiTraces)):
@@ -662,7 +666,7 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None):
 
             whr = np.where(np.logical_or(r<0, r>=ronchiSlices[i].shape[0]))
             ronchiTraces[i][whr] = np.nan
-            ronchiWidths[i][whr] = np.nan
+            ronchiAmps[i][whr] = np.nan
 
             
         with PdfPages('quick_reduction/'+ronchiFolder+'_ronchi_slices_traces.pdf') as pdf:
@@ -681,56 +685,56 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None):
                 pdf.savefig(dpi=300)
                 plt.close()
 
-        print('plotting fwhm map')
+        print('plotting amp map')
         #build resolution map
-        widthMapLst = spatialCor.buildWidthMap(ronchiTraces, ronchiWidths, ronchiSlices)
+        ampMapLst = spatialCor.buildAmpMap(ronchiTraces, ronchiAmps, ronchiSlices)
 
         #get median FWHM
-        fwhmAll = []
-        for f in ronchiWidths:
+        ampAll = []
+        for f in ronchiAmps:
             for i in range(len(f)):
                 for j in range(len(f[i])):
-                    fwhmAll.append(f[i][j])
+                    ampAll.append(f[i][j])
             
-        fwhmMed = np.nanmedian(fwhmAll)*2.355
+        ampMed = np.nanmedian(ampAll)
 
 
         print('**************************************')
-        print('*** MEDIAN FWHM IS '+ str(fwhmMed) + ' ***')
+        print('*** MEDIAN amplitude IS '+ str(ampMed) + ' ***')
         print('**************************************')
         
         ntot = 0
         for r in ronchiSlices:
             ntot += r.shape[0]
     
-        fwhmMap = np.empty((r.shape[1],ntot),dtype='float32')
+        ampMap = np.empty((r.shape[1],ntot),dtype='float32')
     
         strt=0
-        for w in widthMapLst:
-            fwhmMap[:,strt:strt+w.shape[0]] = 2.355*w.T
-            strt += w.shape[0]
+        for a in ampMapLst:
+            ampMap[:,strt:strt+a.shape[0]] = a.T
+            strt += a.shape[0]
 
         fig = plt.figure()
-        m = np.nanmedian(fwhmMap)
-        s = np.nanstd(fwhmMap)
+        m = np.nanmedian(ampMap)
+        s = np.nanstd(ampMap)
 
         if colorbarLims is None:
             clim = [m-3*s, m+3*s]
         else:
             clim=colorbarLims
         
-        plt.imshow(fwhmMap, origin='lower', aspect='auto', clim=clim,cmap='jet')
-        plt.title('Ronchi FWHM map - Med FWHM ' + '{:4.2f}'.format(fwhmMed))
+        plt.imshow(ampMap, origin='lower', aspect='auto', clim=clim,cmap='jet')
+        plt.title('Ronchi amplitude map - Med amp ' + '{:4.2f}'.format(ampMed))
         
         plt.colorbar()
-        plt.savefig('quick_reduction/'+ronchiFolder+'_ronchi_fwhm_map.png',dpi=300)
+        plt.savefig('quick_reduction/'+ronchiFolder+'_ronchi_amp_map.png',dpi=300)
         plt.close()
         
         
         print('saving results')
         #write results!
         wifisIO.writeFits(ronchiTraces, 'quick_reduction/'+ronchiFolder+'_ronchi_traces.fits', ask=False)
-        wifisIO.writeFits(fwhmMap, 'quick_reduction/'+ronchiFolder+'_ronchi_fwhm_map.fits', ask=False)
+        wifisIO.writeFits(ampMap, 'quick_reduction/'+ronchiFolder+'_ronchi_amp_map.fits', ask=False)
     else:
         print('Ronchi ' + ronchiFolder + ' already processed')
     return
