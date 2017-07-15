@@ -17,6 +17,7 @@ waveLstFile = 'wave.lst'
 flatLstFile = 'flat.lst'
 
 hband = False
+colorbarLims = [0,10]
 
 #****************************************************************************************
 
@@ -30,5 +31,5 @@ if flatLst.ndim == 0:
 
 quickReduction.initPaths()
 for fle in range(len(waveLst)):
-    quickReduction.procArcData(waveLst[fle], flatLst[fle], colorbarLims=[0,10]])
+    quickReduction.procArcData(waveLst[fle], flatLst[fle], colorbarLims=colorbarLims)
     
