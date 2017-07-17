@@ -716,10 +716,11 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxW
 
         fig = plt.figure()
         m = np.nanmedian(ampMap)
-        s = np.nanstd(ampMap)
-
+        with warnings.catch_warnings():
+            s = np.nanstd(ampMap[ampMap < 10*m])
+            
         if colorbarLims is None:
-            clim = [m-3*s, m+3*s]
+            clim = [0, m+3*s]
         else:
             clim=colorbarLims
         
