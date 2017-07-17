@@ -13,7 +13,7 @@ Produces:
 """
 
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use('gtkgg')
 import numpy as np
 import astropy.io.fits as fits
 import astropy.io.ascii as ascii
@@ -159,7 +159,7 @@ if (contProc):
         
                 #find the first saturated frames
                 satFrame = satInfo.getSatFrameCL(data,satCounts,32, ignoreRefPix=True)
-
+                
                 #**********************************************************************
                 #**********************************************************************
 
