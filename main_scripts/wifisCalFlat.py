@@ -69,12 +69,14 @@ if os.path.exists(nlFile):
     nlCoef = wifisIO.readImgsFromFile(nlFile)[0]
 else:
     nlCoef =None
+    warnings.warn('*** No non-linearity coefficient array provided, corrections will be skipped ***')
 
 if os.path.exists(satFile):
     satCounts = wifisIO.readImgsFromFile(satFile)[0]
 else:
     satCounts = None
-    
+    warnings.warn('*** No saturation counts array provided and will not be taken into account ***')
+        
 if (os.path.exists(bpmFile)):
     BPM = wifisIO.readImgsFromFile(bpmFile)[0]
 else:
