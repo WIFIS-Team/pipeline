@@ -27,7 +27,7 @@ def getSatInfo(data, thresh):
     nt = data.shape[2]
 
     #initialize output arrays
-    satFrame = np.repeat(nt-1,(ny*nx)).reshape(ny,nx).astype('int32') # initialize saturation frame
+    satFrame = np.repeat(nt-1,(ny*nx)).reshape(ny,nx).astype('uint32') # initialize saturation frame
     satCounts = np.zeros((ny,nx),dtype='float32') # specifies saturation frame
 
     #determine saturation info
@@ -84,7 +84,7 @@ def getSatFrame(data,satCounts, ignoreRefPix=True):
     nt = data.shape[2]
 
     #initialize output array
-    satFrame = np.repeat(nt-1,(ny*nx)).reshape(ny,nx).astype('int32') # initialize saturation frame
+    satFrame = np.repeat(nt-1,(ny*nx)).reshape(ny,nx).astype('uint32') # initialize saturation frame
 
     #deterimine saturation info
     for y in xrange(ny):
@@ -214,7 +214,7 @@ def getSatFrameCL(data,satCounts, nSplit, ignoreRefPix=True):
     nx = data.shape[1]
     nt = data.shape[2]
 
-    satFrame = np.zeros((ny,data.shape[1]),dtype='int32') # specifies saturation frame
+    satFrame = np.zeros((ny,data.shape[1]),dtype='uint32') # specifies saturation frame
     
     nx = int(nx/nSplit)
     
