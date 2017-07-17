@@ -28,7 +28,7 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSp
     refCor.rowCL(data, nRows,rowSplit)
 
     if satCounts is None:
-        satFrame = np.empty((data.shape[0],data.shape[1]),dtype='float32')
+        satFrame = np.empty((data.shape[0],data.shape[1]),dtype='unint32')
         satFrame[:] = data.shape[2]
     else:
         satFrame = satInfo.getSatFrameCL(data, satCounts,satSplit, ignoreRefPix=True)
@@ -117,7 +117,7 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,ro
     refCor.rowCL(data, nRows,rowSplit)
 
     if satCounts is None:
-        satFrame = np.empty((data.shape[0],data.shape[1]),dtype='float32')
+        satFrame = np.empty((data.shape[0],data.shape[1]),dtype='uint32')
         satFrame[:] = data.shape[2]
     else:
         satFrame = satInfo.getSatFrameCL(data, satCounts,satSplit, ignoreRefPix=True)
