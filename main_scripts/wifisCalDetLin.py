@@ -38,11 +38,19 @@ t0 = time.time()
 #set file list
 fileList = 'det.lst'
 
-rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
-folderType = '/UpTheRamp/'
+rootFolder = ''#'/data/WIFIS/H2RG-G17084-ASIC-08-319'
+
+#assume that if rootFolder is blank, that the folders to read from are local and folderType is not needed
+if rootFolder == '':
+    folderType = ''
+else:
+    folderType = '/UpTheRamp/'
 
 #if exists and to be updated
 #bpmFile = 'processed/bad_pixel_mask.fits'
+
+nRowAvg = 4
+nRowSplit = 5
 #*****************************************************************************
 
 #read file list
@@ -73,113 +81,134 @@ if (contProc):
     zpntLst = []
     rampLst = []
     
-    for filename in lst:
-        filename = filename.tostring()
-        savename = 'processed/'+filename.replace('.fits','')
-        savename = 'processed/'+filename.replace('.gz','')
+    for folder in lst:
 
-        if(os.path.exists(savename+'_satCounts.fits') and os.path.exists(savename+'_NLCoeff.fits')):
-            cont = 'n'
-            cont = wifisIO.userInput('Non-linearity processed files already exists for ' + filename +', do you want to continue processing (y/n)?')
-           
-            if (cont.lower() == 'y'):
+        #check if folder contains multiple ramps
+        nRamps = wifisIO.getNumRamps(folder, rootFolder=rootFolder)
+
+        for rampNum in nRamps:
+            if nRamps > 1:
+                savename = 'processed/'+folder+'_R'+'{:02d}'.format(rampNum)
+            else:
+                savename = 'processed/'+folder
+
+            if(os.path.exists(savename+'_detLin_satCounts.fits') and os.path.exists(savename+'_detLin_NLCoeff.fits')):
+                cont = 'n'
+                if nRamps > 1:
+                    cont = wifisIO.userInput('Non-linearity processed files already exists for ' + folder +', ramp ' + '{:02d}'.format(rampNum) +'do you want to continue processing (y/n)?')
+                else:
+                    cont = wifisIO.userInput('Non-linearity processed files already exists for ' + folder +', do you want to continue processing (y/n)?')
+
+                if (cont.lower() == 'y'):
+                    contProc2 = True
+                else:
+                    contProc2 = False
+            else:
                 contProc2 = True
-            else:
-                contProc2 = False
-        else:
-            contProc2 = True
            
-        if (contProc2):
-            print('Processing '+filename)
+            if (contProc2):
+                print('Processing '+filename)
         
-            #**********************************************************************
-            #**********************************************************************
+                #**********************************************************************
+                #**********************************************************************
 
-            #Read in data
-            ta = time.time()
-            print('Reading data into cube')
-            #adjust accordingly depending on data source
-            data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + filename)
-            #data, inttime, hdr = wifisIO.readRampFromAsciiList(filename)
-            #data, inttime, hdr = wifisIO.readRampFromFile(filename)
+                #Read in data
+                ta = time.time()
+                print('Reading data into cube')
+                #adjust accordingly depending on data source
+                data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + folder, rampNum=rampNum)
+                #data, inttime, hdr = wifisIO.readRampFromAsciiList(filename)
+                #data, inttime, hdr = wifisIO.readRampFromFile(filename)
          
-            data = data.astype('float32')
-            #**********************************************************************
-            #******************************************************************************
-            #Correct data for reference pixels
-            #ta = time.time()
-            print("Subtracting reference pixel channel bias")
-            refCor.channelCL(data, 32)
-            print("Subtracting reference pixel row bias")
-            refCor.rowCL(data, 4,5)
-            #print("time to apply reference pixel corrections ", time.time()-ta, " seconds")
-            #**********************************************************************
+                data = data.astype('float32')*1.
+                #**********************************************************************
+                #******************************************************************************
+                #Correct data for reference pixels
+                #ta = time.time()
+                print("Subtracting reference pixel channel bias")
+                refCor.channelCL(data, 32)
+                print("Subtracting reference pixel row bias")
+                refCor.rowCL(data, nRowAvg,nRowSplit)
+                #print("time to apply reference pixel corrections ", time.time()-ta, " seconds")
+                #**********************************************************************
 
-            #Get saturation info
-            if(os.path.exists(savename+'_satCounts.fits')):
-                cont ='n'
-                cont = wifisIO.userInput('satCounts file already exists for ' +filename+', do you want to replace (y/n)?')
-            else:
-                cont = 'y'
+                #Get saturation info
+                if(os.path.exists(savename+'_detLin_satCounts.fits')):
+                    cont ='n'
+                    if nRamps > 1:
+                        cont = wifisIO.userInput('satCounts file already exists for ' +folder+', ramp '+ '{:02d}'.format(rampNum) +' do you want to replace (y/n)?')
+                    else:
+                        cont = wifisIO.userInput('satCounts file already exists for ' +folder+', do you want to replace (y/n)?')
+                        
+                else:
+                    cont = 'y'
 
-            if (cont.lower() == 'y'):
-                print('Getting saturation info')
-                ta = time.time()
-                satCounts = satInfo.getSatCountsCL(data,0.95, 1)
+                if (cont.lower() == 'y'):
+                    print('Getting saturation info')
+                    ta = time.time()
+                    satCounts = satInfo.getSatCountsCL(data,0.95, 1)
 
-                #save file
-                wifisIO.writeFits(satCounts, savename+'_detLin_satCounts.fits',ask=False)
+                    #save file
+                    wifisIO.writeFits(satCounts, savename+'_detLin_satCounts.fits',ask=False)
                 
-            else:
-                print('Reading saturation info from file')
-                satCounts = wifisIO.readImgsFromFile(savename+'_detLin_satCounts.fits')[0]
+                else:
+                    print('Reading saturation info from file')
+                    satCounts = wifisIO.readImgsFromFile(savename+'_detLin_satCounts.fits')[0]
 
-            satCountsLst.append(satCounts)
+                satCountsLst.append(satCounts)
         
-            #find the first saturated frames
-            satFrame = satInfo.getSatFrameCL(data,satCounts,32, ignoreRefPix=True)
+                #find the first saturated frames
+                satFrame = satInfo.getSatFrameCL(data,satCounts,32, ignoreRefPix=True)
 
-            #**********************************************************************
-            #**********************************************************************
+                #**********************************************************************
+                #**********************************************************************
 
-            # Get the non-linearity correction coefficients
-            if(os.path.exists(savename+'_NLCoeff.fits')):
-                cont='n'
-                cont = wifisIO.userInput('NLCoeff file already exists for ' +filename+', do you want to replace (y/n)?')
-            else:
-                cont = 'y'
+                # Get the non-linearity correction coefficients
+                if(os.path.exists(savename+'_detLin_NLCoeff.fits')):
+                    cont='n'
+                    if nRamps > 1:
+                        cont = wifisIO.userInput('NLCoeff file already exists for ' +folder+', ramp ' + '{:02d}'.format(rampNum) + ' do you want to replace (y/n)?')
+                    else:
+                        cont = wifisIO.userInput('NLCoeff file already exists for ' +folder+', do you want to replace (y/n)?')
+  
+                else:
+                    cont = 'y'
 
-            if (cont.lower() == 'y'):
-                print('Determining non-linearity corrections')
-                ta = time.time()
-                nlCoeff, zpntImg, rampImg = NLCor.getNLCorCL(data,satFrame,32)
+                if (cont.lower() == 'y'):
+                    print('Determining non-linearity corrections')
+                    ta = time.time()
+                    nlCoeff, zpntImg, rampImg = NLCor.getNLCorCL(data,satFrame,32)
 
-                #hard code the NLCoeff for reference pixels
-                nlCoeff[refFrame,0] = 1.
-                nlCoeff[refFrame,1:] = 0.
+                    #hard code the NLCoeff for reference pixels
+                    #reset the values of the reference pixels so that all frames are used
+                    refFrame = np.ones(satFrame.shape, dtype=bool)
+                    refFrame[4:-4,4:-4] = False
+
+                    nlCoeff[refFrame,0] = 1.
+                    nlCoeff[refFrame,1:] = 0.
                 
-                #save file
-                wifisIO.writeFits(nlCoeff, savename+'_detLin_NLCoeff.fits',ask=False)
-                wifisIO.writeFits([zpntImg, rampImg], savename+'_detLin_polyCoeff.fits', ask=False)
-            else:
-                print('Reading non-linearity coefficient file')
-                nlCoeff = wifisIO.readImgsFromFile(savename+'_detLin_NLCoeff.fits')[0]
-                zpntImg, rampImg = wifisIO.readImgsFromFile(savename+'_detLin_polyCoeff.fits')[0]
+                    #save file
+                    wifisIO.writeFits(nlCoeff, savename+'_detLin_NLCoeff.fits',ask=False)
+                    wifisIO.writeFits([zpntImg, rampImg], savename+'_detLin_polyCoeff.fits', ask=False)
+                else:
+                    print('Reading non-linearity coefficient file')
+                    nlCoeff = wifisIO.readImgsFromFile(savename+'_detLin_NLCoeff.fits')[0]
+                    zpntImg, rampImg = wifisIO.readImgsFromFile(savename+'_detLin_polyCoeff.fits')[0]
                 
-            nlCoeffLst.append(nlCoeff)
-            zpntLst.append(zpntImg)
-            rampLst.append(rampImg)
+                nlCoeffLst.append(nlCoeff)
+                zpntLst.append(zpntImg)
+                rampLst.append(rampImg)
             
-            #**********************************************************************
-            #**********************************************************************
+                #**********************************************************************
+                #**********************************************************************
         
-            print('Done processing and determining saturation info and non-linearity coefficients')
-            data = 0 #clean up data cube to reduce memory usage for next iteration
-        else:
-            #read data from files
-            print('Reading information from files instead')
-            satCountsLst.append(wifisIO.readImgsFromFile(savename+'_satCounts.fits')[0])
-            nlCoeffLst.append(wifisIO.readImgsFromFile(savename+'_NLCoeff.fits')[0])
+                print('Done processing and determining saturation info and non-linearity coefficients')
+                data = 0 #clean up data cube to reduce memory usage for next iteration
+            else:
+                #read data from files
+                print('Reading information from files instead')
+                satCountsLst.append(wifisIO.readImgsFromFile(savename+'_detLin_satCounts.fits')[0])
+                nlCoeffLst.append(wifisIO.readImgsFromFile(savename+'_detLin_NLCoeff.fits')[0])
     
     #create and write master files
     print('Creating master files')
