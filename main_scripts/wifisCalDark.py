@@ -61,7 +61,7 @@ wifisIO.createDir('quality_control')
 lst= wifisIO.readAsciiList(fileList)
 
 if lst.ndim == 0:
-    lst = [lst]
+    lst = np.asarray([lst])
 
 masterSave = 'processed/master_dark.fits'
 
@@ -86,7 +86,7 @@ if (contProc):
 
     for folder in lst:
 
-        folder = folder.tostring()
+        folder = folder
 
         #check if folder contains multiple ramps
         nRamps = wifisIO.getNumRamps(folder,rootFolder=rootFolder)
@@ -150,7 +150,7 @@ if (contProc):
                     satCounts = wifisIO.readImgsFromFile(satFile)[0]
                     satFrame = satInfo.getSatFrameCL(data, satCounts,32, ignoreRefPix=True)
                 else:
-                    satFrame = np.empty((data.shape[0],data.shape[1]),dtype='int')
+                    satFrame = np.empty((data.shape[0],data.shape[1]),dtype='uint32')
                     satFrame[:] = data.shape[2]
                     
                 #******************************************************************************
