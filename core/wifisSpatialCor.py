@@ -75,7 +75,7 @@ def getFit2(x, y, mxWidth=1,plot=False):
     try:
         gfit = gaussFit2(x,y,plot=plot)
         c = gfit[1]
-        amp = gfit[0]
+        amp = np.abs(gfit[0])
         width = np.abs(gfit[2])
         
         if (c < x[0] or c > x[-1]) or (width > mxWidth):
