@@ -8,8 +8,9 @@ import wifisUncertainties
 import wifisBadPixels as badPixels
 import wifisHeaders as headers
 import os
+import time
 
-def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False,skipObsinfo=False, rampNum=None):
+def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False,skipObsinfo=False, rampNum=None, satFile='', nlFile='', bpmFile=''):
     """
     """
     
@@ -19,19 +20,27 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSp
     
     #convert data to float32 for future processing
     data = data.astype('float32')
-            
+    hdr.add_history('Processed using WIFIS pyPline')
+    hdr.add_history('on '+time.strftime("%c"))
+
     #******************************************************************************
     #Correct data for reference pixels
     print("Subtracting reference pixel channel bias")
     refCor.channelCL(data, nChannel)
+    hdr.add_history('Channel reference pixel corrections applied using '+ str(nChannel) +' channels')
+
     print("Subtracting reference pixel row bias")
     refCor.rowCL(data, nRows,rowSplit)
+    hdr.add_history('Row reference pixel corrections applied using '+ str(int(nRows+1))+ ' pixels')
 
     if satCounts is None:
         satFrame = np.empty((data.shape[0],data.shape[1]),dtype='unint32')
         satFrame[:] = data.shape[2]
+        hdr.add_history('No saturation levels determined. Using all ramp frames')
     else:
         satFrame = satInfo.getSatFrameCL(data, satCounts,satSplit, ignoreRefPix=True)
+        hdr.add_history('Saturation levels determined from file:')
+        hdr.add_history(satFile)
 
     #******************************************************************************
     #apply non-linearity correction
@@ -40,13 +49,18 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSp
     #find NL coefficient file
     if nlCoeff is not None:
         NLCor.applyNLCorCL(data, nlCoeff, nlSplit)
-    
+        hdr.add_history('Non-linearity corrections applied using file:')
+        hdr.add_history(nlFile)
+                    
     #******************************************************************************
     #Combine data cube into single image
     if (crReject):
         fluxImg = combData.upTheRampCRRejectCL(inttime, data, satFrame, combSplit)[0]
+        hdr.add_history('Flux determined from median gradient')
     else:
         fluxImg  = combData.upTheRampCL(inttime, data, satFrame, combSplit)[0]
+        hdr.add_history('Flux determined through linear regression')
+                        
         
     #free up some memory
     del data
@@ -86,6 +100,10 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSp
     
         imgCor[4:-4,4:-4] = badPixels.corBadPixelsAll(fluxImg[4:-4,4:-4], dispAxis=0, mxRng=bpmCorRng, MP=True) 
         sigmaCor[4:-4, 4:-4]  = badPixels.corBadPixelsAll(sigmaImg[4:-4,4:-4], dispAxis=0, mxRng=bpmCorRng, MP=True, sigma=True)
+
+        hdr.add_history('Bad pixel mask used:')
+        hdr.add_history(bpmFile)
+        hdr.add_history('Bad pixels correcting using pixels within ' + str(bpmCorRng) + ' pixels')
     else:
         if not ignoreBPM:
             cont = wifisIO.userInput('*** WARNING: No bad pixel mask provided. Do you want to continue? *** (y/n)?')
@@ -94,7 +112,8 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSp
                 
         imgCor = fluxImg
         sigmaCor = sigmaImg
-   
+
+    hdr.add_comment('File contains the flux, uncertainty, and saturation frames as multi-extensions')
     return imgCor, sigmaCor, satFrame, hdr
 
 
@@ -108,20 +127,28 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,ro
     
     #convert data to float32 for future processing
     data = data.astype('float32')
-            
+    hdr.add_history('Processed using WIFIS pyPline')
+    hdr.add_history('on '+time.strftime("%c"))
+    
     #******************************************************************************
     #Correct data for reference pixels
     print("Subtracting reference pixel channel bias")
     refCor.channelCL(data, nChannel)
+    hdr.add_history('Channel reference pixel corrections applied using '+ str(nChannel) +' channels')
+
     print("Subtracting reference pixel row bias")
     refCor.rowCL(data, nRows,rowSplit)
+    hdr.add_history('Row reference pixel corrections applied using '+ str(int(nRows+1))+ ' pixels')
 
     if satCounts is None:
-        satFrame = np.empty((data.shape[0],data.shape[1]),dtype='uint32')
+        satFrame = np.empty((data.shape[0],data.shape[1]),dtype='uint16')
         satFrame[:] = data.shape[2]
+        hdr.add_history('No saturation levels determined. Using all ramp frames')
     else:
         satFrame = satInfo.getSatFrameCL(data, satCounts,satSplit, ignoreRefPix=True)
-
+        hdr.add_history('Saturation levels determined from file:')
+        hdr.add_history(satFile)
+        
     #******************************************************************************
     #apply non-linearity correction
     print("Correcting for non-linearity")
@@ -129,11 +156,13 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,ro
     #find NL coefficient file
     if nlCoeff is not None:
         NLCor.applyNLCorCL(data, nlCoeff, nlSplit)
-
+        hdr.add_history('Non-linearity corrections applied using file:')
+        hdr.add_history(nlFile)
+ 
     #******************************************************************************
     #Combine data cube into single image
     fluxImg = combData.fowlerSamplingCL(inttime, data, satFrame, combSplit)
-
+    
     #free up some memory
     del data
 
@@ -171,6 +200,9 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,ro
         
         imgCor[4:-4,4:-4] = badPixels.corBadPixelsAll(fluxImg[4:-4,4:-4], dispAxis=0, mxRng=bpmCorRng, MP=True) 
         sigmaCor[4:-4, 4:-4]  = badPixels.corBadPixelsAll(sigmaImg[4:-4,4:-4], dispAxis=0, mxRng=bpmCorRng, MP=True, sigma=True)
+        hdr.add_history('Bad pixel mask used:')
+        hdr.add_history(bpmFile)
+        hdr.add_history('Bad pixels correcting using pixels within ' + str(bpmCorRng) + ' pixels')
     else:
         if not ignoreBPM:
             cont = wifisIO.userInput('*** WARNING: No bad pixel mask provided. Do you want to continue? *** (y/n)?')
@@ -179,7 +211,8 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,ro
             
         imgCor = fluxImg
         sigmaCor = sigmaImg
-   
+
+    hdr.add_comment('File contains the flux, uncertainty, and saturation frames as multi-extensions')
     return imgCor, sigmaCor, satFrame, hdr
 
 
