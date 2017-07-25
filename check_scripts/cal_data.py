@@ -56,10 +56,16 @@ else:
     #distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_june/20170607010313/processed/20170607001828_flat_limits.fits'
     #spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_june/20170607010313/processed/20170607001609_ronchi_spatGridProps.dat'
 
-nlFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_NLCoeff.fits'        
-satFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_satCounts.fits'
-bpmFile = '/data/pipeline/external_data/bpm.fits'
-atlasFile = '/data/pipeline/external_data/best_lines2.dat'
+    #july
+    distMapFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707175840_ronchi_distMap.fits'
+    distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707180443_flat_limits.fits'
+    spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707175840_ronchi_spatGridProps.dat'
+
+
+nlFile = pipelineFolder+'external_data/master_detLin_NLCoeff.fits'        
+satFile = pipelineFolder+'external_data/master_detLin_satCounts.fits'
+bpmFile = pipelineFolder+'external_data/bpm.fits'
+atlasFile = pipelineFolder+'external_data/best_lines2.dat'
 
 #pixel scale
 #may old
@@ -143,7 +149,7 @@ if os.path.exists(flatLstFile):
     flatLst = wifisIO.readAsciiList(flatLstFile)
 
     if flatLst.ndim == 0:
-        flatLst = np.asarray([waveLst])
+        flatLst = np.asarray([flatLst])
 else:
     raise SystemExit('flat list file ' + flatLstFile + ' does not exist')
 
