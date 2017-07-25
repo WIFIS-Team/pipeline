@@ -10,7 +10,7 @@ import wifisHeaders as headers
 import os
 import time
 
-def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False,skipObsinfo=False, rampNum=None, satFile='', nlFile='', bpmFile=''):
+def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False,skipObsinfo=False, rampNum=None, satFile='', nlFile='', bpmFile=''):
     """
     """
     
@@ -30,8 +30,9 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSp
     hdr.add_history('Channel reference pixel corrections applied using '+ str(nChannel) +' channels')
 
     print("Subtracting reference pixel row bias")
-    refCor.rowCL(data, nRows,rowSplit)
-    hdr.add_history('Row reference pixel corrections applied using '+ str(int(nRows+1))+ ' pixels')
+    if nRows > 0:
+        refCor.rowCL(data, nRows,rowSplit)
+        hdr.add_history('Row reference pixel corrections applied using '+ str(int(nRows+1))+ ' pixels')
 
     if satCounts is None:
         satFrame = np.empty((data.shape[0],data.shape[1]),dtype='unint32')
@@ -59,9 +60,8 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSp
         hdr.add_history('Flux determined from median gradient')
     else:
         fluxImg  = combData.upTheRampCL(inttime, data, satFrame, combSplit)[0]
-        hdr.add_history('Flux determined through linear regression')
-                        
-        
+        hdr.add_history('Flux determined through openCL linear regression')
+                
     #free up some memory
     del data
     
@@ -74,7 +74,7 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSp
     #add additional header information here
     if not skipObsinfo:
         headers.addTelInfo(hdr, folder+'/obsinfo.dat')
-        
+    hdr.add_comment('File contains flux, uncertainties, saturation info as multi-extensions')
     #****************************************************************************
     
     if (saveAll):
@@ -84,7 +84,7 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSp
         
     # CORRECT BAD PIXELS
     #check for BPM and read, if exists
-    if(BPM is not None):
+    if(BPM is not None or bpmCorRng > 0):
         print('Correcting for bad pixels')
 
         #assumes BPM is same dimensions as raw image file
@@ -103,8 +103,8 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSp
 
         hdr.add_history('Bad pixel mask used:')
         hdr.add_history(bpmFile)
-        hdr.add_history('Bad pixels correcting using pixels within ' + str(bpmCorRng) + ' pixels')
-    else:
+        hdr.add_history('Bad pixels corrected using nearest pixels within ' + str(bpmCorRng) + ' pixel range')
+    elif(BPM is None):
         if not ignoreBPM:
             cont = wifisIO.userInput('*** WARNING: No bad pixel mask provided. Do you want to continue? *** (y/n)?')
             if (cont.lower()!='y'):
@@ -113,11 +113,10 @@ def fromUTR(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSp
         imgCor = fluxImg
         sigmaCor = sigmaImg
 
-    hdr.add_comment('File contains the flux, uncertainty, and saturation frames as multi-extensions')
     return imgCor, sigmaCor, satFrame, hdr
 
 
-def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False, skipObsinfo=False, rampNum=None):
+def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False, skipObsinfo=False, rampNum=None, nlFile='', bpmFile='',satFile=''):
     """
     """
     
@@ -137,8 +136,9 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,ro
     hdr.add_history('Channel reference pixel corrections applied using '+ str(nChannel) +' channels')
 
     print("Subtracting reference pixel row bias")
-    refCor.rowCL(data, nRows,rowSplit)
-    hdr.add_history('Row reference pixel corrections applied using '+ str(int(nRows+1))+ ' pixels')
+    if nRows>0:
+        refCor.rowCL(data, nRows,rowSplit)
+        hdr.add_history('Row reference pixel corrections applied using '+ str(int(nRows+1))+ ' pixels')
 
     if satCounts is None:
         satFrame = np.empty((data.shape[0],data.shape[1]),dtype='uint16')
@@ -162,6 +162,7 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,ro
     #******************************************************************************
     #Combine data cube into single image
     fluxImg = combData.fowlerSamplingCL(inttime, data, satFrame, combSplit)
+    hdr.add_history('Flux determined from mean average of Fowler reads in openCL')
     
     #free up some memory
     del data
@@ -175,8 +176,9 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,ro
     #add additional header information here
     if not skipObsinfo:
         headers.addTelInfo(hdr, folder+'/obsinfo.dat')
-
+    hdr.add_comment('File contains flux, uncertainties, and saturation info as multi-extensions')
     #****************************************************************************
+    
     if saveAll:
         wifisIO.writeFits([fluxImg, sigmaImg, satFrame], saveName, hdr=hdr, ask=False)
     else:
@@ -184,7 +186,7 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,ro
     
     # CORRECT BAD PIXELS
     #check for BPM and read, if exists
-    if(BPM is not None):
+    if(BPM is not None and bpmCorRng >0):
         print('Correcting for bad pixels')
 
         #assumes BPM is same dimensions as raw image file
@@ -202,8 +204,8 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,ro
         sigmaCor[4:-4, 4:-4]  = badPixels.corBadPixelsAll(sigmaImg[4:-4,4:-4], dispAxis=0, mxRng=bpmCorRng, MP=True, sigma=True)
         hdr.add_history('Bad pixel mask used:')
         hdr.add_history(bpmFile)
-        hdr.add_history('Bad pixels correcting using pixels within ' + str(bpmCorRng) + ' pixels')
-    else:
+        hdr.add_history('Bad pixels corrected using nearest pixels within ' + str(bpmCorRng) + ' pixel range')
+    elif (BPM is None):
         if not ignoreBPM:
             cont = wifisIO.userInput('*** WARNING: No bad pixel mask provided. Do you want to continue? *** (y/n)?')
             if (cont.lower()!='y'):
@@ -212,11 +214,10 @@ def fromFowler(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,ro
         imgCor = fluxImg
         sigmaCor = sigmaImg
 
-    hdr.add_comment('File contains the flux, uncertainty, and saturation frames as multi-extensions')
     return imgCor, sigmaCor, satFrame, hdr
 
 
-def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=4,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False, skipObsinfo=False, rampNum=None):
+def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False, skipObsinfo=False, rampNum=None, bpmFile='', satFile='', nlFile=''):
     """
     """
 
@@ -227,16 +228,16 @@ def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRow
     if os.path.exists(rootFolder+'/CDSReference/'+folder):
         folderType = '/CDSReference/'
 
-        imgCor, sigmaCor, satFrame, hdr = fromFowler(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM, saveAll=saveAll, skipObsinfo=skipObsinfo, rampNum=rampNum)
+        imgCor, sigmaCor, satFrame, hdr = fromFowler(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM, saveAll=saveAll, skipObsinfo=skipObsinfo, rampNum=rampNum, bpmFile=bpmFile, satFile=satFile, nlFile=nlFile)
     #Fowler
     elif os.path.exists(rootFolder+'/FSRamp/'+folder):
         folderType = '/FSRamp/'
         
-        imgCor, sigmaCor, satFrame, hdr = fromFowler(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM, saveAll=saveAll, skipObsinfo=skipObsinfo, rampNum=rampNum)
+        imgCor, sigmaCor, satFrame, hdr = fromFowler(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM, saveAll=saveAll, skipObsinfo=skipObsinfo, rampNum=rampNum, bpmFile=bpmFile, satFile=satFile, nlFile=nlFile)
 
     elif os.path.exists(rootFolder + '/UpTheRamp/'+folder):
         folderType = '/UpTheRamp/'
-        imgCor, sigmaCor, satFrame, hdr = fromUTR(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=rowSplit, satSplit=satSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM, saveAll=saveAll, skipObsinfo=skipObsinfo, rampNum=rampNum)
+        imgCor, sigmaCor, satFrame, hdr = fromUTR(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=rowSplit, satSplit=satSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM, saveAll=saveAll, skipObsinfo=skipObsinfo, rampNum=rampNum, bpmFile=bpmFile, satFile=satFile, nlFile=nlFile)
 
     else:
         raise Warning('*** Ramp folder ' + folder + ' does not exist ***')
