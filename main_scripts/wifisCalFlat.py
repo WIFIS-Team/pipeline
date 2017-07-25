@@ -15,6 +15,7 @@ import os
 import wifisIO 
 import warnings
 import wifisCalFlatFunc as calFlat
+import numpy as np
 
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
 os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
@@ -41,7 +42,7 @@ if hband:
 else:
     distMapLimitsFile = pipelineFolder+'external_data/distMap_limits.fits'
 
-distMapLimitsFile = ''
+#distMapLimitsFile = ''
 #optional behaviour of pipeline
 plot = True #whether to plot the traces
 crReject = False
@@ -50,10 +51,12 @@ winRng = 51
 imgSmth = 5
 polyFitDegree=2
 
+flatSmooth=0
+flatCutOff = 0.1
 #parameters used for processing of ramps
 nChannel=32 #specifies the number of channels used during readout of detector
 bpmCorRng=20 #specifies the maximum separation of pixel search to use during bad pixel correction
-nRowAverage=4 # specifies the number of rows of reference pixels to use to correct for row bias (+/- nRowAverage)
+nRowsAvg=0 # specifies the number of rows of reference pixels to use to correct for row bias (+/- nRowAvg)
 rowSplit=1 # specifies how many processing steps to use during reference row correction. Must be integer multiple of number of frames. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
 nlSplit=32 #specifies how many processing steps to use during non-linearity correction. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption. 
 combSplit=32 #specifies how many processing steps to use during creation of ramp image. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
@@ -105,8 +108,8 @@ if satCounts is None:
     warnings.warn('*** No saturation counts array provided and will not be taken into account ***')
 
 if flatLst.ndim == 0:
-    flatLst = np.asarray([lst])
+    flatLst = np.asarray([flatLst])
 
-calFlat.runCalFlat(flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=plot, nChannel=nChannel, nRowAverage=nRowAverage, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, bpmCorRng=bpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, imgSmth=imgSmth, polyFitDegree=2, avgRamps=True)
+calFlat.runCalFlat(flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=plot, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, bpmCorRng=bpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, imgSmth=imgSmth, polyFitDegree=2, avgRamps=True, nlFile=nlFile, satFile=satFile, bpmFile=bpmFile, flatCutOff=flatCutOff)
 
     
