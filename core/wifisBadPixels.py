@@ -23,6 +23,9 @@ def corBadPixelsAll(data,dispAxis=0,mxRng=2,MP=True, ncpus=None, sigma=False):
     #if (dispAxis==0):
     #    tmpBPM = tmpBPM.T
     #    tmpData = tmpData.T
+
+    if mxRng == 0:
+        return data
            
     #create list of bad pixels
     bad = np.where(~np.isfinite(data))
