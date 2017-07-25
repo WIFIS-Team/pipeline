@@ -345,7 +345,7 @@ if (contProc):
 
     #determine bad pixels from master dark
     if getBadPix:
-        if os.path.exists(bpmFile):
+        if bpmFile is not None and os.path.exists(bpmFile):
                 cont = 'n'
                 cont = wifisIO.userInput('Bad pixel mask ' + bpmFile + ' already exists, do you want to update to reflect bad dark current levels (y/n)?')
 
