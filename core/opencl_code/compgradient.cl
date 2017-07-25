@@ -1,7 +1,7 @@
 __kernel void compmeangrad(const unsigned int nx, const unsigned int nt, __global float* data, __global unsigned int* sat, __global float* outgrad)
 {
   // *********************************************************************************************
-  // A MAXIMUM OF 1000 FRAMES IS CURRENTLY HARDCODED. INCREASE THE GRAD VARIABLE ARRAY LENGTH IF MORE THAN 1000 FRAMES BELONG IN THE SEQUENCE
+  // A MAXIMUM OF 500 FRAMES IS CURRENTLY HARDCODED. INCREASE THE GRAD VARIABLE ARRAY LENGTH IF MORE THAN 500 FRAMES BELONG IN THE SEQUENCE
   // *********************************************************************************************
 
   // nx is size of 2nd dimension
@@ -25,7 +25,7 @@ __kernel void compmeangrad(const unsigned int nx, const unsigned int nt, __globa
   unsigned int satframe = (int) sat[pos2d];
   
   // first determine gradient along time axis
-  float grad [1000];
+  float grad [500];
   float meangrad = 0.;
   float meangrad2 = 0.;
   float std=0;
@@ -34,17 +34,17 @@ __kernel void compmeangrad(const unsigned int nx, const unsigned int nt, __globa
   float cnt;
 
   // only compute gradient for minimum of 2 frames
-  if (satframe <1){
+  if (satframe <2){
     meangrad = NAN;
   } else {
     // if only 2 frames, compute gradient for both points as y[1]-y[0]
-    if (satframe == 1){
+    if (satframe == 2){
       pos3d = i*(nx*nt) + j*nt;
       grad[0] = data[pos3d+1]-data[pos3d];
       grad[1] = grad[0];
     }
     //if more than 2 frames, compute gradient over 3-pixels
-    if (satframe > 1){
+    if (satframe > 2){
       pos3d = i*(nx*nt) + j*nt;
       
       grad[0] = -(3.*data[pos3d] -4.*data[pos3d+1] + data[pos3d+2])/2.;
@@ -85,7 +85,7 @@ __kernel void compmeangrad(const unsigned int nx, const unsigned int nt, __globa
       cnt = 0.;
       
       for (k=0;k<satframe;k++){
-	if(fabs(grad[k]-meangrad2) < std2){
+	if(fabs(grad[k]-meangrad2) < 1.5*std2){
 	  meangrad += grad[k];
 	  tmp = (grad[k]-meangrad2);
 	  std += tmp*tmp;
