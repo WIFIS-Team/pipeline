@@ -13,7 +13,7 @@ Produces:
 """
 
 import matplotlib
-matplotlib.use('gtkgg')
+matplotlib.use('gtkagg')
 import numpy as np
 import astropy.io.fits as fits
 import astropy.io.ascii as ascii
@@ -26,6 +26,7 @@ import os
 import wifisIO
 import wifisHeaders as headers
 import warnings
+import wifisBadPixels as badPixels
 
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
 os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target, should uncomment and set to preferred device to avoid interactively selecting each time
@@ -38,7 +39,7 @@ t0 = time.time()
 #set file list
 fileList = 'det.lst'
 
-rootFolder = ''#'/data/WIFIS/H2RG-G17084-ASIC-08-319'
+rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
 
 #assume that if rootFolder is blank, that the folders to read from are local and folderType is not needed
 if rootFolder == '':
@@ -49,8 +50,13 @@ else:
 #if exists and to be updated
 #bpmFile = 'processed/bad_pixel_mask.fits'
 
+nChannels = 32
 nRowAvg = 4
-nRowSplit = 5
+nRowSplit = 1
+nSatSplit = 1
+nReadSkip = 2
+satLimit=0.97
+bpmCutoff = 1e-5
 #*****************************************************************************
 
 #read file list
@@ -63,7 +69,7 @@ if lst.ndim == 0:
 wifisIO.createDir('processed')
 
 #check if processing needs to be done
-if(os.path.exists('processed/master_detLin_NLCoeff.fits') and os.path.exists('processed/master_detLin_satCounts.fits')):
+if(os.path.exists('processed/master_detLin_NLCoeff.fits') and os.path.exists('processed/master_detLin_satCounts.fits') and os.path.exists('processed/master_detLin_BPM.fits')):
     cont = 'n'
     cont = wifisIO.userInput('Master non-linearity processed files already exists, do you want to continue processing (y/n)?')
 
@@ -86,7 +92,7 @@ if (contProc):
         #check if folder contains multiple ramps
         nRamps = wifisIO.getNumRamps(folder, rootFolder=rootFolder)
 
-        for rampNum in nRamps:
+        for rampNum in range(1, nRamps+1):
             if nRamps > 1:
                 savename = 'processed/'+folder+'_R'+'{:02d}'.format(rampNum)
             else:
@@ -95,7 +101,7 @@ if (contProc):
             if(os.path.exists(savename+'_detLin_satCounts.fits') and os.path.exists(savename+'_detLin_NLCoeff.fits')):
                 cont = 'n'
                 if nRamps > 1:
-                    cont = wifisIO.userInput('Non-linearity processed files already exists for ' + folder +', ramp ' + '{:02d}'.format(rampNum) +'do you want to continue processing (y/n)?')
+                    cont = wifisIO.userInput('Non-linearity processed files already exists for ' + folder +' ramp ' + '{:02d}'.format(rampNum) +', do you want to continue processing (y/n)?')
                 else:
                     cont = wifisIO.userInput('Non-linearity processed files already exists for ' + folder +', do you want to continue processing (y/n)?')
 
@@ -107,7 +113,7 @@ if (contProc):
                 contProc2 = True
            
             if (contProc2):
-                print('Processing '+filename)
+                print('Processing '+folder + ' ramp '+str(rampNum))
         
                 #**********************************************************************
                 #**********************************************************************
@@ -116,7 +122,9 @@ if (contProc):
                 ta = time.time()
                 print('Reading data into cube')
                 #adjust accordingly depending on data source
-                data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + folder, rampNum=rampNum)
+                data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + folder, rampNum=rampNum, nSkip=2)
+                hdr.add_history('Processed using WIFIS pyPline')
+                hdr.add_history('on '+time.strftime("%c"))
                 #data, inttime, hdr = wifisIO.readRampFromAsciiList(filename)
                 #data, inttime, hdr = wifisIO.readRampFromFile(filename)
          
@@ -126,9 +134,14 @@ if (contProc):
                 #Correct data for reference pixels
                 #ta = time.time()
                 print("Subtracting reference pixel channel bias")
-                refCor.channelCL(data, 32)
+                refCor.channelCL(data, nChannels)
+                
+                hdr.add_history('Channel reference pixel corrections applied using '+ str(nChannels) +' channels')
+                
                 print("Subtracting reference pixel row bias")
                 refCor.rowCL(data, nRowAvg,nRowSplit)
+                hdr.add_history('Row reference pixel corrections applied using '+ str(int(nRowAvg+1))+ ' pixels')
+   
                 #print("time to apply reference pixel corrections ", time.time()-ta, " seconds")
                 #**********************************************************************
 
@@ -146,11 +159,18 @@ if (contProc):
                 if (cont.lower() == 'y'):
                     print('Getting saturation info')
                     ta = time.time()
-                    satCounts = satInfo.getSatCountsCL(data,0.95, 1)
-
+                    satCounts = satInfo.getSatCountsCL(data,satLimit, nSatSplit)
+                    hdr.add_history('Saturation level defined as '+ str(satLimit)+ ' saturation limit')
+                    hdr.add_comment('File contains saturation level for each pixel')
+                    
                     #save file
-                    wifisIO.writeFits(satCounts, savename+'_detLin_satCounts.fits',ask=False)
-                
+                    wifisIO.writeFits(satCounts, savename+'_detLin_satCounts.fits',hdr=hdr,ask=False)
+
+                    #now remove last history and comment line
+                    hdrTmp = hdr[::-1]
+                    hdrTmp.remove('HISTORY')
+                    hdrTmp.remove('COMMENT')
+                    hdr = hdrTmp[::-1]
                 else:
                     print('Reading saturation info from file')
                     satCounts = wifisIO.readImgsFromFile(savename+'_detLin_satCounts.fits')[0]
@@ -186,10 +206,22 @@ if (contProc):
 
                     nlCoeff[refFrame,0] = 1.
                     nlCoeff[refFrame,1:] = 0.
-                
+
+                    hdr.add_comment('This cube contains the non-linearity correction coefficients')
                     #save file
-                    wifisIO.writeFits(nlCoeff, savename+'_detLin_NLCoeff.fits',ask=False)
-                    wifisIO.writeFits([zpntImg, rampImg], savename+'_detLin_polyCoeff.fits', ask=False)
+                    wifisIO.writeFits(nlCoeff, savename+'_detLin_NLCoeff.fits',ask=False,hdr=hdr)
+
+                    hdrTmp = hdr[::-1]
+                    hdrTmp.remove('COMMENT')
+                    hdr = hdrTmp[::-1]
+
+                    hdr.add_comment('File contains the bias and ramp levels as multi-extensions')
+                    wifisIO.writeFits([zpntImg, rampImg], savename+'_detLin_polyCoeff.fits', ask=False,hdr=hdr)
+
+                    hdrTmp = hdr[::-1]
+                    hdrTmp.remove('COMMENT')
+                    hdr = hdrTmp[::-1]
+
                 else:
                     print('Reading non-linearity coefficient file')
                     nlCoeff = wifisIO.readImgsFromFile(savename+'_detLin_NLCoeff.fits')[0]
@@ -202,7 +234,7 @@ if (contProc):
                 #**********************************************************************
                 #**********************************************************************
         
-                print('Done processing and determining saturation info and non-linearity coefficients')
+                print('Done processing, determining saturation info, and non-linearity coefficients')
                 data = 0 #clean up data cube to reduce memory usage for next iteration
             else:
                 #read data from files
@@ -219,157 +251,47 @@ if (contProc):
         masterZpnt = np.nanmedian(np.array(zpntLst), axis=0)
         masterRamp = np.nanmedian(np.array(rampLst),axis=0)
     
+
+    #create fits header
+    hdr = fits.Header()
+    hdr.add_history('Processed using WIFIS pyPline')
+    hdr.add_history('on '+time.strftime("%c"))
+    hdr.add_history('This file was constructed from the median average of the following:')
+
+    for s in lst:
+        hdr.add_history(s + ' with ' +  str(wifisIO.getNumRamps(s, rootFolder=rootFolder)) + ' ramps;')
+  
     #write files, if necessary
-    wifisIO.writeFits(masterSatCounts.astype('float32'),'processed/master_detLin_satCounts.fits')
-    wifisIO.writeFits(masterNLCoeff.astype('float32'),'processed/master_detLin_NLCoeff.fits')
-    wifisIO.writeFits([masterZpnt.astype('float32'), masterRamp.astype('float32')], 'processed/master_detLin_polyCoeff.fits')
+    hdr.add_comment('Master saturation info file defining limits for each pixel')
+    wifisIO.writeFits(masterSatCounts.astype('float32'),'processed/master_detLin_satCounts.fits',hdr=hdr)
+
+    hdrTmp = hdr[::-1]
+    hdrTmp.remove('COMMENT')
+    hdr = hdrTmp[::-1]
+
+    hdr.add_comment('Master non-linearity correction coefficients cube for each pixel')
+    wifisIO.writeFits(masterNLCoeff.astype('float32'),'processed/master_detLin_NLCoeff.fits', hdr=hdr)
+
+    hdrTmp = hdr[::-1]
+    hdrTmp.remove('COMMENT')
+    hdr = hdrTmp[::-1]
+
+    hdr.add_comment('Master bias and ramp values for each pixel, as multi-extensions')
+    wifisIO.writeFits([masterZpnt.astype('float32'), masterRamp.astype('float32')], 'processed/master_detLin_polyCoeff.fits',hdr=hdr)
+
+    hdrTmp = hdr[::-1]
+    hdrTmp.remove('COMMENT')
+    hdr = hdrTmp[::-1]
+
+    print('Determining bad pixels from master NL coefficients')
+    hdr.add_comment('Master bad pixel mask')
+
+    bpm,hdr =  badPixels.getBadPixelsFromNLCoeff(masterNLCoeff,hdr,saveFile='quality_control/master_detLin_NLCoeff',cutoff=bpmCutoff)
+
+    wifisIO.writeFits(bpm, 'processed/master_detLin_BPM.fits',hdr=hdr)
+    
 else:
     print('No processing necessary')
 
-
-raise SystemExit('EXITING SCRIPT, BAD PIXEL IDENTIFICATION CURRENTLY A WORK IN PROGRESS')
-
-#check if analysis of NL coefficients needs to be done
-if(os.path.exists('processed/bad_pixel_mask.fits')):
-    cont = wifisIO.userInput('bad pixel mask already exists, do you want to update, replace, skip? ("update"/"replace"/anything else to skip)')
-    
-    if (cont.lower() == 'update' or cont.lower() == 'replace'):
-        contAnalysis = True
-    else:
-        contAnalysis = False
-else:
-    contAnalysis = True
-    cont = 'replace'
-
-
-
-
-if (contAnalysis):
-    print('Determining bad pixels from non-linearity coefficients')
-    
-    if (~contProc):
-        #read in nlCoeff instead
-        print('Reading non-linearity coefficient file')
-        nlCoeff = wifisIO.readImgsFromFile('processed/master_detLin_NLCoeff.fits')[0]
-    
-    if (cont == 'update'):
-        BPM = wifisIO.readImgsFromFile(bpmFile)[0]
-    else:
-        BPM = np.zeros(nlCoeff[:,:,0].shape, dtype='int8')
-
-    print('Analyzing non-linearity coefficients and determining outliers')
-
-    #NLCoeff 0, ignoring reference pixels
-    n = nlCoeff[4:2044,4:2044,0]
-    
-    for i in range(5):
-        med = np.median(n)
-        std = np.std(n)
-        whr = np.where(np.abs(n-med) < 5.*std)
-        n = n[whr]
-        
-    plt.close('all')
-    plt.hist(nlCoeff[4:2044,4:2044,0].flatten(), range=[med-1.5*std, med+1.5*std],bins=100)
-    hist = np.histogram(nlCoeff[4:2044,4:2044,0].flatten(), range=[med-1.5*std, med+1.5*std], bins=100)
-   
-    std = np.std(n)
-    med = np.median(n)
-    
-    plt.plot([med-5.*std,med-5.*std], [np.min(hist[0]),np.max(hist[0])], 'r--')
-    plt.plot([med+5.*std,med+5.*std], [np.min(hist[0]),np.max(hist[0])], 'r--')
-    plt.xlabel('value')
-    plt.ylabel('count')
-    plt.title('NL correction coefficient 0')
-    plt.savefig('processed/nlcoeff_0_hist.eps', bbox_inches='tight')
-    #plt.show()
-    plt.close('all')
-    
-    whr = np.where(np.abs(nlCoeff[4:2044,4:2044,0]-med) > 5.*std)
-    BPM[whr] = 1
-    
-    #NLCoeff 1
-    n = nlCoeff[4:2044,4:2044,1]
-    
-    for i in range(6):
-        med = np.median(n)
-        std = np.std(n-med)
-        whr = np.where(np.abs(n-med) < 7.*std)
-        n = n[whr]
-    
-    plt.hist(nlCoeff[4:2044,4:2044,1].flatten(), range=[med-std, med+std],bins=100)
-    hist = np.histogram(nlCoeff[4:2044,4:2044,1].flatten(), range=[med-std, med+std], bins=100)
-    
-    med = np.median(n)
-    std = np.std(n)
-
-    plt.plot([med-5.*std,med-5.*std], [np.min(hist[0]),np.max(hist[0])], 'r--')
-    plt.plot([med+5.*std,med+5.*std], [np.min(hist[0]),np.max(hist[0])], 'r--')
-    
-    plt.xlabel('value')
-    plt.ylabel('count')
-    plt.title('NL correction coefficient 1')
-    plt.savefig('processed/nlcoeff_1_hist.eps')
-    #plt.show()
-    plt.close('all')
-    
-    whr = np.where(np.abs(nlCoeff[:,:,1]-med) > 5.*std)
-    #BPM[whr] = 1
-    
-    #NLCoeff 2
-    n = nlCoeff[4:2044,4:2044,2]
-    
-    for i in range(8):
-        med = np.median(n)
-        std = np.std(n)
-        whr = np.where(np.abs(n-med) < 7.*std)
-        n = n[whr]
-        
-    plt.hist(nlCoeff[4:2044,4:2044,2].flatten(), range=[med-std, med+std],bins=100)
-    hist = np.histogram(nlCoeff[4:2044,4:2044,2].flatten(), range=[med-std, med+std], bins=100)
-    
-    med = np.median(n)
-    std = np.std(n)
-    
-    plt.plot([med-5.*std,med-5.*std], [np.min(hist[0]),np.max(hist[0])], 'r--')
-    plt.plot([med+5.*std,med+5.*std], [np.min(hist[0]),np.max(hist[0])], 'r--')
-    plt.xlabel('value')
-    plt.ylabel('count')
-    plt.title('NL correction coefficient 2')
-    plt.savefig('processed/nlcoeff_2_hist.eps')
-    #plt.show()
-    plt.close('all')
-    
-    whr = np.where(np.abs(nlCoeff[:,:,2]-med) > 5.*std)
-    #BPM[whr] = 1
-    
-    #NLCoeff 3
-    n = nlCoeff[4:2044,4:2044,3]
-    
-    for i in range(9):
-        med = np.median(n)
-        std = np.std(n)
-        whr = np.where(np.abs(n-med) < 5.*std)
-        n = n[whr]
-    
-    plt.hist(nlCoeff[4:2044,4:2044,3].flatten(), range=[med-std, med+std],bins=100)
-    hist = np.histogram(nlCoeff[4:2044,4:2044,3].flatten(), range=[med-std, med+std], bins=100)
-        
-    med = np.median(n)
-    std = np.std(n)
-    
-    plt.plot([med-5.*std,med-5.*std], [np.min(hist[0]),np.max(hist[0])], 'r--')
-    plt.plot([med+5.*std,med+5.*std], [np.min(hist[0]),np.max(hist[0])], 'r--')
-    plt.xlabel('value')
-    plt.ylabel('count')
-    plt.title('NL correction coefficient 3')
-    plt.savefig('processed/nlcoeff_3_hist.eps')
-    #plt.show()
-    plt.close('all')
-
-    whr = np.where(np.abs(nlCoeff[:,:,3]-med) > 5.*std)
-    #BPM[whr] = 1
-    
-    print('Saving bad pixel mask')
-    wifisIO.writeFits(BPM.astype('int'),'processed/bad_pixel_mask.fits',ask=False)
 
 print ("Total time to run entire script: "+str(time.time()-t0))+" seconds"
