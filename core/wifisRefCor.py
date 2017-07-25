@@ -212,8 +212,7 @@ def rowCL(data,winSize,nSplit):
     if(nFrames >1 and nSplit>1):
 
         if (nFrames % nSplit > 0):
-            print("Error! nFrames MUST be an integer multiple of nSplit")
-            return
+            raise UserWarning('*** Error! nFrames MUST be an integer multiple of nSplit ***')
         else:
             nt = int(nFrames/nSplit)
 
