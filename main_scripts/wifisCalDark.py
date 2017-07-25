@@ -27,6 +27,8 @@ import wifisIO
 import wifisCombineData as combData
 import warnings
 import wifisUncertainties
+import astropy.io.fits as fits
+import wifisBadPixels as badPixels
 
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
 os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
@@ -39,12 +41,15 @@ fileList = 'dark.lst'
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
 pipelineFolder = '/data/pipeline/'
 
-nlFile = pipelineFolder+'external_data/master_detLin_NLCoeff.fits' # the non-linearity correction coefficients file        
-satFile = pipelineFolder+'external_data/master_detLin_satCounts.fits' # the saturation limits file
-bpmFile = pipelineFolder+'external_data/bpm.fits'
+nlFile = '/home/jason/wifis/data/non-linearity/july/processed/master_detLin_NLCoeff.fits' # the non-linearity correction coefficients file        
+satFile = '/home/jason/wifis/data/non-linearity/july/processed/master_detLin_satCounts.fits' # the saturation limits file
+bpmFile = '/home/jason/wifis/data/non-linearity/july/processed/master_detLin_BPM.fits'
 
 nRowSplit = 5
 nRowAvg =  4
+nChannels = 32
+getBadPix = True
+
 #*****************************************************************************
 
 #first check if required input exists
@@ -63,10 +68,10 @@ lst= wifisIO.readAsciiList(fileList)
 if lst.ndim == 0:
     lst = np.asarray([lst])
 
-masterSave = 'processed/master_dark.fits'
+masterSave = 'processed/master_dark'
 
 #first check if master dark exists
-if(os.path.exists(masterSave)):
+if(os.path.exists(masterSave+'.fits')):
     cont = wifisIO.userInput('Master dark file already exists, do you want to replace (y/n)?')
     if (cont.lower() == 'y'):
         contProc = True
@@ -81,7 +86,7 @@ if (contProc):
     procSigma = []
     procSatFrame = []
     procVarImg = []
-
+    nRampsLst = []
     #go through list and process each file individually
 
     for folder in lst:
@@ -90,7 +95,8 @@ if (contProc):
 
         #check if folder contains multiple ramps
         nRamps = wifisIO.getNumRamps(folder,rootFolder=rootFolder)
-
+        nRampsLst.append(nRamps)
+        
         for rampNum in range(1,nRamps+1):
             if nRamps > 1:
                 savename = 'processed/'+folder+'_R'+'{:02d}'.format(rampNum)
@@ -101,10 +107,12 @@ if (contProc):
                 cont = 'n'
                 cont = wifisIO.userInput('Processed dark file already exists for ' +folder+', do you want to continue processing (y/n)?')
                 if (not cont.lower() == 'y'):
-                    print('Reading image'+savename+'_dark.fits instead')
+                    print('Reading image '+savename+'_dark.fits instead')
                     contProc2 = False
                     #read in file instead
                     fluxImg, sigma, satFrame = wifisIO.readImgsFromFile(savename+'_dark.fits')[0]
+                    ron = wifisIO.readImgsFromFile(savename+'_dark_RON.fits')[0]
+                    varImg = ron**2
                 else:
                     contProc2 = True
             else:
@@ -136,23 +144,33 @@ if (contProc):
 
 
                 data = data.astype('float32')*1.
+                hdr.add_history('Processed using WIFIS pyPline')
+                hdr.add_history('on '+time.strftime("%c"))
+                
                 #******************************************************************************
                 #Correct data for reference pixels
                 print("Subtracting reference pixel channel bias")
-                refCor.channelCL(data, 32)
+                refCor.channelCL(data, nChannels)
+                hdr.add_history('Channel reference pixel corrections applied using '+ str(nChannels) +' channels')
+                
                 print("Subtracting reference pixel row bias")
                 refCor.rowCL(data, nRowAvg,nRowSplit) 
-        
+                hdr.add_history('Row reference pixel corrections applied using '+ str(int(nRowAvg+1))+ ' pixels')
+                
                 #******************************************************************************
                 #find if any pixels are saturated to avoid use in future calculations
 
                 if os.path.exists(satFile):
                     satCounts = wifisIO.readImgsFromFile(satFile)[0]
                     satFrame = satInfo.getSatFrameCL(data, satCounts,32, ignoreRefPix=True)
+                    hdr.add_history('Saturation levels determined from file:')
+                    hdr.add_history(satFile)
+
                 else:
-                    satFrame = np.empty((data.shape[0],data.shape[1]),dtype='uint32')
+                    satFrame = np.empty((data.shape[0],data.shape[1]),dtype='uint16')
                     satFrame[:] = data.shape[2]
-                    
+                    hdr.add_history('No saturation levels determined. Using all ramp frames')
+
                 #******************************************************************************
                 #apply non-linearity correction
                 print("Correcting for non-linearity")
@@ -160,12 +178,15 @@ if (contProc):
                 if os.path.exists(nlFile):
                     nlCoeff = wifisIO.readImgsFromFile(nlFile)[0]
                     NLCor.applyNLCorCL(data, nlCoeff, 32)
-                
+                    hdr.add_history('Non-linearity corrections applied using file:')
+                    hdr.add_history(nlFile)
+                    
                 #******************************************************************************
                 #Combine data cube into single image
                 fluxImg, zpntImg, varImg = combData.upTheRampCL(inttime, data, satFrame, 32)
                 #fluxImg = combData.upTheRampCRRejectCL(inttime, data, satFrame, 32)
-                
+                hdr.add_history('Flux determined from linear regression')
+
                 #reset cube to reduce memory impact 
                 data = 0
  
@@ -175,11 +196,7 @@ if (contProc):
                 else:
                     sigma = wifisUncertainties.compFowler(inttime, fluxImg, satFrame)
 
-                #add additional header information here
-
-                wifisIO.writeFits([fluxImg, sigma, satFrame], savename+'_dark.fits', hdr=hdr)
-
-                #plot quality control stuff here
+                #plot and determine quality control stuff here
                 medDark = np.nanmedian(fluxImg)
                 stdDark = np.nanstd(fluxImg)
 
@@ -197,9 +214,9 @@ if (contProc):
                         plt.savefig('quality_control/'+folder+'_R'+'{:02d}'.format(rampNum)+'_dark_hist.png',dpi=300)
                     else:
                         plt.savefig('quality_control/'+folder+'_dark_hist.png',dpi=300)
-
+                
                     plt.close()
-            
+                
                 #compute read-out-noise
                 with warnings.catch_warnings():
                     warnings.simplefilter('ignore',RuntimeWarning)
@@ -211,42 +228,61 @@ if (contProc):
                         stdRon = np.nanstd(ron[np.logical_and(ron >= medRon-stdRon, ron <= medRon+stdRon)])
 
                 
-                    fig = plt.figure()
-                    plt.hist(ron.flatten(),range=[medRon-5.*stdRon,medRon+5.*stdRon],bins=100)
-                    plt.title('Median RON of ' + '{: e}'.format(medRon))
-                    plt.xlabel('counts')
-                    plt.ylabel('# of pixels')
-                    if nRamps>1:
-                        plt.savefig('quality_control/'+folder+'_R{:02d}'.format(rampNum)+'_dark_ron_hist.png',dpi=300)
-                    else:
-                        plt.savefig('quality_control/'+folder+'_dark_ron_hist.png',dpi=300)
+                fig = plt.figure()
+                plt.hist(ron.flatten(),range=[medRon-5.*stdRon,medRon+5.*stdRon],bins=100)
+                plt.title('Median RON of ' + '{: e}'.format(medRon))
+                plt.xlabel('counts')
+                plt.ylabel('# of pixels')
+                if nRamps>1:
+                    plt.savefig('quality_control/'+folder+'_R{:02d}'.format(rampNum)+'_dark_ron_hist.png',dpi=300)
+                else:
+                    plt.savefig('quality_control/'+folder+'_dark_ron_hist.png',dpi=300)
 
-                    plt.close()
-                    wifisIO.writeFits(ron, savename+'_dark_RON.fits',ask=False)
+                plt.close()
+                hdr.set('QC_RON', medRon, 'Median readout noise, in counts')
+                hdr.set('QC_STDRN',stdRon, 'Standard deviation of readout noise, in counts')
+                hdr.add_comment('File contains the estimated readout noise per pixel')
+                wifisIO.writeFits(ron.astype('float32'), savename+'_dark_RON.fits',ask=False, hdr=hdr)
 
-            
+                hdrTmp = hdr[::-1]
+                hdrTmp.remove('COMMENT')
+                hdr = hdrTmp[::-1]
+                
+                #add additional header information here
+                hdr.set('QC_DARK',medDark,'Median dark current of entire array, in counts')
+                hdr.set('QC_STDDK',stdDark, 'Standard deviation of dark current, in counts')
+                hdr.add_comment('File contains the dark, uncertainty, and saturation frames as multi-extensions')
+                wifisIO.writeFits([fluxImg,sigma, satFrame],savename+'_dark.fits',hdr=hdr)
+
             procDark.append(fluxImg)
             procSigma.append(sigma)
             procSatFrame.append(satFrame)
             procVarImg.append(varImg)
-        
-    #now combine all dark images into master dark, propagating uncertainties as needed
-    masterDark, masterSigma  = wifisUncertainties.compMedian(np.array(procDark),np.array(procSigma), axis=0)
-    
-    #combine satFrame
-    masterSatFrame = np.median(np.array(procSatFrame), axis=0).astype('int')
 
-    #combine variance frame
-    masterVarImg = np.nansum(np.array(procVarImg), axis=0)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        #now combine all dark images into master dark, propagating uncertainties as needed
+        masterDark, masterSigma  = wifisUncertainties.compMedian(np.array(procDark),np.array(procSigma), axis=0)
+    
+        #combine satFrame
+        masterSatFrame = np.median(np.array(procSatFrame), axis=0).astype('int')
+
+        #combine variance frame
+        masterVarImg = np.nanmedian(np.array(procVarImg), axis=0)
     
     #******************************************************************************
     #******************************************************************************
 
     #add/modify header information here
+    hdr = fits.Header()
+    hdr.add_history('Processed using WIFIS pyPline')
+    hdr.add_history('on '+time.strftime("%c"))
+    hdr.add_history('This file was constructed from the median average of the following:')
 
-    #save file
-    wifisIO.writeFits([masterDark, masterSigma, masterSatFrame], masterSave, ask=False)
+    for i in range(len(lst)):
+        hdr.add_history(lst[i] + ' with ' +  str(nRampsLst[i]) + ' ramps;')
 
+        
     #plot quality control stuff here
     medDark = np.nanmedian(masterDark)
     stdDark = np.nanstd(masterDark)
@@ -283,8 +319,50 @@ if (contProc):
     plt.ylabel('# of pixels')
     plt.savefig('quality_control/'+folder+'_dark_ron_hist.png',dpi=300)
     plt.close()
-    wifisIO.writeFits(ron, masterSave +'_dark_RON.fits',ask=False)
-    
+
+    hdr.set('QC_RON', medRon, 'Median readout noise, in counts')
+    hdr.set('QC_STDRN',stdRon, 'Standard deviation of readout noise, in counts')
+    hdr.add_comment('File contains the estimated readout noise per pixel')
+    wifisIO.writeFits(ron, masterSave +'_dark_RON.fits',ask=False,hdr=hdr)
+
+    hdrTmp = hdr[::-1]
+    hdrTmp.remove('COMMENT')
+    hdr = hdrTmp[::-1]
+
+    hdr.add_comment('File contains the dark, uncertainty, and saturation frames as multi-extensions')
+
+    #add additional header information here
+    hdr.set('QC_DARK',medDark,'Median dark current of entire array, in counts')
+    hdr.set('QC_STDDK',stdDark, 'Standard deviation of dark current, in counts')
+               
+    #save file
+    wifisIO.writeFits([masterDark.astype('float32'), masterSigma.astype('float32'), masterSatFrame.astype('float32')], masterSave+'.fits', ask=False,hdr=hdr)
+
+    hdrTmp = hdr[::-1]
+    hdrTmp.remove('COMMENT')
+    hdrTmp.remove('COMMENT')
+    hdr = hdrTmp[::-1]
+
+    #determine bad pixels from master dark
+    if getBadPix:
+        if os.path.exists(bpmFile):
+                cont = 'n'
+                cont = wifisIO.userInput('Bad pixel mask ' + bpmFile + ' already exists, do you want to update to reflect bad dark current levels (y/n)?')
+
+                if (cont.lower() == 'y'):
+                        print('Updating bad pixel mask')
+                        bpm, bpmHdr = wifisIO.readImgsFromFile(bpmFile)
+                        with warnings.catch_warnings():
+                                warnings.simplefilter('ignore', RuntimeWarning)
+                                bpm, bpmHdr = badPixels.getBadPixelsFromDark(masterDark,bpmHdr, saveFile='quality_control/master_dark',darkFile=masterSave+'.fits',BPM=bpm)
+                        wifisIO.writeFits(bpm, bpmFile,hdr=bpmHdr,ask=False)
+        else:
+                print('Creating bad pixel mask')
+                bpm,hdr = badPixels.getBadPixelsFromDark(masterDark,hdr,saveFile='quality_control/master_dark', darkFile=masterSave+'.fits',BPM=None)
+                hdr.add_comment('File contains the bad pixel mask')
+                wifisIO.writeFits(bpm,'processed/master_dark_BPM.fits' ,hdr=hdr,ask=False)
+
+
 else:
      print('No processing necessary')   
 
