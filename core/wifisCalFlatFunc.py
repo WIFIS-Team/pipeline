@@ -27,7 +27,7 @@ import wifisProcessRamp as processRamp
 from matplotlib.backends.backend_pdf import PdfPages
 import warnings
 
-def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowAverage=4,rowSplit=1,nlSplit=32, combSplit=32,bpmCorRng=100, crReject=False, skipObsinfo=False,winRng=51, polyFitDegree=3, imgSmth=5, avgRamps=False):
+def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowsAvg=0,rowSplit=1,nlSplit=32, combSplit=32,bpmCorRng=100, crReject=False, skipObsinfo=False,winRng=51, polyFitDegree=3, imgSmth=5, avgRamps=False,nlFile='',bpmFile='', satFile='',flatCutOff=0.1,flatSmooth=0):
     
     """
     Flat calibration function which can be used/called from another script.
@@ -45,7 +45,7 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
     #file list can be a 2D table: where all files to be coadded are on the same row and files to be processed separately are on different rows. *** NOT YET IMPLEMENTED
 
     if hband:
-        print('***WORKING ON H-BAND DATA***')
+        print('*** WORKING ON H-BAND DATA ***')
     
     #create processed directory, in case it doesn't exist
     wifisIO.createDir('processed')
@@ -137,7 +137,7 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                         for rampNum2 in range(1,nRampsAll+1):
                             print('Processing ramp ' + str(rampNum2))
                             
-                            flatImg, sigmaImg, satFrame, hdr = processRamp.auto(folder, rootFolder,savename+'_flat.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, skipObsinfo=skipObsinfo, nRows=nRowAverage, rampNum=rampNum2)
+                            flatImg, sigmaImg, satFrame, hdr = processRamp.auto(folder, rootFolder,savename+'_flat.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, skipObsinfo=skipObsinfo, nRows=nRowsAvg, rampNum=rampNum2,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile)
                             flatImgAll.append(flatImg)
                             sigmaImgAll.append(sigmaImg)
                             satFrameAll.append(satFrame)
@@ -145,17 +145,22 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                         #now combine all images
                         with warnings.catch_warnings():
                             warnings.simplefilter('ignore', RuntimeWarning)
-                            flatImg = np.nanmean(np.asarray(flatImgAll),axis=0)
+                            flatImg = np.nanmedian(np.asarray(flatImgAll),axis=0)
                             sigmaImg = np.zeros(sigmaImg.shape,dtype=sigmaImg.dtype)
-                            for k in range(len(sigmaImgAll)):
-                                sigmaImg += sigmaImgAll[k]**2
-                            sigmaImg = np.sqrt(sigmaImg)/len(sigmaImgAll)
-                            satFrame = np.nanmean(np.asarray(satFrameAll),axis=0).round().astype('int')
+                            #for k in range(len(sigmaImgAll)):
+                            #sigmaImg += sigmaImgAll[k]**2
+                            #sigmaImg = np.sqrt(sigmaImg)/len(sigmaImgAll)
+                            sigmaImg = np.nanmedian(np.asarray(sigmaImgAll),axis=0)
+                            satFrame = np.nanmedian(np.asarray(satFrameAll),axis=0).round().astype('int')
+
+                        hdr.add_history('Data is median average of ' +str(nRampsAll) + ' ramps')
+                        wifisIO.writeFits([flatImg,sigmaImg,satFrame],savename+'_flat.fits',hdr=hdr,ask=False)
+                        
                         del flatImgAll
                         del sigmaImgAll
                         del satFrameAll
                     else:
-                        flatImg, sigmaImg, satFrame, hdr = processRamp.auto(folder, rootFolder,savename+'_flat.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, skipObsinfo=skipObsinfo, nRows=nRowAverage, rampNum=rampNum)
+                        flatImg, sigmaImg, satFrame, hdr = processRamp.auto(folder, rootFolder,savename+'_flat.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, skipObsinfo=skipObsinfo, nRows=nRowsAvg, rampNum=rampNum, nlFile=nlFile, satFile=satFile, bpmFile=bpmFile)
 
                     #carry out dark subtraction
                     if darkFile is not None:
@@ -163,6 +168,8 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                         dark, darkSig, darkSat = wifisIO.readImgsFromFile(darkFile)[0]
                         flatImg -= dark
                         sigmaImg = np.sqrt(sigmaImg**2 + darkSig**2)
+                        hdr.add_history('Dark image subtracted using file:')
+                        hdr.add_history(darkFile)
                     else:
                         warnings.warn('*** NO DARK RAMP PROVIDED SKIPPING DARK SUBTRACTION ***')
 
@@ -184,6 +191,12 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                     
                 if (contProc2):
                     print('Finding slice limits and extracting slices')
+
+                    #remove comment about contents of file
+                    hdrTmp = hdr[::-1]
+                    hdrTmp.remove('COMMENT')
+                    hdr = hdrTmp[::-1]
+                    
                     #find limits of each slice with the reference pixels, but the returned limits exclude them
                     limits = slices.findLimits(flatImg, dispAxis=0, winRng=51, imgSmth=imgSmth, limSmth=20, rmRef=True)
                     
@@ -192,6 +205,8 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
 
                     if os.path.exists(distMapLimitsFile):
                         print('Finding slice limits relative to distortion map file')
+                        hdr.add_history('Slice limits are relative to the following file:')
+                        hdr.add_history(distMapLimitsFile)
                         distMapLimits = wifisIO.readImgsFromFile(distMapLimitsFile)[0]
 
                         if hband:
@@ -212,8 +227,14 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                 
                     #write distMapLimits + shft to file
                     hdr.set('LIMSHIFT',shft, 'Limits shift relative to Ronchi slices')
+                    hdr.add_comment('File contains the edge limits for each slice')
                     wifisIO.writeFits(finalLimits,savename+'_flat_limits.fits', hdr=hdr, ask=False)
-            
+
+                    #remove comment about contents of file
+                    hdrTmp = hdr[::-1]
+                    hdrTmp.remove('COMMENT')
+                    hdr = hdrTmp[::-1]
+                    
                     #save figures of tracing results for quality control purposes
                     if (plot):
                         print('Plotting results')
@@ -271,8 +292,15 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                         satSlices = slices.extSlices(satFrame, finalLimits, dispAxis=0, shft=shft)
 
                         #write slices to file
-                        wifisIO.writeFits(flatSlices+sigmaSlices+satSlices,savename+'_flat_slices.fits',hdr=hdr, ask=False)
 
+                        hdr.add_comment('File contains each slice image as separate extension')
+                        wifisIO.writeFits(flatSlices+sigmaSlices+satSlices,savename+'_flat_slices.fits',hdr=hdr, ask=False)
+                        
+                        #remove comment about contents of file
+                        hdrTmp = hdr[::-1]
+                        hdrTmp.remove('COMMENT')
+                        hdr = hdrTmp[::-1]
+                        
                     if os.path.exists(savename+'_flat_slices_norm.fits'):
                         cont = 'n'
                         if nRamps> 1:
@@ -290,7 +318,10 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                     if (contProc2):
                         print('Getting normalized flat field')
                         #now get smoothed and normalized response function
-                        flatNorm = slices.getResponseAll(flatSlices, 0, 0.1)
+                        flatNorm = slices.getResponseAll(flatSlices, flatSmooth, flatCutOff)
+                        hdr.add_comment('File contains the normalized flat-field response function')
+                        hdr.add_history('Smoothed using Gaussian with 1-sigma width of ' + str(flatSmooth) + ' pixels')
+                        hdr.add_history('Normalized cutoff threshold is ' + str(flatCutOff))
                         sigmaNorm = slices.ffCorrectAll(sigmaSlices, flatNorm)
             
                         #write normalized images to file
