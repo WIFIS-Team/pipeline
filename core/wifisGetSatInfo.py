@@ -11,7 +11,7 @@ import os
 path = os.path.dirname(__file__)
 clCodePath = path+'/opencl_code'
 
-def getSatInfo(data, thresh):
+def getSatInfo(data, thresh, satThresh=0.97):
     """
     Determine saturation counts for each pixel using built-in python routines
     Usage: satCounts, satFrame = getSatInfo(data,thresh)
@@ -40,12 +40,12 @@ def getSatInfo(data, thresh):
             #assume last pixel in series is part of saturation regime
             mx = ytmp[-1]
             maxPixs = np.where(ytmp >= thresh*mx)
-            satVal = 0.97*np.mean(ytmp[maxPixs])
+            satVal = satThresh*np.mean(ytmp[maxPixs])
             satCounts[y,x] = satVal
             satFrame = ((np.where(ytmp >= satVal))[0])[0] #returns first saturated frame
     return satCounts, satFrame
 
-def getSatCounts(data, thresh):
+def getSatCounts(data, thresh, satThresh=0.97):
     """
     Determine saturation level for each pixel using built-in python routines
     Usage: satCounts = getSatCounts(data,thresh)
@@ -66,7 +66,7 @@ def getSatCounts(data, thresh):
             mx = ytmp[-1] # assumes a well behaved ramp, with the last pixel having the highest counts
             maxPixs = np.where(ytmp >= thresh*mx)
             satVal = np.mean(ytmp[maxPixs])
-            satCounts[y,x] = satVal*0.97 #set useful range as 97% of the saturation value
+            satCounts[y,x] = satVal*satThresh #set useful range as satThresh times the saturation value
     return satCounts
 
 def getSatFrame(data,satCounts, ignoreRefPix=True):
@@ -102,7 +102,7 @@ def getSatFrame(data,satCounts, ignoreRefPix=True):
 
     return satFrame    
 
-def getSatCountsCL(data, thresh, nSplit):
+def getSatCountsCL(data, thresh, nSplit,satThresh=0.97):
     """
     Determine saturation level for each pixel using OpenCL code
     Usage: satCounts = getSatCounts(data,thresh)
@@ -187,7 +187,7 @@ def getSatCountsCL(data, thresh, nSplit):
         program.getsatlev(queue,(ny,nx),None,np.uint32(nx), np.uint32(nt), np.float32(thresh),data_buf, mxCounts_buf, satCounts_buf)
         cl.enqueue_read_buffer(queue, satCounts_buf, satCounts).wait()
 
-    satCounts *= 0.97 #set useful range as 97% of the saturation value
+    satCounts *= satThresh #set useful range as satThresh  times the saturation value
 
     #modify variables to reduce memory consumption
     dTmp = 0
@@ -235,7 +235,7 @@ def getSatFrameCL(data,satCounts, nSplit, ignoreRefPix=True):
             #create temporary arrays to hold information
             dTmp = np.array(data[:, n*nx:(n+1)*nx,:].astype('float32'))
             sCountsTmp = np.array(satCounts[:,n*nx:(n+1)*nx].astype('float32'))
-            sFrameTmp = np.zeros((ny, nx), dtype='int32')
+            sFrameTmp = np.zeros((ny, nx), dtype='uint32')
         
             #create OpenCL buffers
             data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=dTmp)
