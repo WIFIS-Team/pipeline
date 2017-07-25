@@ -215,7 +215,7 @@ def writeFits_old(data, filename, hdr=None):
     else:
         hdu.writeto(filename,clobber=True)
 
-def readRampFromFolder(folderName, rampNum=None):
+def readRampFromFolder(folderName, rampNum=None,nSkip=0):
     """
     read all H2RG files from specified folder.
     Usage: output = readRampFromFolder(folderName)
@@ -236,7 +236,10 @@ def readRampFromFolder(folderName, rampNum=None):
     else:
         lst = glob.glob(folderName+'/H2*'+'R'+'{:02d}'.format(rampNum)+'*.fits')
         lst = sorted_nicely(lst)
-    
+
+    if nSkip>0:
+        lst = lst[nSkip:]
+        
     output,outtime,hdr = readRampFromList(lst)    
     
     return output,outtime,hdr
