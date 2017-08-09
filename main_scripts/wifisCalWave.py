@@ -29,13 +29,13 @@ import warnings
 import wifisCalWaveFunc as calWave
 
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
-os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target
+os.environ['PYOPENCL_CTX'] = '2' # Used to specify which OpenCL device to target
 plt.ioff()
 
 #*****************************************************************************
 #************************** Required input ***********************************
-waveListFile = 'wave.lst' 
-flatListFile = 'flat.lst'
+waveListFile = 'wave2.lst' 
+flatListFile = 'flat2.lst'
 
 hband = False
 
@@ -89,13 +89,19 @@ sigmaLimit= 3 #relative noise limit (x * noise level) for which to reject lines
 #parameters used for processing of ramps
 nChannel=32 #specifies the number of channels used during readout of detector
 bpmCorRng=20 #specifies the maximum separation of pixel search to use during bad pixel correction
-nRowAverage=4 # specifies the number of rows of reference pixels to use to correct for row bias (+/- nRowAverage)
+nRowsAvg=4 # specifies the number of rows of reference pixels to use to correct for row bias (+/- nRowsAvg)
 rowSplit=1 # specifies how many processing steps to use during reference row correction. Must be integer multiple of number of frames. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
 nlSplit=32 #specifies how many processing steps to use during non-linearity correction. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption. 
 combSplit=32 #specifies how many processing steps to use during creation of ramp image. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
 
 #*****************************************************************************
 #*****************************************************************************
+
+logfile = open('wifis_reduction_log.txt','a')
+logfile.write('********************\n')
+logfile.write(time.strftime("%c")+'\n')
+logfile.write('Processing flatfield files with WIFIS pyPline\n')
+logfile.write('Root folder containing raw data: ' + str(rootFolder)+'\n')
 
 print('Reading in calibration files')
 
@@ -107,12 +113,13 @@ if os.path.exists(waveListFile):
     if waveLst.ndim ==0:
         waveLst = np.asarray([waveLst])
 else:
+    logfile.write('*** FAILURE: Wave file list ' + waveListFile + ' does not exist ***')
     raise Warning('*** Wave file list ' + waveListFile + ' does not exist ***')
 
 if os.path.exists(flatListFile):
     flatLst= wifisIO.readAsciiList(flatListFile)
     if flatLst.ndim ==0:
-        flatLst = np.asarray([waveLst])
+        flatLst = np.asarray([flatLst])
 else:
     raise Warning('*** Flat file list ' + flatListFile + ' does not exist ***')
 
@@ -122,15 +129,22 @@ if len(waveLst) != len(flatLst):
 #open calibration files
 if os.path.exists(nlFile):
     nlCoef = wifisIO.readImgsFromFile(nlFile)[0]
+    logfile.write('Using non-linearity corrections from file:\n')
+    logfile.write(nlFile+'\n')
 else:
     nlCoef =None
     warnings.warn('*** No non-linearity coefficient array provided, corrections will be skipped ***')
-
+    logfile.write('*** WARNING: No non-linearity corrections file provided or file ' + str(nlFile) +' does not exist ***\n')
+    
 if os.path.exists(satFile):
     satCounts = wifisIO.readImgsFromFile(satFile)[0]
+    logfile.write('Using saturation limitts from file:\n')
+    logfile.write(satFile+'\n')
+
 else:
     satCounts = None
     warnings.warn('*** No saturation counts array provided and will not be taken into account ***')
+    logfile.write('*** WARNING: No saturation counts file provided or file ' + str(satFile) +' does not exist ***\n')
 
 if (os.path.exists(bpmFile)):
     BPM = wifisIO.readImgsFromFile(bpmFile)[0]
@@ -138,12 +152,8 @@ else:
     BPM = None
 
 if (darkListFile is not None) and os.path.exists(darkListFile):
-    darkLst = wifisIO.readAsciiList(darkListFile)
-    
-    if darkLst.ndim == 0:
-        darkLst = np.asarray([darkLst])
-    else:
-        darkLst = None
+    darkLst = wifisIO.readAsciiList(darkListFile)[0]
+    darkLst = darkLst[:2]
 else:
     darkLst = None
 
@@ -160,5 +170,7 @@ if not (os.path.exists(spatGridPropsFile)):
 wifisIO.createDir('processed')
 wifisIO.createDir('quality_control')
 
-calWave.runCalWave(waveLst, flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=plot, nChannel=nChannel, nRowAverage=nRowAverage, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, bpmCorRng=bpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, flatWinRng=flatWinRng,flatImgSmth=flatImgSmth, flatPolyFitDegree=3, distMapFile=distMapFile, spatGridPropsFile=spatGridPropsFile, atlasFile=atlasFile, templateFile=templateFile, prevResultsFile=prevResultsFile,  sigmaClip=sigmaClip, sigmaClipRounds=sigmaClipRounds, sigmaLimit=sigmaLimit, cleanDispSol=cleanDispSol,cleanDispThresh = cleanDispThresh, waveTrimThresh=waveTrimThresh)
+calWave.runCalWave(waveLst, flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=plot, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, bpmCorRng=bpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, flatWinRng=flatWinRng,flatImgSmth=flatImgSmth, flatPolyFitDegree=3, distMapFile=distMapFile, spatGridPropsFile=spatGridPropsFile, atlasFile=atlasFile, templateFile=templateFile, prevResultsFile=prevResultsFile,  sigmaClip=sigmaClip, sigmaClipRounds=sigmaClipRounds, sigmaLimit=sigmaLimit, cleanDispSol=cleanDispSol,cleanDispThresh = cleanDispThresh, waveTrimThresh=waveTrimThresh,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile)
     
+logfile.write('\n')
+logfile.close()
