@@ -29,7 +29,7 @@ import warnings
 import wifisBadPixels as badPixels
 
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
-os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target, should uncomment and set to preferred device to avoid interactively selecting each time
+os.environ['PYOPENCL_CTX'] = '2' # Used to specify which OpenCL device to target, should uncomment and set to preferred device to avoid interactively selecting each time
 
 t0 = time.time()
 
@@ -51,13 +51,26 @@ else:
 #bpmFile = 'processed/bad_pixel_mask.fits'
 
 nChannels = 32
-nRowAvg = 4
+nRowsAvg = 4
 nRowSplit = 1
 nSatSplit = 1
 nReadSkip = 2
 satLimit=0.97
+satThresh=0.97
 bpmCutoff = 1e-5
+gain = 1.
+ron = 1.
 #*****************************************************************************
+
+#open log file to record all processing steps
+logfile = open('wifis_reduction_log.txt','a')
+
+logfile.write('********************\n')
+logfile.write(time.strftime("%c")+'\n')
+logfile.write('Processing detector non-linearity ramps with WIFIS pyPline\n')
+logfile.write('Root folder containing raw data: ' + str(rootFolder)+'\n')
+logfile.write('Detector gain of' + str(gain) ' in electrons/count\n')
+logfile.write('Detector readout noise of' + str(ron) ' electrons per frame\n')
 
 #read file list
 lst= wifisIO.readAsciiList(fileList)
@@ -114,7 +127,8 @@ if (contProc):
            
             if (contProc2):
                 print('Processing '+folder + ' ramp '+str(rampNum))
-        
+                logfile.write('Processing ' + folder + ' ramp ' + str(rampNum)+'\n')
+                
                 #**********************************************************************
                 #**********************************************************************
 
@@ -129,6 +143,7 @@ if (contProc):
                 #data, inttime, hdr = wifisIO.readRampFromFile(filename)
          
                 data = data.astype('float32')*1.
+                
                 #**********************************************************************
                 #******************************************************************************
                 #Correct data for reference pixels
@@ -137,11 +152,14 @@ if (contProc):
                 refCor.channelCL(data, nChannels)
                 
                 hdr.add_history('Channel reference pixel corrections applied using '+ str(nChannels) +' channels')
-                
-                print("Subtracting reference pixel row bias")
-                refCor.rowCL(data, nRowAvg,nRowSplit)
-                hdr.add_history('Row reference pixel corrections applied using '+ str(int(nRowAvg+1))+ ' pixels')
-   
+                logfile.write('Subtracted reference pixel channel bias using ' + str(nChannels) + ' channels\n')
+
+                if nRowsAvg > 0:
+                    print("Subtracting reference pixel row bias")
+                    refCor.rowCL(data, nRowsAvg,nRowSplit)
+                    hdr.add_history('Row reference pixel corrections applied using '+ str(int(nRowsAvg+1))+ ' pixels')
+
+                    logfile.write('Subtraced row reference pixel bias using moving average of ' + str(int(nRowsAvg)+1) + ' rows\n')
                 #print("time to apply reference pixel corrections ", time.time()-ta, " seconds")
                 #**********************************************************************
 
@@ -159,9 +177,10 @@ if (contProc):
                 if (cont.lower() == 'y'):
                     print('Getting saturation info')
                     ta = time.time()
-                    satCounts = satInfo.getSatCountsCL(data,satLimit, nSatSplit)
+                    satCounts = satInfo.getSatCountsCL(data,satLimit, nSatSplit, satThresh=satThresh)
                     hdr.add_history('Saturation level defined as '+ str(satLimit)+ ' saturation limit')
                     hdr.add_comment('File contains saturation level for each pixel')
+                    logfile.write('Determined saturation limit as ' + str(satLimit) + ' times the mean of all pixels with flux greater than ' + str(satThresh)+'\n')
                     
                     #save file
                     wifisIO.writeFits(satCounts, savename+'_detLin_satCounts.fits',hdr=hdr,ask=False)
@@ -179,7 +198,8 @@ if (contProc):
         
                 #find the first saturated frames
                 satFrame = satInfo.getSatFrameCL(data,satCounts,32, ignoreRefPix=True)
-                
+
+                logfile.write('Determined first saturated frame based on saturation limits\n')
                 #**********************************************************************
                 #**********************************************************************
 
@@ -210,7 +230,8 @@ if (contProc):
                     hdr.add_comment('This cube contains the non-linearity correction coefficients')
                     #save file
                     wifisIO.writeFits(nlCoeff, savename+'_detLin_NLCoeff.fits',ask=False,hdr=hdr)
-
+                    logfile.write('Determined non-linearity correction coefficients\n')
+                    
                     hdrTmp = hdr[::-1]
                     hdrTmp.remove('COMMENT')
                     hdr = hdrTmp[::-1]
@@ -251,7 +272,9 @@ if (contProc):
         masterZpnt = np.nanmedian(np.array(zpntLst), axis=0)
         masterRamp = np.nanmedian(np.array(rampLst),axis=0)
     
-
+    logfile.write('\n')
+    logfile.write('Created master saturation counts, non-linearity correction coefficients, bias, and ramp/flux files as the median of all processed ramps\n')
+    
     #create fits header
     hdr = fits.Header()
     hdr.add_history('Processed using WIFIS pyPline')
@@ -284,14 +307,23 @@ if (contProc):
     hdr = hdrTmp[::-1]
 
     print('Determining bad pixels from master NL coefficients')
-    hdr.add_comment('Master bad pixel mask')
+    hdr.add_comment('File contains the master bad pixel mask')
 
     bpm,hdr =  badPixels.getBadPixelsFromNLCoeff(masterNLCoeff,hdr,saveFile='quality_control/master_detLin_NLCoeff',cutoff=bpmCutoff)
 
+    logfile.write('Determined bad pixel mask based on the master non-linearity coefficients,\n')
+    logfile.write('excluding all pixels with non-linearity corrections with a probability density of less than ' + str(bpmCutoff) + ', or greater than ' + str(1.-bpmCutoff)+'\n')
+    
     wifisIO.writeFits(bpm, 'processed/master_detLin_BPM.fits',hdr=hdr)
+    logfile.write('\n')
     
 else:
     print('No processing necessary')
 
 
 print ("Total time to run entire script: "+str(time.time()-t0))+" seconds"
+logfile.write('Total time to run entire script: '+str(time.time()-t0)+' seconds\n')
+logfile.write('********************\n')
+logfile.write('\n')
+
+logfile.close()
