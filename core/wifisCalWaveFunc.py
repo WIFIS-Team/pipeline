@@ -26,7 +26,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 import warnings
 import wifisCalFlatFunc as calFlat
 
-def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowAverage=4,rowSplit=1,nlSplit=1, combSplit=1,bpmCorRng=2, crReject=False, skipObsinfo=False, darkLst=None, flatWinRng=51, flatImgSmth=5, flatPolyFitDegree=3, rootFolder='', distMapFile='', spatGridPropsFile='', atlasFile='', templateFile='', prevResultsFile='', sigmaClip=2, sigmaClipRounds=2, sigmaLimit=3,cleanDispSol=False,cleanDispThresh = 0, waveTrimThresh=0, smoothSol=False):
+def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowsAvg=0,rowSplit=1,nlSplit=1, combSplit=1,bpmCorRng=2, crReject=False, skipObsinfo=False, darkLst=None, flatWinRng=51, flatImgSmth=5, flatPolyFitDegree=3, rootFolder='', distMapFile='', spatGridPropsFile='', atlasFile='', templateFile='', prevResultsFile='', sigmaClip=2, sigmaClipRounds=2, sigmaLimit=3,cleanDispSol=False,cleanDispThresh = 0, waveTrimThresh=0, smoothSol=False, waveSmooth=1, nlFile='', bpmFile='', satFile='',darkFile='',logfile=None, ask=True):
     """
     """
       
@@ -40,14 +40,16 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
     for lstNum in range(len(waveLst)):
         waveFolder = waveLst[lstNum]
         flatFolder = flatLst[lstNum]
-        
+
         savename = 'processed/'+waveFolder
     
         if(os.path.exists(savename+'_wave.fits') and os.path.exists(savename+'_wave_waveMap.fits') and os.path.exists(savename+'_wave_fitResults.pkl') and os.path.exists(savename+'_wave_distCor.fits') and os.path.exists(savename+'_wave_waveGridProps.dat')):
             cont = 'n'
-            cont = wifisIO.userInput('Processed wavelength calibration files already exists for ' +waveFolder+', do you want to continue processing (y/n)?')
+            if ask:
+                cont = wifisIO.userInput('Processed wavelength calibration files already exists for ' +waveFolder+', do you want to continue processing (y/n)?')
+                
             if (not cont.lower() == 'y'):
-                contProc = False
+                    contProc = False
             else:
                 contProc = True
         else:
@@ -71,7 +73,8 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
         
             if (contProc2):
                 nRamps = wifisIO.getNumRamps(waveFolder,rootFolder=rootFolder)
-
+                nRampsAll = nRamps
+                
                 #if more than one ramp is present, average the results
                 if nRamps > 1:
                     waveAll = []
@@ -79,7 +82,7 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                     satFrameAll = []
 
                     for rampNum in range(1,nRamps+1):
-                        wave, sigmaImg, satFrame,hdr = processRamp.auto(waveFolder, rootFolder, savename+'_wave.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, rampNum=rampNum)
+                        wave, sigmaImg, satFrame,hdr = processRamp.auto(waveFolder, rootFolder, savename+'_wave.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, rampNum=rampNum, nlFile=nlFile, satFile=satFile, bpmFile=bpmFile)
 
                         waveAll.append(wave)
                         sigmaImgAll.append(sigmaImg)
@@ -88,17 +91,36 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                     #now combine all images
                     with warnings.catch_warnings():
                         warnings.simplefilter('ignore', RuntimeWarning)
-                        wave = np.nanmean(np.asarray(waveAll),axis=0)
-                        sigmaImg = np.zeros(sigmaImg.shape,dtype=sigmaImg.dtype)
-                        for k in range(len(sigmaImgAll)):
-                            sigmaImg += sigmaImgAll[k]**2
-                        sigmaImg = np.sqrt(sigmaImg)/len(sigmaImgAll)
-                        satFrame = np.nanmean(np.asarray(satFrameAll),axis=0).round().astype('int')
+                        wave = np.nanmedian(np.asarray(waveAll),axis=0)
+                        sigmaImg = np.sqrt(np.nansum(np.asarray(sigmaImgAll)**2,axis=0))/len(sigmaImgAll)
+                        #sigmaImg = np.nanmedian(np.asarray(sigmaImgAll),axis=0)
+                        satFrame = np.nanmedian(np.asarray(satFrameAll),axis=0).round().astype('int')
+
+                    hdr.add_history('Data is median average of ' +str(nRampsAll) + ' ramps')
+                    wifisIO.writeFits([wave,sigmaImg,satFrame],savename+'_wave.fits',hdr=hdr,ask=False)
+
                     del flatImgAll
                     del sigmaImgAll
                     del satFrameAll
                 else:
-                    wave, sigmaImg, satFrame,hdr = processRamp.auto(waveFolder, rootFolder, savename+'_wave.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, rampNum=None)
+                    wave, sigmaImg, satFrame,hdr = processRamp.auto(waveFolder, rootFolder, savename+'_wave.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, rampNum=None, nlFile=nlFile, bpmFile=bpmFile, satFile=satFile)
+
+                    #carry out dark subtraction
+                    if darkLst is not None and darkLst[0] is not None:
+                        print('Subtracting dark ramp')
+                        dark, darkSig = darkLst
+                        wave -= dark
+                        sigmaImg = np.sqrt(sigmaImg**2 + darkSig**2)
+                        hdr.add_history('Dark image subtracted using file:')
+                        hdr.add_history(darkFile)
+                        if logfile is not None:
+                            logfile.write('Subtracted dark image using file:\n')
+                            logfile.write(darkFile+'\n')
+                    else:
+                        warnings.warn('*** No dark image provide, or file does not exist ***')
+                        if logfile is not None:
+                            logfile.write('*** WARNING: No dark image provide, or file ' + str(darkFile)+' does not exist ***')
+                   
             if os.path.exists(savename+'_wave_slices.fits'):
                 cont = 'n'
                 cont = wifisIO.userInput('Wave slices already exists for ' + waveFolder+', do you want to continue processing (y/n)?')
@@ -121,14 +143,14 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                 sigmaImg = sigmaImg[4:-4, 4:-4]
                 satFrame = satFrame[4:-4, 4:-4]
 
-                print(flatFolder)
                 #check if processed flat already exists, if not process the flat folder
                 if not os.path.exists('processed/'+flatFolder+'_flat_limits.fits'):
                     distMap = wifisIO.readImgsFromFile(distMapFile)[0]
                     print('Flat limits do not exist for folder ' +flatFolder +', processing flat folder')
 
-                    calFlat.runCalFlat(np.asarray([flatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, distMapLimitsFile = distMapLimitsFile, plot=True, nChannel = nChannel, nRowAverage=nRowAverage,rowSplit=rowSplit,nlSplit=nlSplit, combSplit=combSplit,bpmCorRng=2, crReject=False, skipObsinfo=False,avgRamps=True)
+                    calFlat.runCalFlat(np.asarray([flatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, distMapLimitsFile = distMapLimitsFile, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=rowSplit,nlSplit=nlSplit, combSplit=combSplit,bpmCorRng=20, crReject=False, skipObsinfo=False,avgRamps=True,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile)
 
+                print('Reading slice limits file')
                 limits, limHdr = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_limits.fits')
                 limShift = limHdr['LIMSHIFT']
         
@@ -136,8 +158,21 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                 sigmaSlices = slices.extSlices(sigmaImg, limits, dispAxis=0)
                 satSlices = slices.extSlices(satFrame, limits, dispAxis=0)
 
+                hdr.add_history('Used following flat field file for slice limits:')
+                hdr.add_history(flatFolder)
+
+                #remove previous comment about file contents
+                hdrTmp = hdr[::-1]
+                hdrTmp.remove('COMMENT')
+                hdr = hdrTmp[::-1]
+                
+                hdr.add_comment('File contains flux, sigma, sat info for each slice as multi-extensions')
                 wifisIO.writeFits(waveSlices + sigmaSlices + satSlices, savename+'_wave_slices.fits', hdr=hdr,ask=False)
 
+                hdrTmp = hdr[::-1]
+                hdrTmp.remove('COMMENT')
+                hdr = hdrTmp[::-1]
+                
                 #get flat fielded slices
                 flatNormLst = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_slices_norm.fits')[0]
                 flatNorm = flatNormLst[0:18]
@@ -168,9 +203,17 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                 spatGridProps = wifisIO.readTable(spatGridPropsFile)
                 waveCor = createCube.distCorAll(waveSlices, distMap, spatGridProps=spatGridProps)
 
+                hdr.add_history('Used following file for distortion map:')
+                hdr.add_history(distMapFile)
+
+                hdr.add_comment('File contains the distortion-corrected flux slices as multi-extensions')
                 #save distortion corrected arc image
                 wifisIO.writeFits(waveCor, savename+'_wave_distCor.fits',hdr=hdr, ask=False)
 
+                hdrTmp = hdr[::-1]
+                hdrTmp.remove('COMMENT')
+                hdr = hdrTmp[::-1]
+                
             if os.path.exists(savename+'_wave_fitResults.pkl'):
                 cont = 'n'
                 cont = wifisIO.userInput('Wavlength fitting results already exists for ' +waveFolder+', do you want to continue processing (y/n)?')
@@ -199,6 +242,11 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
 
                     results = waveSol.getWaveSol(waveCor, template, atlasFile, 3, prevSol, winRng=9, mxCcor=150, weights=False, buildSol=False, sigmaClip=sigmaClip, allowLower=False, lngthConstraint=True, MP=True, adjustFitWin=True, sigmaLimit=sigmaLimit, allowSearch=False, sigmaClipRounds=sigmaClipRounds)
 
+                hdr.add_history('Used the following file as template for wavelength mapping:')
+                hdr.add_history(templateFile)
+                hdr.add_history('Used the following atlas file for the input line list:')
+                hdr.add_history(atlasFile)
+                
                 #Save all results
                 wifisIO.writePickle(results, savename+'_wave_fitResults.pkl')
 
@@ -220,6 +268,8 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                     print('Building wavelegth map')
                     if cleanDispSol:
                         print('Finding and replacing bad solutions')
+                        hdr.add_history('Removed badly fit solutions with threshold of ' + str(cleanDispThresh) + '-sigma')
+                        
                         if plot:
                             rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(results, plotFile='quality_control/'+waveFolder+'_wave_waveFit_RMS.pdf', threshold=cleanDispThresh)
                         else:
@@ -245,22 +295,22 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
 
                     #use linear interpolation and extrapolation to fill in missing solutions
                     #waveMapLst = waveSol.buildWaveMap(dispSolLst, waveCor[0].shape[1], extrapolate=False, fill_missing=False)
+                    #hdr.add_history('Used linear interpolation to fill missing/badly fit wavelength regions')
                     
                     #use linear interpolation and polynomial fitting to extrapolate for missing solutions
                     waveMapLst = waveSol.buildWaveMap2(dispSolLst, waveCor[0].shape[1], extrapolate=True, fill_missing=True)
+                    hdr.add_history('Used linear interpolation and a linear polynomial fitting to fill missing/badly fit wavelength regions')
 
                     #smooth waveMap solution to avoid pixel-to-pixel jumps
                     if smoothSol:
                         print('Smooth wavelength map')
-                        waveMap = waveSol.smoothWaveMapAll(waveMapLst,smth=1,MP=True )
+                        waveMap = waveSol.smoothWaveMapAll(waveMapLst,smth=waveSmooth,MP=True )
+                        hdr.add_history('Gaussian smoothed wavelength map using 1-sigma width of ' + str(waveSmooth))
                     else:
                         waveMap = waveMapLst
                         
                     #replace wavemap with polynomial fit
                     #waveMap = waveSol.polyFitWaveMapAll(waveMapLst, degree=1, MP=True)
-
-                    #save wavemap solution
-                    wifisIO.writeFits(waveMap, savename+'_wave_waveMap.fits',hdr=hdr, ask=False)
 
                     if waveTrimThresh > 0:
                         print('Trimming wavelength map to useful range')
@@ -278,8 +328,15 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
 
                     print('placing arc image on grid')
                     waveGrid = createCube.waveCorAll(waveCor, waveMap, waveGridProps=waveGridProps)
+
+                    hdr.add_comment('File contains the uniformly gridded spatial and wavelength mapped fluxes for each slice as multi-extensions')
                     wifisIO.writeFits(waveGrid, savename+'_wave_fullGrid.fits', hdr=hdr,ask=False)
-            
+
+                    hdrTmp = hdr[::-1]
+                    hdrTmp.remove('COMMENT')
+                    hdrTmp.remove('COMMENT')
+                    hdr = hdrTmp[::-1]
+                    
                     if plot:
                         print('Getting quality control checks')
                         rms = results[4]
@@ -333,6 +390,10 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                             strt += f.shape[0]
 
                         #save results
+                        hdr.set('QC_WMIN',waveMin,'Minimum median wavelength for middle slice')
+                        hdr.set('QC_WMAX',waveMax,'Maximum median wavelength for middle slice')
+                        hdr.set('QC_WFWHM', fwhmMed, 'Median FWHM of all slices')
+
                         wifisIO.writeFits(waveMapImg, 'quality_control/'+waveFolder+'_wave_wavelength_map.fits', hdr=hdr,ask=False)
                         wifisIO.writeFits(fwhmMap, 'quality_control/'+waveFolder+'_wave_fwhm_map.fits',hdr=hdr, ask=False)
 
@@ -347,7 +408,10 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                         plt.title('Median FWHM is '+'{:3.1f}'.format(fwhmMed) +', min wave is '+'{:6.1f}'.format(waveMin)+', max wave is '+'{:6.1f}'.format(waveMax))
                         plt.savefig('quality_control/'+waveFolder+'_wave_fwhm_map.png', dpi=300)
                         plt.close()
-                                
-                        
-    print ("Total time to run entire script: ",time.time()-t0)
+                                            
+                    hdr.add_comment('File contains the wavelength mapping slices as multi-extensions')
+                    #save wavemap solution
+                    wifisIO.writeFits(waveMap, savename+'_wave_waveMap.fits',hdr=hdr, ask=False)
+
+                   
     return
