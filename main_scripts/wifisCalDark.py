@@ -31,7 +31,7 @@ import astropy.io.fits as fits
 import wifisBadPixels as badPixels
 
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
-os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
+os.environ['PYOPENCL_CTX'] = '2' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
 
 t0 = time.time()
 
@@ -355,12 +355,12 @@ if (contProc):
                         with warnings.catch_warnings():
                                 warnings.simplefilter('ignore', RuntimeWarning)
                                 bpm, bpmHdr = badPixels.getBadPixelsFromDark(masterDark,bpmHdr, saveFile='quality_control/master_dark',darkFile=masterSave+'.fits',BPM=bpm)
-                        wifisIO.writeFits(bpm, bpmFile,hdr=bpmHdr,ask=False)
+                        wifisIO.writeFits(bpmFile,masterSave+'_BPM.fits',hdr=bpmHdr,ask=False)
         else:
                 print('Creating bad pixel mask')
                 bpm,hdr = badPixels.getBadPixelsFromDark(masterDark,hdr,saveFile='quality_control/master_dark', darkFile=masterSave+'.fits',BPM=None)
                 hdr.add_comment('File contains the bad pixel mask')
-                wifisIO.writeFits(bpm,'processed/master_dark_BPM.fits' ,hdr=hdr,ask=False)
+                wifisIO.writeFits(bpm,masterSave+'_BPM.fits' ,hdr=hdr,ask=False)
 
 
 else:
