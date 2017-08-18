@@ -210,11 +210,13 @@ def writeFits_old(data, filename, hdr=None):
 
     hdu = fits.PrimaryHDU(out, header=prihdr)
 
-    if (astropy.version.major >=1 and astropy.version.minor >=3):
-        hdu.writeto(filename,overwrite=True)
-    else:
+    if str(astropy.version.version)<'1.3':
         hdu.writeto(filename,clobber=True)
+    else:
+        hdu.writeto(filename,overwrite=True)
 
+    return
+        
 def readRampFromFolder(folderName, rampNum=None,nSkip=0):
     """
     read all H2RG files from specified folder.
@@ -341,10 +343,10 @@ def writeImgSlices(data, extSlices,filename, hdr=None):
 
     hdu = fits.HDUList(list)
 
-    if (astropy.version.major >=1 and astropy.version.minor >=3):
-        hdu.writeto(filename,overwrite=True)
-    else:
+    if str(astropy.version.version) <'1.3':
         hdu.writeto(filename,clobber=True)
+    else:
+        hdu.writeto(filename,overwrite=True)
 
     return
 
@@ -417,10 +419,10 @@ def writeFits(data, filename, hdr=None, ask=True):
 
     hdu = fits.HDUList(allHDU)
          
-    if (astropy.version.major >=1 and astropy.version.minor >=3):
-        hdu.writeto(filename,overwrite=True)
-    else:
+    if str(astropy.version.version)  <'1.3':
         hdu.writeto(filename,clobber=True)
+    else:
+        hdu.writeto(filename,overwrite=True)
 
     hdu.close()
     return
@@ -476,3 +478,19 @@ def getNumRamps(folder, rootFolder=''):
         raise Warning('*** Folder ' + folder +' does not exist ***')
 
     return nRamps
+
+def getPath(folder, rootFolder=''):
+    """
+    """
+    
+    #CDS
+    if os.path.exists(rootFolder+'/CDSReference/'+folder):
+        path = rootFolder+'/CDSReference/'+folder
+    #Fowler
+    elif os.path.exists(rootFolder+'/FSRamp/'+folder):
+       path = rootFolder+'/FSRamp/'+folder
+    elif os.path.exists(rootFolder + '/UpTheRamp/'+folder):
+        path = rootFolder+'/UpTheRamp/'+folder
+    else:
+        raise Warning('*** Folder ' + folder +' does not exist ***')
+    return path
