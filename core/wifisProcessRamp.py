@@ -10,7 +10,7 @@ import wifisHeaders as headers
 import os
 import time
 
-def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False,skipObsinfo=False, rampNum=None, satFile='', nlFile='', bpmFile='',logfile=None, fowler=False, gain=1., ron=1.):
+def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False,skipObsinfo=False, rampNum=None, satFile='', nlFile='', bpmFile='',logfile=None, fowler=False, gain=1., ron=1., obsCoords=None):
     """
     """
     
@@ -98,7 +98,7 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
     #****************************************************************************
     #add additional header information here
     if not skipObsinfo:
-        headers.addTelInfo(hdr, folder+'/obsinfo.dat')
+        headers.addTelInfo(hdr, folder+'/obsinfo.dat',logfile=logfile, obsCoords=obsCoords)
     hdr.add_comment('File contains flux, sigma, and sat info as multi-extensions')
     #****************************************************************************
     
@@ -146,7 +146,7 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
     return imgCor, sigmaCor, satFrame, hdr
 
 
-def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False, skipObsinfo=False, rampNum=None, bpmFile='', satFile='', nlFile='', gain=1., ron=1., logfile=None):
+def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False, skipObsinfo=False, rampNum=None, bpmFile='', satFile='', nlFile='', gain=1., ron=1., logfile=None,obsCoords=None):
     """
     """
 
@@ -157,16 +157,16 @@ def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRow
     if os.path.exists(rootFolder+'/CDSReference/'+folder):
         folderType = '/CDSReference/'
 
-        imgCor, sigmaCor, satFrame, hdr = process(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM, saveAll=saveAll, skipObsinfo=skipObsinfo, rampNum=rampNum, bpmFile=bpmFile, satFile=satFile, nlFile=nlFile, fowler=True, gain=gain, ron=ron, logfile=logfile)
+        imgCor, sigmaCor, satFrame, hdr = process(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM, saveAll=saveAll, skipObsinfo=skipObsinfo, rampNum=rampNum, bpmFile=bpmFile, satFile=satFile, nlFile=nlFile, fowler=True, gain=gain, ron=ron, logfile=logfile, obsCoords=obsCoords)
     #Fowler
     elif os.path.exists(rootFolder+'/FSRamp/'+folder):
         folderType = '/FSRamp/'
         
-        imgCor, sigmaCor, satFrame, hdr = process(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM, saveAll=saveAll, skipObsinfo=skipObsinfo, rampNum=rampNum, bpmFile=bpmFile, satFile=satFile, nlFile=nlFile, fowler=True, gain=gain, ron=ron, logfile=logfile)
+        imgCor, sigmaCor, satFrame, hdr = process(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=1, satSplit=1, nlSplit=1, combSplit=1, crReject=False, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM, saveAll=saveAll, skipObsinfo=skipObsinfo, rampNum=rampNum, bpmFile=bpmFile, satFile=satFile, nlFile=nlFile, fowler=True, gain=gain, ron=ron, logfile=logfile, obsCoords=obsCoords)
 
     elif os.path.exists(rootFolder + '/UpTheRamp/'+folder):
         folderType = '/UpTheRamp/'
-        imgCor, sigmaCor, satFrame, hdr = process(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=rowSplit, satSplit=satSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM, saveAll=saveAll, skipObsinfo=skipObsinfo, rampNum=rampNum, bpmFile=bpmFile, satFile=satFile, nlFile=nlFile, fowler=False, gain=gain, ron=ron, logfile=logfile)
+        imgCor, sigmaCor, satFrame, hdr = process(rootFolder+folderType+folder, saveName, satCounts, nlCoeff, BPM,nChannel=nChannel, nRows=nRows,rowSplit=rowSplit, satSplit=satSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, ignoreBPM=ignoreBPM, saveAll=saveAll, skipObsinfo=skipObsinfo, rampNum=rampNum, bpmFile=bpmFile, satFile=satFile, nlFile=nlFile, fowler=False, gain=gain, ron=ron, logfile=logfile, obsCoords=obsCoords)
 
     else:
         raise Warning('*** Ramp folder ' + folder + ' does not exist ***')
