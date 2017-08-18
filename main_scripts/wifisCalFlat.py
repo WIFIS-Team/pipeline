@@ -17,7 +17,9 @@ import warnings
 import wifisCalFlatFunc as calFlat
 import numpy as np
 import time
+import colorama
 
+colorama.init()
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
 os.environ['PYOPENCL_CTX'] = '2' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
 
@@ -66,6 +68,8 @@ combSplit=32 #specifies how many processing steps to use during creation of ramp
 gain = 1.
 ron = 1.
 
+obsCoords = [-111.600444444,31.9629166667,2071]
+
 #*****************************************************************************
 #*****************************************************************************
 
@@ -85,7 +89,8 @@ if os.path.exists(nlFile):
     logfile.write(nlFile+'\n')
 else:
     nlCoef =None
-    warnings.warn('*** No non-linearity coefficient array provided, corrections will be skipped ***')
+    print(colorama.Fore.RED+'*** WARNING: No non-linearity coefficient array provided, corrections will be skipped ***' + colorama.Style.RESET_ALL)
+
     logfile.write('*** WARNING: No non-linearity corrections file provided or file ' + str(nlFile) +' does not exist ***\n')
 
 if os.path.exists(satFile):
@@ -95,7 +100,8 @@ if os.path.exists(satFile):
  
 else:
     satCounts = None
-    warnings.warn('*** No saturation counts array provided and will not be taken into account ***')
+    print(colorama.Fore.RED+'*** WARNING: No saturation counts array provided and will not be taken into account ***'+colorama.Style.RESET_ALL)
+
     logfile.write('*** WARNING: No saturation counts file provided or file ' + str(satFile) +' does not exist ***\n')
             
 
@@ -130,7 +136,7 @@ if flatLst.ndim == 0:
     flatLst = np.asarray([flatLst])
 
 logfile.write('\n')
-calFlat.runCalFlat(flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=plot, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, bpmCorRng=bpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, imgSmth=imgSmth, polyFitDegree=2, avgRamps=True, nlFile=nlFile, satFile=satFile, bpmFile=bpmFile, flatCutOff=flatCutOff, logfile=logfile, winRng=winRng, dispAxis=dispAxis, limSmth=limSmth)
+calFlat.runCalFlat(flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=plot, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, bpmCorRng=bpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, imgSmth=imgSmth, polyFitDegree=2, avgRamps=True, nlFile=nlFile, satFile=satFile, bpmFile=bpmFile, flatCutOff=flatCutOff, logfile=logfile, winRng=winRng, dispAxis=dispAxis, limSmth=limSmth, obsCoords=obsCoords)
 
 logfile.write('********************\n')
 logfile.write('\n')
