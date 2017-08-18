@@ -25,12 +25,15 @@ import wifisCreateCube as createCube
 from matplotlib.backends.backend_pdf import PdfPages
 import warnings
 import wifisCalFlatFunc as calFlat
+from astropy import time as astrotime, coordinates as coord, units
+import colorama
 
-def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowsAvg=0,rowSplit=1,nlSplit=1, combSplit=1,bpmCorRng=2, crReject=False, skipObsinfo=False, darkLst=None, flatWinRng=51, flatImgSmth=5, flatPolyFitDegree=3, rootFolder='', distMapFile='', spatGridPropsFile='', atlasFile='', templateFile='', prevResultsFile='', sigmaClip=2, sigmaClipRounds=2, sigmaLimit=3,cleanDispSol=False,cleanDispThresh = 0, waveTrimThresh=0, smoothSol=False, waveSmooth=1, nlFile='', bpmFile='', satFile='',darkFile='',logfile=None, ask=True):
+def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowsAvg=0,rowSplit=1,nlSplit=1, combSplit=1,bpmCorRng=2, crReject=False, skipObsinfo=False, darkLst=None, flatWinRng=51, flatImgSmth=5, flatPolyFitDegree=3, rootFolder='', distMapFile='', spatGridPropsFile='', atlasFile='', templateFile='', prevResultsFile='', sigmaClip=2, sigmaClipRounds=2, sigmaLimit=3,cleanDispSol=False,cleanDispThresh = 0, waveTrimThresh=0, smoothSol=False, waveSmooth=1, nlFile='', bpmFile='', satFile='',darkFile='',logfile=None, ask=True, obsCoords=None):
     """
     """
       
     t0 = time.time()
+    colorama.init()
     
     plt.ioff()
     #create processed directory, in case it doesn't exist
@@ -62,7 +65,7 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                 cont = 'n'
                 cont = wifisIO.userInput('Processed arc lamp file already exists for ' + waveFolder+', do you want to continue processing (y/n)?')
                 if (not cont.lower() == 'y'):
-                    print('Reading image'+savename+'_wave.fits instead')
+                    print('Reading image '+savename+'_wave.fits instead')
                     [wave, sigmaImg, satFrame],hdr= wifisIO.readImgsFromFile(savename+'_wave.fits')
                     hdr = hdr[0]
                     contProc2 = False
@@ -82,7 +85,7 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                     satFrameAll = []
 
                     for rampNum in range(1,nRamps+1):
-                        wave, sigmaImg, satFrame,hdr = processRamp.auto(waveFolder, rootFolder, savename+'_wave.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, rampNum=rampNum, nlFile=nlFile, satFile=satFile, bpmFile=bpmFile)
+                        wave, sigmaImg, satFrame,hdr = processRamp.auto(waveFolder, rootFolder, savename+'_wave.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, rampNum=rampNum, nlFile=nlFile, satFile=satFile, bpmFile=bpmFile, obsCoords=obsCoords)
 
                         waveAll.append(wave)
                         sigmaImgAll.append(sigmaImg)
@@ -103,7 +106,7 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                     del sigmaImgAll
                     del satFrameAll
                 else:
-                    wave, sigmaImg, satFrame,hdr = processRamp.auto(waveFolder, rootFolder, savename+'_wave.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, rampNum=None, nlFile=nlFile, bpmFile=bpmFile, satFile=satFile)
+                    wave, sigmaImg, satFrame,hdr = processRamp.auto(waveFolder, rootFolder, savename+'_wave.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, rampNum=None, nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, obsCoords=obsCoords)
 
                     #carry out dark subtraction
                     if darkLst is not None and darkLst[0] is not None:
@@ -117,9 +120,10 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                             logfile.write('Subtracted dark image using file:\n')
                             logfile.write(darkFile+'\n')
                     else:
-                        warnings.warn('*** No dark image provide, or file does not exist ***')
+                        print(colorama.Fore.RED+'*** WARNING: No dark image provided, or file does not exist, skipping ***'+colorama.Style.RESET_ALL)
+
                         if logfile is not None:
-                            logfile.write('*** WARNING: No dark image provide, or file ' + str(darkFile)+' does not exist ***')
+                            logfile.write('*** WARNING: No dark image provided, or file ' + str(darkFile)+' does not exist, skipping ***')
                    
             if os.path.exists(savename+'_wave_slices.fits'):
                 cont = 'n'
