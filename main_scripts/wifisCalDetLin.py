@@ -41,7 +41,7 @@ fileList = 'det.lst'
 
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
 
-#assume that if rootFolder is blank, that the folders to read from are local and folderType is not needed
+#assume that if rootFolder is blank, than the folders to read from are local and folderType is not needed
 if rootFolder == '':
     folderType = ''
 else:
