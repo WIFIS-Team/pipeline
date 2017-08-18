@@ -26,13 +26,17 @@ import wifisHeaders as headers
 import wifisProcessRamp as processRamp
 from matplotlib.backends.backend_pdf import PdfPages
 import warnings
+from astropy import time as astrotime, coordinates as coord, units
+import colorama
 
-def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowsAvg=0,rowSplit=1,nlSplit=32, combSplit=32,bpmCorRng=100, crReject=False, skipObsinfo=False,winRng=51, polyFitDegree=3, imgSmth=5, avgRamps=False,nlFile='',bpmFile='', satFile='',darkFile='',flatCutOff=0.1,flatSmooth=0, logfile=None, gain=1., ron=1., dispAxis=0,limSmth=20, ask=True):
+def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowsAvg=0,rowSplit=1,nlSplit=32, combSplit=32,bpmCorRng=100, crReject=False, skipObsinfo=False,winRng=51, polyFitDegree=3, imgSmth=5, avgRamps=False,nlFile='',bpmFile='', satFile='',darkFile='',flatCutOff=0.1,flatSmooth=0, logfile=None, gain=1., ron=1., dispAxis=0,limSmth=20, ask=True, obsCoords=None):
     
     """
     Flat calibration function which can be used/called from another script.
     """
 
+    colorama.init()
+    
     plt.ioff()
 
     t0 = time.time()
@@ -131,7 +135,7 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                             if logfile is not None:
                                 logfile.write('Processing ' + folder + ' ramp ' + str(rampNum)+'\n')
 
-                            flatImg, sigmaImg, satFrame, hdr = processRamp.auto(folder, rootFolder,savename+'_flat.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, skipObsinfo=skipObsinfo, nRows=nRowsAvg, rampNum=rampNum2,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=ron,logfile=logfile)
+                            flatImg, sigmaImg, satFrame, hdr = processRamp.auto(folder, rootFolder,savename+'_flat.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, skipObsinfo=skipObsinfo, nRows=nRowsAvg, rampNum=rampNum2,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=ron,logfile=logfile, obsCoords=obsCoords)
                             flatImgAll.append(flatImg)
                             sigmaImgAll.append(sigmaImg)
                             satFrameAll.append(satFrame)
@@ -157,7 +161,7 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                         del sigmaImgAll
                         del satFrameAll
                     else:
-                        flatImg, sigmaImg, satFrame, hdr = processRamp.auto(folder, rootFolder,savename+'_flat.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, skipObsinfo=skipObsinfo, nRows=nRowsAvg, rampNum=rampNum, nlFile=nlFile, satFile=satFile, bpmFile=bpmFile, gain=gain, ron=ron, logfile=logfile)
+                        flatImg, sigmaImg, satFrame, hdr = processRamp.auto(folder, rootFolder,savename+'_flat.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, skipObsinfo=skipObsinfo, nRows=nRowsAvg, rampNum=rampNum, nlFile=nlFile, satFile=satFile, bpmFile=bpmFile, gain=gain, ron=ron, logfile=logfile, obsCoords=obsCoords)
 
                     #carry out dark subtraction
                     if darkLst is not None and darkLst[0] is not None:
@@ -171,9 +175,10 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                             logfile.write('Subtracted dark image using file:\n')
                             logfile.write(darkFile+'\n')
                     else:
-                        warnings.warn('*** No dark image provide, or file does not exist ***')
+                        print(colorama.Fore.RED+'*** WARNING: No dark image provided, or file does not exist ***'+colorama.Style.RESET_ALL)
+
                         if logfile is not None:
-                            logfile.write('*** WARNING: No dark image provide, or file ' + str(darkFile)+' does not exist ***')
+                            logfile.write('*** WARNING: No dark image provided, or file ' + str(darkFile)+' does not exist ***')
 
                 if os.path.exists(savename+'_flat_limits.fits'):
                     if nRamps > 1:
@@ -209,14 +214,30 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                         logfile.write('imgSmth: ' + str(imgSmth)+'\n')
                         logfile.write('limSmth: ' + str(limSmth)+'\n')
                         
-                    #get smoother limits, if desired, using polynomial fitting
-                    polyLimits = slices.polyFitLimits(limits, degree=polyFitDegree, sigmaClipRounds=2)
+                    if hband:
+                        #only use region with suitable flux
+                        if dispAxis == 0:
+                            flatImgMed = np.nanmedian(flatImg[4:-4,4:-4], axis=1)
+                        else:
+                            flatImgMed = np.nanmedian(flatImg[4:-4,4:-4], axis=0)
+                            
+                        flatImgMedGrad = np.gradient(flatImgMed)
+                        medMax = np.nanargmax(flatImgMed)
+                        lim1 = np.nanargmax(flatImgMedGrad[:medMax])
+                        lim2 = np.nanargmin(flatImgMedGrad[medMax:])+medMax
+                        polyLimits = slices.polyFitLimits(limits, degree=polyFitDegree, sigmaClipRounds=2, constRegion=[lim1,lim2])
+                    else:
+                        #get smoother limits, if desired, using polynomial fitting
+                        polyLimits = slices.polyFitLimits(limits, degree=polyFitDegree, sigmaClipRounds=2)
 
                     if logfile is not None:
                         logfile.write('Fit polynomial to slice edge traces using:\n')
                         logfile.write('Polynomial degree: ' + str(polyFitDegree)+'\n')
                         logfile.write('sigmaClipRounds: ' + str(2)+'\n')
-                        
+
+                        if hband:
+                            logfile.write('Only used pixels between ' + str(lim1) +' and ' + str(lim2)+'\n')
+                     
                     if os.path.exists(distMapLimitsFile):
                         print('Finding slice limits relative to distortion map file')
                         hdr.add_history('Slice limits are relative to the following file:')
@@ -225,21 +246,9 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                         if logfile is not None:
                             logfile.write('Finding slice limits relative to distortion map file:\n')
                             logfile.write(distMapLimitsFile+'\n')
-                            
+
                         if hband:
-                            #only use region with suitable flux
-                            if dispAxis == 0:
-                                flatImgMed = np.nanmedian(flatImg[4:-4,4:-4], axis=1)
-                            else:
-                                flatImgMed = np.nanmedian(flatImg[4:-4,4:-4], axis=0)
-                                
-                            flatImgMedGrad = np.gradient(flatImgMed)
-                            medMax = np.nanargmax(flatImgMed)
-                            lim1 = np.nanargmax(flatImgMedGrad[:medMax])
-                            lim2 = np.nanargmin(flatImgMedGrad[medMax:])+medMax
                             shft = int(np.nanmedian(polyLimits[1:-1,lim1:lim2+1] - distMapLimits[1:-1,lim1:lim2+1]))
-                            if logfile is not None:
-                                logfile.write('Only used pixels between ' + str(lim1) +' and ' + str(lim2)+'\n')
                         else:
                             shft = int(np.nanmedian(polyLimits[1:-1,:] - distMapLimits[1:-1,:]))
                         
@@ -257,7 +266,10 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                     #write distMapLimits + shft to file
                     hdr.set('LIMSHIFT',shft, 'Limits shift relative to Ronchi slices')
                     hdr.add_comment('File contains the edge limits for each slice')
-                    wifisIO.writeFits(finalLimits,savename+'_flat_limits.fits', hdr=hdr, ask=False)
+
+                    #compute paralactic angle using definite of EQ 10 of Filippenko 1982, PASP 94,715
+
+                    wifisIO.writeFits(finalLimits.astype('float32'),savename+'_flat_limits.fits', hdr=hdr, ask=False)
 
                     #remove comment about contents of file
                     hdrTmp = hdr[::-1]
