@@ -46,7 +46,7 @@ def splineContFit(x,y,regions, lineRegions=None,order=3,winRng=10.):
 
     return xfit, yfit, contFit
 
-def crossCorCube(wave, cube1, cube2, regions=None, oversample=20, absorption=False, ncpus=None, mode='idl', contFit=True, nContFit=50, contFitOrder=1, mxShift=4,reject=0, velocity=False):
+def crossCorCube(wave, cube1, cube2, regions=None, oversample=20, absorption=False, ncpus=None, mode='idl', contFit1=True, contFit2=True,nContFit=50, contFitOrder=1, mxShift=4,reject=0, velocity=False):
     """
     Determine the pixel shift (if velocity=False) between input cubes cube1 and cube2, expected to be on the same wavelength grid/coordinate system x. Determines velocity difference, if velocity=True. mxShift is in pixels or km/s.
     Usage: 
@@ -77,11 +77,11 @@ def crossCorCube(wave, cube1, cube2, regions=None, oversample=20, absorption=Fal
         
         for i in range(cube1.shape[0]):
             for j in range(cube1.shape[1]):
-                inpLst.append([vconst,v, cube1tmp[i,j,:], cube2tmp[i,j,:],oversample, absorption,mode, contFit, nContFit,contFitOrder,mxShift, False, reject])
+                inpLst.append([vconst,v, cube1tmp[i,j,:], cube2tmp[i,j,:],oversample, absorption,mode, contFit1, contFit2,nContFit,contFitOrder,mxShift, False, reject])
     else:
         for i in range(cube1.shape[0]):
             for j in range(cube1.shape[1]):
-                inpLst.append([cube1tmp[i,j,:], cube2tmp[i,j,:],oversample, absorption,mode, contFit, nContFit,contFitOrder,mxShift, False, reject])
+                inpLst.append([cube1tmp[i,j,:], cube2tmp[i,j,:],oversample, absorption,mode, contFit1, contFit2,nContFit,contFitOrder,mxShift, False, reject])
 
     if ncpus is None:
         ncpus = mp.cpu_count()
@@ -116,20 +116,23 @@ def crossCorPixMP(input):
     oversample=input[2]
     absorption= input[3]
     mode = input[4]
-    contFit = input[5]
-    nContFit = input[6]
-    contFitOrder = input[7]
-    mxShift = input[8]
-    plot = input[9]
-    reject =input[10]
+    contFit1 = input[5]
+    contFit2 = input[6]
+    nContFit = input[7]
+    contFitOrder = input[8]
+    mxShift = input[9]
+    plot = input[10]
+    reject =input[11]
     
     #quit if either input arrays are all NaN
     if np.all(~np.isfinite(y1)) or np.all(~np.isfinite(y2)):
         return np.nan
     
-    if contFit:
+    if contFit1:
         y1tmp = y1 - splineContFitMP([y1,contFitOrder,nContFit, reject])
+    if contFit2:
         y2tmp  = y2 - splineContFitMP([y2,contFitOrder,nContFit, reject])
+        
     else:
         y1tmp = np.empty(y1.shape)
         np.copyto(y1tmp,y1)
@@ -161,7 +164,7 @@ def crossCorPixMP(input):
  
     return shiftOut
 
-def crossCorSpec(wave, spec1, spec2, regions=None, oversample=20, absorption=False, mode='idl', contFit=True, nContFit=50,contFitOrder=1, mxVel=200, plot=False, reject=0, velocity=True):
+def crossCorSpec(wave, spec1, spec2, regions=None, oversample=20, absorption=False, mode='idl', contFit1=True, contFit2=True,nContFit=50,contFitOrder=1, mxVel=200, plot=False, reject=0, velocity=True):
     """
     Determine the velocity difference between input spectra cube1 and cube2, expected to be on the same wavelength grid/coordinate system x.
     Usage: 
@@ -190,9 +193,9 @@ def crossCorSpec(wave, spec1, spec2, regions=None, oversample=20, absorption=Fal
     vconst = np.linspace(v[0],v[-1],num=v.shape[0]*oversample)
 
     if velocity:
-        rvOut = crossCorVelMP([vconst, v, y1tmp, y2tmp, oversample, absorption, mode,contFit,nContFit,contFitOrder,mxVel, plot, reject])
+        rvOut = crossCorVelMP([vconst, v, y1tmp, y2tmp, oversample, absorption, mode,contFit1,contFit2,nContFit,contFitOrder,mxVel, plot, reject])
     else:
-        rvOut = crossCorPixMP([y1tmp, y2tmp, oversample, absorption, mode,contFit,nContFit,contFitOrder,mxVel, plot, reject])
+        rvOut = crossCorPixMP([y1tmp, y2tmp, oversample, absorption, mode,contFit,nContFit1,contFit2,contFitOrder,mxVel, plot, reject])
 
     return rvOut
     
@@ -321,12 +324,13 @@ def crossCorVelMP(input):
     oversample=input[4]
     absorption= input[5]
     mode = input[6]
-    contFit = input[7]
-    nContFit = input[8]
-    contFitOrder = input[9]
-    mxVel = input[10]
-    plot = input[11]
-    reject =input[12]
+    contFit1 = input[7]
+    contFit2 = input[8]
+    nContFit = input[9]
+    contFitOrder = input[10]
+    mxVel = input[11]
+    plot = input[12]
+    reject =input[13]
     
     #quit if either input arrays are all NaN
     if np.all(~np.isfinite(y1)) or np.all(~np.isfinite(y2)):
@@ -334,8 +338,9 @@ def crossCorVelMP(input):
     
     #go through regions list and construct new arrays from subsets
 
-    if contFit:
+    if contFit1:
         y1 -= splineContFitMP([y1,contFitOrder,nContFit, reject])
+    if contFit2:
         y2 -= splineContFitMP([y2,contFitOrder,nContFit, reject])    
 
     if mode != 'idl':    
@@ -439,11 +444,16 @@ def subScaledSkyPix(input):
     bounds = input[4]
     sigmaClip = input[5]
     sigmaClipRounds = input[6]
+    useMaxOnly = input[7]
+    nContFit = input[8]
     
-    obsCont = splineContFitMP([obs, 1, 50, 1])
-    skyCont = splineContFitMP([sky, 1, 50, 1])
+    obsCont = splineContFitMP([obs, 1, nContFit, 1])
+    skyCont = splineContFitMP([sky, 1, nContFit, 1])
     skyScaled = np.zeros(sky.shape,dtype=sky.dtype)
 
+    if regions is None:
+        regions = [[wave.min(), wave.max()]]
+        
     if np.all(~np.isfinite(obs)) or np.all(~np.isfinite(sky)):
         fOut = []
         for reg in regions:
@@ -459,7 +469,6 @@ def subScaledSkyPix(input):
     for reg in regions:
         whr = np.where(np.logical_and(wave>=reg[0],wave<=reg[1]))[0]
         outside[whr] = False
-
     skyScaled[outside] = sky[outside]
     
     for reg in regions:
@@ -477,6 +486,8 @@ def subScaledSkyPix(input):
             f = bounds[0]
         elif (f > bounds[1]):
             f = bounds[1]
+
+        skyCor = stmp*f
         
         if sigmaClipRounds>0:
             with warnings.catch_warnings():
@@ -485,30 +496,29 @@ def subScaledSkyPix(input):
                     y = otmp-stmp*f
                     med = np.nanmedian(y)
                     std = np.nanstd(y)
+                    goodPix = np.where(np.abs(y-med)<=sigmaClip*std)[0]
                     badPix = np.where(np.abs(y-med)>sigmaClip*std)[0]
-                    otmp[badPix] = 0
-                    stmp[badPix] = 0
-                    f = fitSky(otmp, stmp)
+                    
+                    #use only pixels with value useMax of maximum flux for fitting and subtracting
+                    if useMaxOnly > 0:
+                        badPix = np.where(stmp < useMaxOnly*stmp.max())[0]
+                        goodPix = np.where(stmp >= useMaxOnly*stmp[goodPix].max())[0]
+                        
+                    f = fitSky(otmp[goodPix], stmp[goodPix])
 
                     if (f < bounds[0]):
                         f = bounds[0]
                     elif (f > bounds[1]):
                         f = bounds[1]
-             
-        fOut.append(f)
-        skyScaled[whr] = skyCont[whr] + (sky[whr]-skyCont[whr])*f
 
-    #now add in regions of sky not part of scaling algorithm
-    #skyScaled[:outside[0][0]] = sky[:outside[0][0]]
-
-    #for i in range(1,len(outside)):
-    #    skyScaled[outside[i-1][1]+1:outside[i][0]] = sky[outside[i-1][1]+1:outside[i][0]]
-
-    #skyScaled[outside[-1][1]+1:] = sky[outside[-1][1]+1:]
+            skyCor[goodPix] = stmp[goodPix]*f
+            skyCor[badPix] = stmp[badPix]
+            
+        skyScaled[whr] = skyCont[whr] + skyCor
 
     return obs - skyScaled, fOut
     
-def subScaledSkyCube(wave, obs, sky, mxScale=0.5, regions=None, MP=True, ncpus=None,sigmaClip=3, sigmaClipRounds=1):
+def subScaledSkyCube(wave, obs, sky, mxScale=0.5, regions=None, MP=True, ncpus=None,sigmaClip=3, sigmaClipRounds=1, useMaxOnly=0., nContFit=50):
     """
     mxScale is maximum allowable scaled difference between sky/obs spectrum (e.g. 0.2 -> sky can be scaled in range of 0.8-1.2).
     """
@@ -523,7 +533,7 @@ def subScaledSkyCube(wave, obs, sky, mxScale=0.5, regions=None, MP=True, ncpus=N
     inpLst = []
     for i in range(sky.shape[0]):
         for j in range(sky.shape[1]):
-            inpLst.append([wave,obs[i,j,:],sky[i,j,:],regions, bounds,sigmaClip,sigmaClipRounds])
+            inpLst.append([wave,obs[i,j,:],sky[i,j,:],regions, bounds,sigmaClip,sigmaClipRounds,useMaxOnly,nContFit])
     
     if MP:
     #setup multithreading
@@ -559,7 +569,7 @@ def subScaledSkyCube(wave, obs, sky, mxScale=0.5, regions=None, MP=True, ncpus=N
 
     return subCube, fImg
 
-def subScaledSkySlices(waveMap, obsSlices, skySlices, mxScale=0.5, regions=None, MP=True, ncpus=None,sigmaClip=3, sigmaClipRounds=1):
+def subScaledSkySlices(waveMap, obsSlices, skySlices, mxScale=0.5, regions=None, MP=True, ncpus=None,sigmaClip=3, sigmaClipRounds=1, useMaxOnly=0., nContFit=50):
     """
     mxScale is maximum allowable scaled difference between sky/obs spectrum (e.g. 0.2 or 20%, implies that the sky emission strength can be scaled in range of +/-20% or 0.8-1.2).
     """
@@ -574,7 +584,7 @@ def subScaledSkySlices(waveMap, obsSlices, skySlices, mxScale=0.5, regions=None,
     inpLst = []
     for i in range(len(skySlices)):
         for j in range(skySlices[i].shape[0]):
-            inpLst.append([waveMap[i][j,:],obsSlices[i][j,:],skySlices[i][j,:],regions, bounds,sigmaClip,sigmaClipRounds])
+            inpLst.append([waveMap[i][j,:],obsSlices[i][j,:],skySlices[i][j,:],regions, bounds,sigmaClip,sigmaClipRounds,useMaxOnly, nContFit])
     
     if MP:
     #setup multithreading
@@ -613,7 +623,7 @@ def subScaledSkySlices(waveMap, obsSlices, skySlices, mxScale=0.5, regions=None,
 
     return subSlices, fSlices
   
-def crossCorSlices(waveMap, slices1, slices2, regions=None, oversample=20, absorption=False, ncpus=None, mode='idl', contFit=True, nContFit=50, contFitOrder=1, mxShift=4,reject=0, velocity=False):
+def crossCorSlices(waveMap, slices1, slices2, regions=None, oversample=20, absorption=False, ncpus=None, mode='idl', contFit1=True, contFit2=True,nContFit=50, contFitOrder=1, mxShift=4,reject=0, velocity=False):
     """
     Determine the pixel shift (if velocity=False) between input cubes cube1 and cube2, expected to be on the same wavelength grid/coordinate system x. Determines velocity difference, if velocity=True. mxShift is in pixels or km/s.
     Usage: 
@@ -648,11 +658,11 @@ def crossCorSlices(waveMap, slices1, slices2, regions=None, oversample=20, absor
             for j in range(slices1[i].shape[0]):
                 v = (waveMap[i][j,:]-waveMap[i][j,:][int(waveMap[i][j,:].shape[0]/2)])/waveMap[i][j,:][int(waveMap[i][j,:].shape[0]/2)]*2.99792458e5 # in km/s
                 vconst = np.linspace(v[0],v[-1],num=v.shape[0]*oversample)
-                inpLst.append([vconst,v, slices1tmp[i,j,:], slices2tmp[i,j,:],oversample, absorption,mode, contFit, nContFit,contFitOrder,mxShift, False, reject])
+                inpLst.append([vconst,v, slices1tmp[i,j,:], slices2tmp[i,j,:],oversample, absorption,mode, contFit1, contFit2,nContFit,contFitOrder,mxShift, False, reject])
     else:
         for i in range(len(slices1)):
             for j in range(slices1[i].shape[0]):
-                inpLst.append([slices1tmp[i][j,:], slices2tmp[i][j,:],oversample, absorption,mode, contFit, nContFit,contFitOrder,mxShift, False, reject])
+                inpLst.append([slices1tmp[i][j,:], slices2tmp[i][j,:],oversample, absorption,mode, contFit1, contFit2,nContFit,contFitOrder,mxShift, False, reject])
 
     if ncpus is None:
         ncpus = mp.cpu_count()
@@ -667,7 +677,7 @@ def crossCorSlices(waveMap, slices1, slices2, regions=None, oversample=20, absor
 
     shiftOut = []
     for i in range(len(slices1)):
-        shiftOut.append(slices1[i].shape, dtype=slices1[i].dtype)
+        shiftOut.append(np.zeros(slices1[i].shape, dtype=slices1[i].dtype))
 
     k=0
     for i in range(len(shiftOut)):
