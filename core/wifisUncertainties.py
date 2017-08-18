@@ -68,7 +68,7 @@ def compMedian(data, sigma, axis=None):
     axis : {int, None}, optional
         Axis or axes along which the medians are computed. The default
         is to compute the median along a flattened version of the array.
-        A sequence of axes is supported since version 1.9.0.
+    Modified version of Numpy's nanmedian function
     """
 
     a = np.ma.masked_array(np.asanyarray(data),np.isnan(data))
@@ -87,10 +87,12 @@ def compMedian(data, sigma, axis=None):
         #if even number of elements, take average of middle two elements
         if (sz % 2 == 0):
             outD =  (a[sz/2-1] + a[sz/2])/2.
-            outS = np.sqrt(s[sz/2-1]**2 + s[sz/2]**2)
+            #outS = np.sqrt(s[sz/2-1]**2 + s[sz/2]**2)
         else:
             outD = a[int(sz/2)]
-            outS = s[int(sz/2)]
+            #outS = s[int(sz/2)]
+        outS = np.sqrt(np.sum(s**2))/sz
+
     else:
 
         index = list(np.ix_(*[np.arange(i) for i in a.shape]))
@@ -107,11 +109,12 @@ def compMedian(data, sigma, axis=None):
         #if even number of elements, take average of middle two elements
         if (sz % 2 == 0):
             outD = (a[sz/2-1, ...] + a[sz/2,...])/2.
-            outS = np.sqrt(s[sz/2-1,...]**2 + s[sz/2,...]**2)
+            #outS = np.sqrt(s[sz/2-1,...]**2 + s[sz/2,...]**2)
         else:
-            outS = s[int(sz/2),...]
+           # outS = s[int(sz/2),...]
             outD = a[int(sz/2),...]
-                        
+        outS = np.sqrt(np.sum(s**2,axis=0))/sz
+            
         #swap axis back to original location
         if (axis - 1 > 0):
             outD = outD.swapaxes(0,axis-1)
