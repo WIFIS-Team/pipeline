@@ -6,6 +6,9 @@ Tasks to modify FITS headers
 
 from astropy import wcs
 from astropy.io import fits
+import colorama
+from astropy import coordinates as coord
+import numpy as np
 
 def getWCSCube(data, hdr, xScale, yScale, waveGridProps):
     """
@@ -42,6 +45,15 @@ def getWCSCube(data, hdr, xScale, yScale, waveGridProps):
     #update header or add if keyword doesn't exist
     for h in header.cards:
         hdr.set(h[0],h[1],h[2])
+
+    #Now make sure NAXIS keywords are correct
+    #hdr.set('NAXIS',3)
+    #hdr.set('NAXIS1',data.shape[1])
+    #hdr.set('NAXIS2',data.shape[0])
+    #if not 'NAXIS3' in hdr:
+    #    hdr.insert('NAXIS2', ('NAXIS3', int(waveGridProps[2])))
+    #else:
+    #    hdr.set('NAXIS3',data.shape[2])
         
     return
 
@@ -81,13 +93,15 @@ def getWCSImg(data, hdr, xScale, yScale):
         hdr.set(h[0],h[1],h[2])
 
     #update NAXIS parameters
-    hdr['NAXIS1'] = data.shape[1]
-    hdr['NAXIS2'] = data.shape[0]
+    #hdr['NAXIS1'] = data.shape[1]
+    #hdr['NAXIS2'] = data.shape[0]
     return
 
-def addTelInfo(hdr, obsinfoFile):
+def addTelInfo(hdr, obsinfoFile, logfile=None, obsCoords=None):
     """
     """
+
+    colorama.init()
 
     #open the obsinfo.dat file associated with the data
     fle = open(obsinfoFile,'r')
@@ -157,15 +171,29 @@ def addTelInfo(hdr, obsinfoFile):
     try:
         crpa = float(dct['IIS'])
     except ValueError:
-        print('***WARNING. ROTATOR POSITION ANGLE FORMAT INCORRECT, ASSUMING 90 DEG***')
+        print(colorama.Fore.RED+'*** WARNING: ROTATOR POSITION ANGLE FORMAT INCORRECT, ASSUMING 90 DEG ***'+colorama.Style.RESET_ALL)
+        if logfile is not None:
+            logfile.write('*** WARNING: ROTATOR POSITION ANGLE FORMAT INCORRECT, ASSUMING 90 DEG ***\n')
         crpa = 90.
     
     hdr.set('CRPA', crpa, 'Cass Rotator Position Angle at end')
     hdr.set('HA', dct['HA'], 'Telescope hour angle')
     hdr.set('ST', dct['ST'], 'Sidereal time at end of observation')
     hdr.set('UT', dct['UT'],'Universal time at end of observation')
-    hdr.set('JD', dct['JD'], 'Julian date at end of observation')
+    hdr.set('JD', float(dct['JD']), 'Julian date at end of observation')
     hdr.set('LT', dct['Timestamp'], 'Local time stamp at end of observation')
+
+    if obsCoords is not None:
+        #compute paralactic angle using definite of EQ 10 of Filippenko 1982, PASP 94,715
+        #print('Determining paralactic angle')
+        #logfile.write('Determining paralactic angle\n')
+        haAng = coord.Angle(hdr['HA']+' hour')
+        decAng = coord.Angle(hdr['DEC']+' degrees')
+        latAng = coord.Angle(str(obsCoords[1])+' degrees')
+        sin_eta = (np.sin(haAng.rad)*np.cos(latAng.rad))/np.sqrt(1. - (np.sin(latAng.rad)*np.sin(decAng.rad) + np.cos(latAng.rad)*np.cos(decAng.rad)*np.cos(haAng.rad))**2)
+        eta = coord.Angle(str(np.arcsin(sin_eta)) + ' rad')
+        hdr.set('PA_ANG',eta.deg, 'Paralactic angle, in degrees')
+ 
     
     #finally, add the obsinfo.dat file information directly
     for line in linesSplit:
