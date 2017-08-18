@@ -27,7 +27,9 @@ import wifisCreateCube as createCube
 from matplotlib.backends.backend_pdf import PdfPages
 import warnings
 import wifisCalWaveFunc as calWave
+import colorama
 
+colorama.init()
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
 os.environ['PYOPENCL_CTX'] = '2' # Used to specify which OpenCL device to target
 plt.ioff()
@@ -94,6 +96,8 @@ rowSplit=1 # specifies how many processing steps to use during reference row cor
 nlSplit=32 #specifies how many processing steps to use during non-linearity correction. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption. 
 combSplit=32 #specifies how many processing steps to use during creation of ramp image. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
 
+obsCoords = [-111.600444444,31.9629166667,2071]
+
 #*****************************************************************************
 #*****************************************************************************
 
@@ -133,7 +137,8 @@ if os.path.exists(nlFile):
     logfile.write(nlFile+'\n')
 else:
     nlCoef =None
-    warnings.warn('*** No non-linearity coefficient array provided, corrections will be skipped ***')
+    print(colorama.Fore.RED+'*** WARNING: No non-linearity coefficient array provided, corrections will be skipped *** + colorama.Style.RESET_ALL')
+
     logfile.write('*** WARNING: No non-linearity corrections file provided or file ' + str(nlFile) +' does not exist ***\n')
     
 if os.path.exists(satFile):
@@ -143,7 +148,8 @@ if os.path.exists(satFile):
 
 else:
     satCounts = None
-    warnings.warn('*** No saturation counts array provided and will not be taken into account ***')
+    print(colorama.Fore.RED+'*** WARNING: No saturation counts array provided and will not be taken into account ***' + colorama.Style.RESET_ALL)
+
     logfile.write('*** WARNING: No saturation counts file provided or file ' + str(satFile) +' does not exist ***\n')
 
 if (os.path.exists(bpmFile)):
@@ -170,7 +176,7 @@ if not (os.path.exists(spatGridPropsFile)):
 wifisIO.createDir('processed')
 wifisIO.createDir('quality_control')
 
-calWave.runCalWave(waveLst, flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=plot, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, bpmCorRng=bpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, flatWinRng=flatWinRng,flatImgSmth=flatImgSmth, flatPolyFitDegree=3, distMapFile=distMapFile, spatGridPropsFile=spatGridPropsFile, atlasFile=atlasFile, templateFile=templateFile, prevResultsFile=prevResultsFile,  sigmaClip=sigmaClip, sigmaClipRounds=sigmaClipRounds, sigmaLimit=sigmaLimit, cleanDispSol=cleanDispSol,cleanDispThresh = cleanDispThresh, waveTrimThresh=waveTrimThresh,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile)
+calWave.runCalWave(waveLst, flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=plot, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, bpmCorRng=bpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, flatWinRng=flatWinRng,flatImgSmth=flatImgSmth, flatPolyFitDegree=3, distMapFile=distMapFile, spatGridPropsFile=spatGridPropsFile, atlasFile=atlasFile, templateFile=templateFile, prevResultsFile=prevResultsFile,  sigmaClip=sigmaClip, sigmaClipRounds=sigmaClipRounds, sigmaLimit=sigmaLimit, cleanDispSol=cleanDispSol,cleanDispThresh = cleanDispThresh, waveTrimThresh=waveTrimThresh,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, obsCoords=obsCoords)
     
 logfile.write('\n')
 logfile.close()
