@@ -29,6 +29,9 @@ import warnings
 import wifisUncertainties
 import astropy.io.fits as fits
 import wifisBadPixels as badPixels
+import colorama
+
+colorama.init()
 
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
 os.environ['PYOPENCL_CTX'] = '2' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
@@ -54,9 +57,10 @@ getBadPix = True
 
 #first check if required input exists
 if not os.path.exists(nlFile):
-        warnings.warn('*** No non-linearity corrections provided. Skipping non-linearity corrections ***')
+        print(colorama.Fore.RED+'*** WARNING: No non-linearity corrections provided. Skipping non-linearity corrections ***'+colorama.Style.RESET_ALL)
+
 if not os.path.exists(satFile):
-        warnings.warn('*** No saturation info provided. Using all frames ***')
+        print(colorama.Fore.RED+'*** WARNING: No saturation info provided. Using all frames ***'+colorama.Style.RESET_ALL)
 
 #create processed directory, in case it doesn't exist
 wifisIO.createDir('processed')
