@@ -924,7 +924,7 @@ if len(obsLst) > 1:
     combCube = createCube.mkCube(combGrid, ndiv=ndiv)
     
 else:
-    combCube, hdr = wifisIO.readImgsFromFile('processed/'+obsLst[i]+'_obs_cube.fits')
+    combCube, combHdr = wifisIO.readImgsFromFile('processed/'+obsLst[i]+'_obs_cube.fits')
 
 
 #need to include JD/BJD and additional corrections
