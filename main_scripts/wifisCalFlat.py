@@ -43,8 +43,9 @@ bpmFile = pipelineFolder+'external_data/bpm.fits' # the bad pixel mask
 if hband:
     distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_june/hband/processed/20170607221050_flat_limits.fits'
 else:
-    distMapLimitsFile = pipelineFolder+'external_data/distMap_limits.fits'
-
+    #distMapLimitsFile = pipelineFolder+'external_data/distMap_limits.fits'
+    distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_august/tb/processed/20170831210255_flat_limits.fits'
+    
 #distMapLimitsFile = ''
 #optional behaviour of pipeline
 plot = True #whether to plot the traces
@@ -95,7 +96,7 @@ else:
 
 if os.path.exists(satFile):
     satCounts = wifisIO.readImgsFromFile(satFile)[0]
-    logfile.write('Using saturation limitts from file:\n')
+    logfile.write('Using saturation limits from file:\n')
     logfile.write(satFile+'\n')
  
 else:
