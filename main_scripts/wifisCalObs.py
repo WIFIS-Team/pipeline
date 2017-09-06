@@ -908,13 +908,15 @@ if len(obsLst) > 1:
         logfile.write('Interpolating slices of ' + obsLst[i] + ' onto uniform grid\n')
         dataGrid = createCube.waveCorAll(dataCor, waveShift, waveGridProps=waveGridProps)
 
+        #combine data by summing all of the same slices together
         if len(combGrid)>0:
             for j in range(len(dataGrid)):
                 combGrid[j] += dataGrid[j]
         else:
             combGrid = dataGrid
                 
-    for i in range(len(obsLst)):
+    #now divide each slice by the total number of observations
+    for i in range(len(combGrid)):
         combGrid[i] /= float(len(obsLst))
         
     #now create cube from gridded data
@@ -925,7 +927,6 @@ if len(obsLst) > 1:
     
 else:
     combCube, combHdr = wifisIO.readImgsFromFile('processed/'+obsLst[i]+'_obs_cube.fits')
-
 
 #need to include JD/BJD and additional corrections
     
