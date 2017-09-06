@@ -41,7 +41,7 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
             logfile.write('Subtraced row reference pixel bias using moving average of ' + str(int(nRows)+1) + ' rows\n')
 
     if satCounts is None:
-        satFrame = np.empty((data.shape[0],data.shape[1]),dtype='unint32')
+        satFrame = np.empty((data.shape[0],data.shape[1]),dtype='uint32')
         satFrame[:] = data.shape[2]
         hdr.add_history('No saturation levels determined. Using all ramp frames')
     else:
