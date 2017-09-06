@@ -136,6 +136,7 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                                 logfile.write('Processing ' + folder + ' ramp ' + str(rampNum)+'\n')
 
                             flatImg, sigmaImg, satFrame, hdr = processRamp.auto(folder, rootFolder,savename+'_flat.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, skipObsinfo=skipObsinfo, nRows=nRowsAvg, rampNum=rampNum2,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=ron,logfile=logfile, obsCoords=obsCoords)
+
                             flatImgAll.append(flatImg)
                             sigmaImgAll.append(sigmaImg)
                             satFrameAll.append(satFrame)
@@ -147,7 +148,7 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                             #sigmaImg = np.zeros(sigmaImg.shape,dtype=sigmaImg.dtype)
                             #for k in range(len(sigmaImgAll)):
                             #sigmaImg += sigmaImgAll[k]**2
-                            sigmaImg = np.sqrt(np.nansum(np.asarray(sigmaImg)**2,axis=0))/len(sigmaImgAll)
+                            sigmaImg = np.sqrt(np.nansum(np.asarray(sigmaImgAll)**2,axis=0))/len(sigmaImgAll)
                             #sigmaImg = np.nanmedian(np.asarray(sigmaImgAll),axis=0)
                             satFrame = np.nanmedian(np.asarray(satFrameAll),axis=0).round().astype('int')
 
