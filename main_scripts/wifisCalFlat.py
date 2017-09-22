@@ -137,7 +137,7 @@ if flatLst.ndim == 0:
     flatLst = np.asarray([flatLst])
 
 logfile.write('\n')
-calFlat.runCalFlat(flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=plot, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, bpmCorRng=bpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, imgSmth=imgSmth, polyFitDegree=2, avgRamps=True, nlFile=nlFile, satFile=satFile, bpmFile=bpmFile, flatCutOff=flatCutOff, logfile=logfile, winRng=winRng, dispAxis=dispAxis, limSmth=limSmth, obsCoords=obsCoords)
+calFlat.runCalFlat(flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=plot, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, bpmCorRng=bpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, imgSmth=imgSmth, polyFitDegree=polyFitDegree, avgRamps=True, nlFile=nlFile, satFile=satFile, bpmFile=bpmFile, flatCutOff=flatCutOff, logfile=logfile, winRng=winRng, dispAxis=dispAxis, limSmth=limSmth, obsCoords=obsCoords)
 
 logfile.write('********************\n')
 logfile.write('\n')
