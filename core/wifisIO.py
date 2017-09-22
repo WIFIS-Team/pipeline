@@ -230,7 +230,7 @@ def readRampFromFolder(folderName, rampNum=None,nSkip=0):
         lst = glob.glob(folderName+'/*N01.fits')
 
         if len(lst)>1:
-            raise Warning('*** More than one set of ramps present in folder ' + folderName + '. Use readAsciiList instead. ***')
+            raise Warning('*** More than one set of ramps present in folder ' + folderName + '. You must specify which ramp to use. ***')
 
         else:
             lst = glob.glob(folderName+'/H2*fits*')
