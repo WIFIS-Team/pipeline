@@ -50,7 +50,7 @@ darkFile = ''#'dark.lst'
 noFlat = False
 
 #sky subtraction options
-skySubFirst = False
+skySubFirst = True
 skyCorRegions = [[1025,1045],[1080,1105],[1140,1175],[1195,1245],[1265,1330]]
 
 #options for flexure/pixel shift between sky/obs cubes
@@ -64,18 +64,19 @@ skyShiftMxShift = 4
 skyShiftReject = 1
 
 #options to determine line strength scaling difference between sky and obs cubes
-skyScaleCor = True
+skyScaleCor = False
 skyScaleMx = 0.5
 skyScaleSigClip = 3
 skyScaleSigClipRnds = 1
 
 #determine additional RV corrections relative to sky emission template
-getSkyCorRV = True
+getSkyCorRV = False
 skyEmTempFile = pipelineFolder+'/external_data/sky_emission_template.dat'
 
 #telluric correction
 tellCor = False
 
+#optional flat field correction to better match cal flats to dome flats
 flatCorFile = 'processed/flat_correction_slices.fits'
 flatCor = True
 
@@ -104,12 +105,18 @@ else:
     distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707180443_flat_limits.fits'
     spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707175840_ronchi_spatGridProps.dat'
 
+    #august
+    #distMapFile = '/home/jason/wifis/data/ronchi_map_august/tb/processed/20170831211259_ronchi_distMap.fits'
+    #distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_august/tb/processed/20170831210255_flat_limits.fits'
+    #spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_august/tb/processed/20170831211259_ronchi_spatGridProps.dat'
+    
 nlFile = pipelineFolder+'external_data/master_detLin_NLCoeff.fits'        
 satFile = pipelineFolder+'external_data/master_detLin_satCounts.fits'
 bpmFile = pipelineFolder+'external_data/bpm.fits'
 atlasFile = pipelineFolder+'external_data/best_lines2.dat'
 
-bpmCorRng = 2
+#bad pixel mask correction range
+bpmCorRng = 1
 
 #pixel scale
 #may old
@@ -154,16 +161,20 @@ flatImgSmth = 5
 flatPolyFitDegree=2
 
 #parameters used for processing of ramps
+dispAxis=0
 nChannel=32 #specifies the number of channels used during readout of detector
 flatbpmCorRng=20 #specifies the maximum separation of pixel search to use during bad pixel correction
 nRowsAvg=4 # specifies the number of rows of reference pixels to use to correct for row bias (+/- nRowsAvg)
 rowSplit=1 # specifies how many processing steps to use during reference row correction. Must be integer multiple of number of frames. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
-nlSplit=32 #specifies how many processing steps to use during non-linearity correction. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption. 
+nlSplit=32 #specifies how many processing steps to use during non-linearity correction. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
+satSplit=32 #specifies how many processing steps to use during identification of first saturated frame. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
 combSplit=32 #specifies how many processing steps to use during creation of ramp image. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
 gain = 1.
 ron = 1.
-obsCoords = [-111.600444444,31.9629166667,2071]
 
+#coordinates
+obsCoords = [-111.600444444,31.9629166667,2071]
+useSesameCoords=False
 #*****************************************************************************
 #*****************************************************************************
 
@@ -384,31 +395,7 @@ for i in range(len(obsLst)):
         contProc = True
     
     if (contProc):
-        nRamps = wifisIO.getNumRamps(obsFolder, rootFolder)
-        
-        if nRamps > 1:
-            obsAll = []
-            sigmaAll = []
-            satAll = []
-                
-            for rampNum in range(1,nRamps+1):
-                obs, sigmaImg, satFrame, hdr = processRamp.auto(obsFolder, rootFolder,'processed/'+obsFolder+'_obs.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, rampNum=rampNum,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=ron,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords)
-                obsAll.append(obs)
-                sigmaAll.append(sigmaImg)
-                satAll.append(satFrame)
-                
-                obs = np.nanmedian(np.asarray(obsAll),axis=0)
-                sigmaImg = np.sqrt(np.nansum(np.asarray(sigmaAll)**2,axis=0))/nRamps
-                satFrame = np.nanmedian(np.asarray(satAll),axis=0)
-                hdr.add_history('Image is median combination of ' + str(nRamps)+ ' ramps')
-                wifisIO.writeFits(obs, obsSave+'_obs.fits',hdr=hdr,ask=False)
-
-                logfile.write('Median combined data of ' + str(nRamps) + ' ramps\n')
-                del obsAll
-                del sigmaAll
-                del satAll
-        else:
-            obs, sigmaImg, satFrame, hdr = processRamp.auto(obsFolder, rootFolder,'processed/'+obsFolder+'_obs.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=ron,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords)
+        obs, sigmaImg, satFrame, hdr = processRamp.auto(obsFolder, rootFolder,'processed/'+obsFolder+'_obs.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=ron,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True, satSplit=satSplit)
             
     else:
         print('Reading science data from file')
@@ -430,34 +417,7 @@ for i in range(len(obsLst)):
         if not os.path.exists('processed/'+skyFolder+'_sky.fits'):
             print('Processing sky folder '+skyFolder)
             logfile.write('\nProcessing sky folder ' + skyFolder+'\n')
-            nRamps = wifisIO.getNumRamps(skyFolder, rootFolder)
-
-            if nRamps > 1:
-                skyAll = []
-                sigmaAll = []
-                satAll = []
-                
-                for rampNum in range(1,nRamps+1):
-                    sky, skySigmaImg, skySatFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, rampNum=rampNum,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=ron,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords)
-                    skyAll.append(sky)
-                    sigmaAll.append(sigmaImg)
-                    satAll.append(satFrame)
-                    
-                sky = np.nanmedian(np.asarray(skyAll),axis=0)
-                skySigmaImg = np.sqrt(np.nansum(np.asarray(sigmaAll),axis=0))/nRamps
-                skySatFrame = np.nanmedian(np.asarray(satAll),axis=0)
-                skyHdr.add_history('Image is median combination of ' + str(nRamps)+ ' ramps')
-                wifisIO.writeFits(sky, 'processed/'+skyFolder+'_sky.fits',hdr=skyHdr,ask=False)
-                logfile.write('Median combined data of ' + str(nRamps) + ' ramps\n')
-
-                del skyAll
-                del sigmaAll
-                del satAll
-            else:
-                logfile.write('Reading processed sky image from:\n')
-                logfile.write('processed/'+skyFolder+'_sky.fits\n')
-
-                sky, skySigmaImg, skySatFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=ron,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords)
+            sky, skySigmaImg, skySatFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=ron,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True,satSplit=satSplit)
                 
         if skySubFirst:
             #subtract sky from data at this stage
@@ -645,7 +605,7 @@ for i in range(len(obsLst)):
     hdr.add_comment('File contains flux, sigma, sat info for each slice as multi-extensions')
     wifisIO.writeFits(dataFlat+sigmaSlices+satSlices, obsSaveName+'_obs_slices.fits', ask=False, hdr=hdr)
 
-    print('Dstortion correcting science data and placing on uniform spatial grid')
+    print('Distortion correcting science data and placing on uniform spatial grid')
     logfile.write('Distortion correcting sky slices and placing on uniform spatial grid\n')
                 
     #distortion correct data
@@ -841,7 +801,7 @@ for i in range(len(obsLst)):
     hdrCube = copy.copy(hdr[:])
     hdrImg = copy.copy(hdr[:])
     
-    headers.getWCSCube(dataCube, hdrCube, xScale, yScale, waveGridProps)
+    headers.getWCSCube(dataCube, hdrCube, xScale, yScale, waveGridProps, useSesameCoords=useSesameCoords)
 
     hdrCube.add_comment('File contains the flux data cube')
     wifisIO.writeFits(dataCube, obsSaveName+'_obs_cube.fits', hdr=hdrCube, ask=False)
@@ -849,7 +809,7 @@ for i in range(len(obsLst)):
     dataImg = np.nansum(dataCube, axis=2).astype('float32')
 
     hdrImg.add_comment('File contains the summed flux along each spaxel')
-    headers.getWCSImg(dataImg, hdrImg, xScale, yScale)
+    headers.getWCSImg(dataImg, hdrImg, xScale, yScale, useSesameCoords=useSesameCoords)
     wifisIO.writeFits(dataImg, obsSaveName+'_obs_cubeImg.fits',hdr=hdrImg, ask=False)
 
 if len(obsLst) > 1:
@@ -872,13 +832,6 @@ if len(obsLst) > 1:
     #define wave grid properties using first file
     waveGridProps = wifisIO.readTable('processed/'+waveLst[0]+'_wave_waveGridProps.dat')
     
-    #get object name
-    objectName = combHdr['Object']
-
-    #check if cube with this name already exists
-    existsLst = glob.glob('processed/'+objectName+'_combined_cube_*fits')
-    obsNum = len(existsLst)+1
-     
     #create output cube
     combGrid = [] # np.zeros(cube.shape, dtype=cube.dtype)
 
@@ -926,7 +879,14 @@ if len(obsLst) > 1:
     combCube = createCube.mkCube(combGrid, ndiv=ndiv)
     
 else:
-    combCube, combHdr = wifisIO.readImgsFromFile('processed/'+obsLst[i]+'_obs_cube.fits')
+    combCube, combHdr = wifisIO.readImgsFromFile('processed/'+obsLst[0]+'_obs_cube.fits')
+
+#get object name
+objectName = combHdr['Object']   
+
+#check if cube with this name already exists
+existsLst = glob.glob('processed/'+objectName+'_combined_cube_*fits')
+obsNum = len(existsLst)+1
 
 #need to include JD/BJD and additional corrections
     
@@ -941,10 +901,10 @@ hdrImg = copy.copy(combHdr[:])
 hdrCube.add_comment('File contains the flux data cube')
 hdrImg.add_comment('File contains the summed flux along each spaxel')
 
-headers.getWCSCube(combCube, hdrCube, xScale, yScale, waveGridProps)
+headers.getWCSCube(combCube, hdrCube, xScale, yScale, waveGridProps, useSesameCoords=useSesameCoords)
 wifisIO.writeFits(combCube.astype('float32'), 'processed/'+objectName+'_combined_cube_'+str(obsNum)+'.fits', hdr=hdrCube, ask=False)
 
 combImg = np.nansum(combCube, axis=2)
 
-headers.getWCSImg(combImg, hdrImg, xScale, yScale)
+headers.getWCSImg(combImg, hdrImg, xScale, yScale, useSesameCoords=useSesameCoords)
 wifisIO.writeFits(combImg.astype('float32'), 'processed/'+objectName+'_combined_cubeImg_'+str(obsNum)+'.fits', hdr=hdrImg, ask=False)
