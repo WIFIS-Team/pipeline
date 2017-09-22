@@ -187,9 +187,14 @@ def getResponse2D(input):
         sliceSmth=conv.convolve(slice,gKern,boundary='extend',normalize_kernel=True)
     else:
         sliceSmth = slice
-
+    
     norm = sliceSmth/nrmValue
-    norm[np.isfinite(norm)][norm[np.isfinite(norm)]<cutoff] = np.nan
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore',RuntimeWarning)
+        norm[norm<cutoff] = np.nan
+    #norm[np.isfinite(norm)][norm[np.isfinite(norm)]<cutoff] = np.nan
+    #norm[np.isfinite(norm)<cutoff]=np.nan
+    norm[~np.isfinite(norm)]=np.nan
 
     return norm
 
@@ -322,17 +327,17 @@ def ffCorrectSlice(input):
     input is a list containing the image slice and the normalized flat-field image
     """
 
-    slice = input[0]
+    slc = input[0]
     response = input[1]
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore",RuntimeWarning)
-        whr = np.where(response != 0)
-        tmp = np.empty(slices.shape, dtype=slices.dtype)
-        tmp[:] = np.nan
-        tmp[whr[0],whr[1]] = slice=[whr[0],whr[1]]/response[whr[0],whr[1]]
-
-    result = slice/response
+        #whr = np.where(response != 0)
+        #tmp = np.empty(slices.shape, dtype=slices.dtype)
+        #tmp[:] = np.nan
+        #tmp[whr[0],whr[1]] = slice=[whr[0],whr[1]]/response[whr[0],whr[1]]
+        result = slc/response
+        result[~np.isfinite] = np.nan
 
     return result
 
