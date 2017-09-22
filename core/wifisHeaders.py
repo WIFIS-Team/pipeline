@@ -7,10 +7,10 @@ Tasks to modify FITS headers
 from astropy import wcs
 from astropy.io import fits
 import colorama
-from astropy import coordinates as coord
+from astropy import coordinates as coord, units
 import numpy as np
 
-def getWCSCube(data, hdr, xScale, yScale, waveGridProps):
+def getWCSCube(data, hdr, xScale, yScale, waveGridProps, useSesameCoords=False):
     """
     Returns the corresponding WCS header parameters based on given input parameters.
     Usage: header = getWCSCube(data, telRA, telDEC, RAScale, DECScale, waveGridProps)
@@ -25,10 +25,22 @@ def getWCSCube(data, hdr, xScale, yScale, waveGridProps):
 
     dWave = (waveGridProps[1]-waveGridProps[0])/(waveGridProps[2]-1)
     w = wcs.WCS(naxis=3)
-    
-    #convert input strings to degrees
-    telRA = hdr['RA_DEG']
-    telDEC = hdr['DEC_DEG']
+
+    if useSesameCoords:
+        #use astropy SESAME name resolver lookup functionality to set the central RA/DEC instead of using the telescope position
+        try:
+            objName = hdr['OBJECT']
+            coords = coord.SkyCoord.from_name(objName)
+            telRA = coords.ra.deg
+            telDEC = coords.dec.deg
+        except('NameResolveError'):
+            useSesameCoords=False
+
+    if not useSesameCoords:
+        #convert input strings to degrees
+        telRA = hdr['RA_DEG']
+        telDEC = hdr['DEC_DEG']
+        
     rotAngle = hdr['CRPA']
 
     #rotAngle of 90 corresponds to N-S alignment
@@ -57,7 +69,7 @@ def getWCSCube(data, hdr, xScale, yScale, waveGridProps):
         
     return
 
-def getWCSImg(data, hdr, xScale, yScale):
+def getWCSImg(data, hdr, xScale, yScale, useSesameCoords=False):
     """
     Returns the corresponding WCS header parameters based on given input parameters.
     Usage: header = getWCSImg(data, telRA, telDEC, RAScale, DECScale)
@@ -71,9 +83,21 @@ def getWCSImg(data, hdr, xScale, yScale):
 
     w = wcs.WCS(naxis=2)
 
-    #get telescope info
-    telRA = hdr['RA_DEG']
-    telDEC = hdr['DEC_DEG']
+    if useSesameCoords:
+        #use astropy SESAME name resolver lookup functionality to set the central RA/DEC instead of using the telescope position
+        try:
+            objName = hdr['OBJECT']
+            coords = coord.SkyCoord.from_name(objName)
+            telRA = coords.ra.deg
+            telDEC = coords.dec.deg
+        except('NameResolveError'):
+            useSesameCoords=False
+
+    if not useSesameCoords:
+        #convert input strings to degrees
+        telRA = hdr['RA_DEG']
+        telDEC = hdr['DEC_DEG']
+
     rotAngle = hdr['CRPA']
 
     #rotAngle of 90 corresponds to N-S alignment
