@@ -322,7 +322,7 @@ for i in range(len(obsLst)):
         print('\n*** Processed flat field files do not exist for folder ' +flatFolder +', processing flat folder ***')
         logfile.write('Processed flat field files do not exist for folder ' +flatFolder +', processing flat folder\n')
         
-        calFlat.runCalFlat(np.asarray([flatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, distMapLimitsFile = distMapLimitsFile, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=rowSplit,nlSplit=nlSplit, combSplit=combSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,avgRamps=True,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile,darkFile=darkFile, logfile=logfile, ask=False, obsCoords=obsCoords)
+        calFlat.runCalFlat(np.asarray([flatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, distMapLimitsFile = distMapLimitsFile, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=rowSplit,nlSplit=nlSplit, combSplit=combSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile,darkFile=darkFile, logfile=logfile, ask=False, obsCoords=obsCoords)
         
     print('Reading slice limits')
     logfile.write('Reading slice limits from file:\n')
