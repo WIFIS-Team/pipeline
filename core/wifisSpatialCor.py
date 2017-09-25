@@ -20,6 +20,72 @@ import warnings
 
 warnings.simplefilter("ignore", OptimizeWarning)
 
+def findBestGaussFit(x,y, winRng, winRng2,orgMid, minWidth, bright, plot, mxIter):
+    """
+    """
+    badFit = True
+    mid = orgMid
+    cent = np.nan
+
+    iterNum=0
+    while badFit and iterNum < mxIter:
+        iterNum+=1
+        xrng = np.arange(winRng) - winRng2 + mid
+        xrng = xrng[np.where(xrng>0)[0]]
+        xrng = xrng[np.where(xrng<len(y))[0]].astype('int')
+        
+        if (xrng.shape[0] > 0):
+            yrng = y[xrng]
+
+            if (bright):
+                mid = xrng[np.nanargmax(yrng)]
+            else:
+                mid = xrng[np.nanargmin(yrng)]
+
+            #now fit Gaussian to feature to identify centre
+            xrng = np.arange(winRng) - winRng2 + mid
+            xrng = xrng[np.where(xrng>0)[0]]
+            xrng = xrng[np.where(xrng<len(y))[0]].astype('int')
+
+            #only continue if there is at least 1 point to fit
+            if (xrng.shape[0] > 0):
+                yrng = y[xrng]
+
+                #remove NaNs
+                whrFinite = np.where(np.isfinite(yrng))[0]
+                if len(whrFinite)>0:
+                    xrng = xrng[whrFinite]
+                    yrng = yrng[whrFinite]
+
+                    try:
+                        fit = gaussFit(xrng, yrng, plot=plot)
+                        if (fit[2] >= xrng[0] and fit[2] <= xrng[-1]):
+
+                            if np.abs(fit[3]) > minWidth:
+                                badFit = False
+                                cent= fit[2]
+
+                            else:
+                                if (bright):
+                                    y[xrng[np.argmax(yrng)]] = np.nanmin(yrng)
+                                    mid = orgMid
+                                else:
+                                    y[xrng[np.argmin(yrng)]] = np.nanmax(yrng)
+                                    mid = orgMid
+                        else:
+                            badFit = False
+                            
+                    except(RuntimeError, ValueError):
+                        badFit = False
+                else:
+                    badFit=False
+            else:
+                badFit=False
+        else:
+            badFit =False
+
+    return cent
+
 def gaussFit(x, y, plot=False):
     """
     Routine to fit a Gaussian to provided x and y data points and return the fitted coefficients.
@@ -34,8 +100,9 @@ def gaussFit(x, y, plot=False):
     offsetGuess = (y[0]+y[-1])/2. # use edges of input to range to guess at offset
     #ampGuess = np.min(y)- offsetGuess #if absorption profile
     ampGuess =  np.max(y) - offsetGuess
+    centGuess = x[np.argmax(y)]
     
-    popt, pcov = curve_fit(gaussian, x, y, p0=[offsetGuess, ampGuess, np.mean(x),1.])
+    popt, pcov = curve_fit(gaussian, x, y, p0=[offsetGuess, ampGuess, centGuess,1.])
 
     if (plot == True):
         plt.close('all')
@@ -328,7 +395,7 @@ def traceRonchiSlice(input):
     m2 = np.nanargmax(medArray)
 
     #extract signal from this column
-    y=tmp[:,m2]
+    y=np.copy(tmp[:,m2])
     x=np.arange(len(y))
     d2 = np.gradient(np.gradient(y))
     
@@ -338,8 +405,10 @@ def traceRonchiSlice(input):
         whr = np.where(y > threshold*mx)[0]
     else:
         yFlat = flatSlc[:,m2]
-        mx = np.nanmedian(yFlat[yFlat>0.05*np.nanmax(np.nanmedian(yFlat))])
-        whr = np.where(yFlat > threshold*mx)[0]
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore',RuntimeWarning)
+            mx = np.nanmedian(yFlat[yFlat>0.05*np.nanmax(np.nanmedian(yFlat))])
+            whr = np.where(yFlat > threshold*mx)[0]
        
     strt = whr[0]
     mxPix = whr[-1]
@@ -452,9 +521,12 @@ def traceRonchiSlice(input):
 
             if(len(whrBad)>0):
                 whrGood = np.where(np.isfinite(atmp))[0]
-                finter = interp1d(xOut[whrGood],atmp[whrGood], kind='linear', bounds_error=False)
-                atmp[whrBad] =finter(xOut[whrBad])
-                outAmp[j,:] = atmp
+                if len(whrGood)>1:
+                    finter = interp1d(xOut[whrGood],atmp[whrGood], kind='linear', bounds_error=False)
+                    atmp[whrBad] =finter(xOut[whrBad])
+                    outAmp[j,:] = atmp
+                else:
+                    outAmp[j,:] = atmp
             else:
                 outAmp[j,:] = atmp
     else:
@@ -662,7 +734,7 @@ def extendTraceAll(traceLst, extSlices, zeroTraces,space=1/15.,order=4,method='l
 
     return interpLst
 
-def traceWireFrameAll(zeroSlices, nbin=2,winRng=31,smooth=5,bright=False,MP=True, plot=False, mxChange=5, ncpus=None, constRegion=None):
+def traceWireFrameAll(zeroSlices, nbin=2,winRng=31,smooth=5,bright=False,MP=True, plot=False, mxChange=5, ncpus=None, constRegion=None,minWidth=1.):
     """
     Routine used to determine/trace zero-point images (e.g. wireframe) of each slice
     Usage: cent = traceZeroPointAll(zeroSlices, nbin=2, winRng=31, smooth=5, bright=False, MP=True, plot=False, mxChange=5, ncpus=None)
@@ -686,7 +758,7 @@ def traceWireFrameAll(zeroSlices, nbin=2,winRng=31,smooth=5,bright=False,MP=True
         #build input list
         lst = []
         for i in range(len(zeroSlices)):
-            lst.append([zeroSlices[i],nbin,winRng,plot,smooth,bright,mxChange,constRegion])
+            lst.append([zeroSlices[i],nbin,winRng,plot,smooth,bright,mxChange,constRegion,minWidth])
             
         cent = pool.map(traceWireFrameSlice, lst)
         pool.close()
@@ -696,7 +768,8 @@ def traceWireFrameAll(zeroSlices, nbin=2,winRng=31,smooth=5,bright=False,MP=True
         cent = []
 
         for i in range(len(zeroSlices)):
-            cent.append(traceWireFrameSlice([zeroSlices[i],nbin,winRng,plot,smooth,bright,mxChange, constRegion]))
+            print('slice ' + str(i))
+            cent.append(traceWireFrameSlice([zeroSlices[i],nbin,winRng,plot,smooth,bright,mxChange, constRegion,minWidth]))
             
     return cent
 
@@ -724,7 +797,9 @@ def traceWireFrameSlice(input):
     bright = input[5]
     mxChange = input[6]
     constRegion = input[7]
-
+    minWidth = input[8]
+    mxIter = 10 # sets the maximum number of allowed iterations to find a good fit
+    
     if constRegion is not None:
         tmp1 = img[:,constRegion[0]:constRegion[1]]
     else:
@@ -740,143 +815,35 @@ def traceWireFrameSlice(input):
     else:
         tmp = tmp1
 
-    #find column with the maximum signal to find first zeropoint measurement
-    m1, m2 = np.unravel_index(np.nanargmax(tmp), tmp.shape)
+    #get the coord of the middle pixel
+    orgMid = int(tmp.shape[0]/2.)
 
+    #find column with the maximum signal within the chosen search window for first zeropoint measurement
+    m1, m2 = np.unravel_index(np.nanargmax(tmp[orgMid-winRng2:orgMid+winRng2+1,:]), tmp[orgMid-winRng2:orgMid+winRng2+1,:].shape)
+    
     #extract signal from this column
-
     x=np.arange(tmp.shape[0])
 
-    #start search from the middle pixel
-    mid = int(tmp.shape[0]/2.)
-
     #find feature in window range, and recentre on this feature
-    y = tmp[:,m2]
-    xrng = np.arange(winRng) - winRng2 + mid
-    xrng = xrng[np.where(xrng>0)[0]]
-    xrng = xrng[np.where(xrng<len(y))[0]].astype('int')
+    y = np.copy(tmp[:,m2])
 
     cent = np.empty(tmp.shape[1])
     cent[:] = np.nan
+
+    #find centre using a Gaussian fitting routine
+    cent[m2] = findBestGaussFit(x,y, winRng, winRng2,orgMid, minWidth, bright, plot, mxIter)
     
-    if (xrng.shape[0] > 0):
-        yrng = y[xrng]
-    
-        if (bright):
-            mid = xrng[np.argmax(yrng)]
-        else:
-            mid = xrng[np.argmin(yrng)]
-
-        #now fit Gaussian to feature to identify centre
-        xrng = np.arange(winRng) - winRng2 + mid
-        xrng = xrng[np.where(xrng>0)[0]]
-        xrng = xrng[np.where(xrng<len(y))[0]].astype('int')
-
-        if (xrng.shape[0] > 0):
-            yrng = y[xrng]
-
-            #remove NaNs
-            whrFinite = np.where(np.isfinite(yrng))[0]
-            if len(whrFinite)>0:
-                xrng = xrng[whrFinite]
-                yrng = yrng[whrFinite]
-                
-                fit = gaussFit(xrng, yrng, plot=plot)
-                
-                if (fit[2] >= xrng[0] and fit[2] <= xrng[-1]):
-                    cent[m2]= fit[2]
-
     #now go through rest of pixels to find centre as well
+
     #first work backwards from starting position
-
-    midStrt = mid
-    
     for i in range(m2-1,0,-1):
-        y = tmp[:,i]
-        xrng = np.arange(winRng) - winRng2 + mid
-        xrng = xrng[np.where(xrng>0)[0]]
-        xrng = xrng[np.where(xrng<len(y))[0]].astype('int')
+        y = np.copy(tmp[:,i])
+        cent[i] = findBestGaussFit(x,y, winRng, winRng2,orgMid, 0, bright, plot, mxIter)
 
-        if (xrng.shape[0] > 0):
-            yrng = y[xrng]
-            midOld = mid
-        
-            if (bright):
-                mid = xrng[np.argmax(yrng)]
-            else:
-                mid = xrng[np.argmin(yrng)]
-
-            if (np.abs(mid-midOld)>mxChange):
-                mid = midOld
-            
-            #now fit Gaussian to feature to identify centre
-            xrng = np.arange(winRng) - winRng2 + mid
-            xrng = xrng[np.where(xrng>0)[0]]
-            xrng = xrng[np.where(xrng<len(y))[0]].astype('int')
-        
-            if (xrng.shape[0] > 0):
-                yrng = y[xrng]
-
-                whrFinite = np.where(np.isfinite(yrng))[0]
-
-                if len(whrFinite)>1:
-
-                    xrng = xrng[whrFinite]
-                    yrng = yrng[whrFinite]
-                    
-                    try:
-                        fit = gaussFit(xrng, yrng, plot=plot)
-
-                        if (fit[2] >= xrng[0] and fit[2] <= xrng[-1]):
-                            cent[i] = fit[2]
-                        
-                    except (RuntimeError):
-                        pass
-            
-                 
     #now work forwards
-    mid = midStrt
-    
     for i in range(m2+1,tmp.shape[1]):
         y = tmp[:,i]
-        xrng = np.arange(winRng) - winRng2 + mid
-        xrng = xrng[np.where(xrng>0)[0]]
-        xrng = xrng[np.where(xrng<len(y))[0]].astype('int')
-
-        if (xrng.shape[0] > 0):
-            yrng = y[xrng]
-            midOld = mid
-        
-            if (bright):
-                mid = xrng[np.argmax(yrng)]
-            else:
-                mid = xrng[np.argmin(yrng)]
-
-            if (np.abs(mid-midOld)>mxChange):
-                mid = midOld
-            
-            #now fit Gaussian to feature to identify centre
-            xrng = np.arange(winRng) - winRng2 + mid
-            xrng = xrng[np.where(xrng>0)[0]]
-            xrng = xrng[np.where(xrng<len(y))[0]].astype('int')
-        
-            if (xrng.shape[0] > 0):
-                yrng = y[xrng]
-        
-                try:
-                    whrFinite = np.where(np.isfinite(yrng))[0]
-                    if len(whrFinite)>0:
-                        xrng = xrng[whrFinite]
-                        yrng = yrng[whrFinite]
-                        
-                        fit = gaussFit(xrng, yrng, plot=plot)
-                        
-                        if (fit[2] >= 0 and fit[2] < len(y)):
-                            cent[i] = fit[2]
-
-                except (RuntimeError):
-                    pass
-
+        cent[i] = findBestGaussFit(x,y, winRng, winRng2,orgMid, 0, bright, plot, mxIter)
 
     xTrace = np.arange(cent.shape[0])*nbin
        
