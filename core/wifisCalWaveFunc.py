@@ -27,6 +27,7 @@ import warnings
 import wifisCalFlatFunc as calFlat
 from astropy import time as astrotime, coordinates as coord, units
 import colorama
+from astropy.visualization import ZScaleInterval
 
 def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowsAvg=0,rowSplit=1,nlSplit=1, combSplit=1,bpmCorRng=2, crReject=False, skipObsinfo=False, darkLst=None, flatWinRng=51, flatImgSmth=5, flatPolyFitDegree=3, rootFolder='', distMapFile='', spatGridPropsFile='', atlasFile='', templateFile='', prevResultsFile='', sigmaClip=2, sigmaClipRounds=2, sigmaLimit=3,cleanDispSol=False,cleanDispThresh = 0, waveTrimThresh=0, smoothSol=False, waveSmooth=1, nlFile='', bpmFile='', satFile='',darkFile='',logfile=None, ask=True, obsCoords=None, dispAxis=0):
     """
@@ -371,14 +372,18 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                         wifisIO.writeFits(fwhmMap, 'quality_control/'+waveFolder+'_wave_fwhm_map.fits',hdr=hdr, ask=False)
 
                         #get improved clim for plotting
-                        with warnings.catch_warnings():
-                            warnings.simplefilter('ignore', RuntimeWarning)
-                            cMax = np.nanmax(fwhmMap[fwhmMap < 0.9*np.nanmax(fwhmMap)])
+                        #with warnings.catch_warnings():
+                        #    warnings.simplefilter('ignore', RuntimeWarning)
+                        #    cMax = np.nanmax(fwhmMap[fwhmMap < 0.9*np.nanmax(fwhmMap)])
                     
                         fig = plt.figure()
-                        plt.imshow(fwhmMap, aspect='auto', cmap='jet', clim=[0, cMax], origin='lower')
+                        interval = ZScaleInterval()
+                        lims = interval.get_limits(fwhmMap)
+                        #plt.imshow(fwhmMap, aspect='auto', cmap='jet', clim=[0, cMax], origin='lower')
+                        plt.imshow(fwhmMap, aspect='auto', cmap='jet', clim=lims, origin='lower')
                         plt.colorbar()
                         plt.title('Median FWHM is '+'{:3.1f}'.format(fwhmMed) +', min wave is '+'{:6.1f}'.format(waveMin)+', max wave is '+'{:6.1f}'.format(waveMax))
+                        plt.tight_layout()
                         plt.savefig('quality_control/'+waveFolder+'_wave_fwhm_map.png', dpi=300)
                         plt.close()
                                             
