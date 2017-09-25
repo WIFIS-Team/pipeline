@@ -10,142 +10,648 @@ Produces:
 
 
 """
-
-import numpy as np
-import time
-import matplotlib.pyplot as plt
-import wifisGetSatInfo as satInfo
-import wifisNLCor as NLCor
-import wifisRefCor as refCor
-import os
-import wifisIO 
-import wifisCombineData as combData
-import wifisSpatialCor as spatialCor
+import matplotlib
+matplotlib.use('gtkagg')
+import wifisIO
 import wifisSlices as slices
+import wifisSpatialCor as spatialCor
+import matplotlib.pyplot as plt
+import numpy as np
+import wifisBadPixels as badPixels
+import wifisCreateCube as createCube
+from matplotlib.backends.backend_pdf import PdfPages
+import os
+import wifisProcessRamp as processRamp
+import colorama
+import wifisUncertainties
+import wifisHeaders as headers
+import wifisCalFlatFunc as calFlat
+import time
+import warnings
+from astropy.visualization import ZScaleInterval
+import wifisBadPixels as badPixels
 
+#*****************************************************************************
+#support function
+
+def fixSatPixelsAll(allSlices):
+    for j in range(len(allSlices)):
+        sliceImg = allSlices[j]
+        x = np.arange(sliceImg.shape[0])
+        sliceOut = sliceImg[:]
+    
+        for i in range(sliceImg.shape[1]):
+            xGood = np.where(np.isfinite(sliceImg[:,i]))[0]
+            xBad = np.where(~np.isfinite(sliceImg[:,i]))[0]
+            yInt = sliceImg[:,i]
+            ytmp = yInt[xGood]
+            yInt[xBad] = np.interp(xBad,xGood, ytmp, left=np.nan, right=np.nan)
+            sliceOut[:,i] = yInt
+        allSlices[j] = sliceOut
+        
+    return allSlices
+#*****************************************************************************
+#main script starts here
+
+colorama.init()
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
-os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target
+os.environ['PYOPENCL_CTX'] = '2' # Used to specify which OpenCL device to target
 
 #*****************************************************************************
 #************************** Required input ***********************************
-ronchifoldername = 'test1'
-zpntfoldername = 'test1'
-nlFile = 'processed/master_detLin_NLCoeff.fits'        
-satFile = 'processed/master_detLin_satCounts.fits'
-bpmFile = 'processed/bad_pixel_mask.fits'
-limitsFile = ''
+ronchiFile = 'ronchi.lst' #expected to be a single entry
+ronchiFlatFile = 'ronchiFlat.lst' #expected to be a single entry
+
+zpntFlatFile = 'zpntFlat.lst' #expected to be a single entry
+zpntLstFile = 'zpntObs.lst'
+
+zpntSkyFile = 'zpntSky.lst'
+
+darkFile = ''
+
+rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
+satFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_satCounts.fits'
+nlFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_NLCoeff.fits' 
+bpmFile = '/data/pipeline/external_data/bpm.fits'
+
+hband = False
+
+#flat field specific options
+flatWinRng = 51
+flatImgSmth = 5
+flatPolyFitDegree=2
+flatBpmCorRng=20 #specifies the maximum separation of pixel search to use during bad pixel correction
+
+#optional flat field correction to better match cal flats to dome flats
+flatCorFile = 'processed/flat_correction_slices.fits'
+flatCor = True
+
+#zero-point tracing parameters
+zpntNbin=1
+zpntBright=True
+zpntSmooth=10
+zpntWinRng=61
+zpntMxChange=5
+obsBpmCorRng = 1
+zpntFlatCutOff = 0.2
+
+#ronchi tracing parameters
+ronchiNbin=1
+ronchiWinRng=7
+ronchiMxWidth=3
+ronchiSmth=20
+ronchiBright=False
+ronchiPolyOrder=2
+ronchiSigmaClipRounds=2
+
+#spatial grid parameters
+spatTrim = 0.5
+
+#parameters used for processing of ramps
+nChannel=32 #specifies the number of channels used during readout of detector
+nRowsAvg=4 # specifies the number of rows of reference pixels to use to correct for row bias (+/- nRowsAvg)
+rowSplit=1 # specifies how many processing steps to use during reference row correction. Must be integer multiple of number of frames. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
+nlSplit=32 #specifies how many processing steps to use during non-linearity correction. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
+satSplit=32 #specifies how many processing steps to use during identification of first saturated frame. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
+combSplit=32 #specifies how many processing steps to use during creation of ramp image. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
+gain =1.
+ron = 1.
+dispAxis=0
+
+obsCoords = [-111.600444444,31.9629166667,2071]
 #*****************************************************************************
 #*****************************************************************************
 
-savename = '/processed/'+filename
+logfile = open('wifis_reduction_log.txt','a')
+logfile.write('********************\n')
+logfile.write(time.strftime("%c")+'\n')
+logfile.write('Processing flatfield files with WIFIS pyPline\n')
+logfile.write('Root folder containing raw data: ' + str(rootFolder)+'\n')
 
-t0 = time.time()
+#first calibrate ronchi flat
+#second calibrate zpnt flat, if exists
+#then calibrate zero-point, if exists
+#lastly, calibrate ronchi
 
-if(os.path.exists(savename+'_distCal.fits') and (os.path.exists(savename+'_distMap.fits')) and (os.path.exists(savename+'_ronchiTraces.fits'))):
-    cont = wifisIO.userInput('Processed ronchi calibration files already exist for ' +foldername+', do you want to continue processing (y/n)?')
-    if (cont.lower() == 'y'):
-        contProc = True
-    else:
-        contProc = False
+#create processed directory, in case it doesn't exist
+wifisIO.createDir('processed')
+wifisIO.createDir('quality_control')
+
+#open calibration files
+if os.path.exists(nlFile):
+    nlCoef = wifisIO.readImgsFromFile(nlFile)[0]
+    logfile.write('Using non-linearity corrections from file:\n')
+    logfile.write(nlFile+'\n')
 else:
-    contProc = True
+    nlCoef =None 
+    print(colorama.Fore.RED+'*** WARNING: No non-linearity coefficient array provided, corrections will be skipped ***'+colorama.Style.RESET_ALL)
+    logfile.write('*** WARNING: No non-linearity corrections file provided or file ' + str(nlFile) +' does not exist ***\n')
     
-if (contProc):
+if os.path.exists(satFile):
+    satCounts = wifisIO.readImgsFromFile(satFile)[0]
+    logfile.write('Using saturation limits from file:\n')
+    logfile.write(satFile+'\n')
 
-    #Read in data
-    ta = time.time()
-    data, inttime, hdr = wifisIO.readRampFromFolder(foldername)
-    print("time to read all files took", time.time()-ta, " seconds")
+else:
+    satCounts = None
+    print(colorama.Fore.RED+'*** WARNING: No saturation counts array provided and will not be taken into account ***'+colorama.Style.RESET_ALL)
 
-    nFrames = inttime.shape[0]
-    nx = data.shape[1]
-    ny = data.shape[0]
-    #******************************************************************************
+    logfile.write('*** WARNING: No saturation counts file provided or file ' + str(satFile) +' does not exist ***\n')
 
-    #Correct data for reference pixels
-    ta = time.time()
-    print("Subtracting reference pixel channel bias")
-    refCor.channelCL(data, 32)
-    print("Subtracting reference pixel row bias")
-    refCor.rowCL(data, 4,5)
-    print("time to apply reference pixel corrections ", time.time()-ta, " seconds")
-    #******************************************************************************
+if (os.path.exists(bpmFile)):
+    BPM = wifisIO.readImgsFromFile(bpmFile)[0]
+else:
+    BPM = None
 
-    #find if any pixels are saturated to avoid use in future calculations
-    satCounts = wifisIO.readImgsFromFile(satFile)
-    satFrame = satInfo.getSatFrameCL(data, satCounts,32)
-    #******************************************************************************
+satCounts = wifisIO.readImgsFromFile(satFile)[0]
+nlCoeff = wifisIO.readImgsFromFile(nlFile)[0]
 
-    #apply non-linearity correction
-    ta = time.time()
-    print("Correcting for non-linearity")
+#deal with darks
+if darkFile is not None and os.path.exists(darkFile):
+    dark, darkSig, darkSat = wifisIO.readImgsFromFile(darkFile)[0]
+    darkLst = [dark, darkSig]
+else:
+    print(colorama.Fore.RED+'*** WARNING: No dark image provided, or file does not exist ***'+colorama.Style.RESET_ALL)
+    
+    if logfile is not None:
+        logfile.write('*** WARNING: No dark image provide, or file ' + str(darkFile)+' does not exist ***\n')
+    darkLst = [None,None]
+    
+#first check if BPM is provided
+if os.path.exists(bpmFile):
+    BPM = wifisIO.readImgsFromFile(bpmFile)[0]
+    BPM = BPM.astype(bool)
+else:
+    BPM = None
+    
+if os.path.exists(ronchiFlatFile):
+    ronchiFlatFolder = wifisIO.readAsciiList(ronchiFlatFile).tostring() 
+else:
+    logfile.write('*** FAILURE: No provided flat field field input list associated with Ronchi data\n ***')
+    raise Warning('No provided flat field field input list associated with Ronchi data  ***')
 
-    #find NL coefficient file
-    nlCoeff = wifisIO.readImgsFromFile(nlFile)
-    NLCor.applyNLCorCL(data, nlCoeff, 32)
-    print("time to apply non-linearity corrections ", time.time()-ta, " seconds")
+if os.path.exists(ronchiFile):
+    ronchiFolder = wifisIO.readAsciiList(ronchiFile).tostring()
+else:
+    print(colorama.Fore.RED+'*** WARNING: No Ronchi input list provided. Skipping processing of Ronchi data ***'+colorama.Style.RESET_ALL)
 
-    #******************************************************************************
+    logfile.write('*** WARNING: No Ronci input list provided. Skipping processing of Ronchi data\n ***')
+    ronchiFolder = None
 
-    #Combine data into single image
-    fluxImg = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
-    #sigmaImg = wifisUncertainties.getUTR(inttime, fluxImg, satFrame)
-    data = 0
+if os.path.exists(zpntFlatFile):
+    zpntFlatFolder = wifisIO.readAsciiList(zpntFlatFile).tostring()
+else:
+    print(colorama.Fore.RED+'*** WARNING: No provided flat field field input list associated with zero-point offset data. Skipping processing of zero-point offset data ***'+colorama.Style.RESET_ALL)
+    logfile.write('*** WARNING: No provided flat field field input list associated with zero-point offset data. Skipping processing of zero-point offset data\n ***')
+    zpntFlatFolder = None
 
-    #******************************************************************************
-    #Correct for dark current
-    #Identify appropriate dark image for subtraction
-    iTime = inttime[-1]-inttime[0]
-    darkName = 'processed/master_dark_I'+str(iTime)+'.fits'
-    if (os.path.exists(darkName)):
-        darkImg,darkSig = wifisIO.readImgsFromFile(darkName)[0][0,1] #get the first two extensions
-        fluxImg -= darkImg
-        #sigmaImg = np.sqrt(sigmaImg**2 + darkSig**2)
+if os.path.exists(zpntLstFile):
+    zpntLst = wifisIO.readAsciiList(zpntLstFile)
+    if zpntLst.ndim==0:
+        zpntLst = np.asarray([zpntLst])
+else:
+    print(colorama.Fore.RED+'*** WARNING: No zero-point input list provided. Skipping processing of zero-point data ***'+colorama.Style.RESET_ALL)
+
+    logfile.write('*** WARNING: No zero-point input list provided. Skipping processing of zero-point data\n ***')
+    zpntLst = None
+
+if zpntSkyFile is not None and os.path.exists(zpntSkyFile):
+    zpntSkyLst = wifisIO.readAsciiList(zpntSkyFile)
+    if zpntSkyLst.ndim==0:
+        zpntSkyLst = np.asarray([zpntSkyLst])
+else:
+    print(colorama.Fore.RED+'*** WARNING: No sky frames associated with zero-point observations provided. Skipping sky subtraction ***'+colorama.Style.RESET_ALL)
+
+    logfile.write('*** WARNING: No sky frames associated with zero-point observations provided. Skipping sky subtraction ***\n')
+    zpntSkyLst = None
+
+#******************************************************************************************************
+#******************************************************************************************************
+#check if processed flat field already exists for Ronchi, if not process the flat
+
+if not os.path.exists('processed/'+ronchiFlatFolder+'_flat_limits.fits') or not os.path.exists('processed/'+ronchiFlatFolder+'_flat_slices_norm.fits'):
+    print('Processed flat field data does not exist for folder ' +ronchiFlatFolder +', processing flat folder')
+    calFlat.runCalFlat(np.asarray([ronchiFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=rowSplit,nlSplit=nlSplit, combSplit=combSplit,bpmCorRng=flatBpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile,satSplit=satSplit)
+
+#******************************************************************************************************
+#******************************************************************************************************
+#check if processed flat field already exists for zero-point data, if not process the flat folder
+
+if zpntFlatFolder is not None:
+    if not os.path.exists('processed/'+zpntFlatFolder+'_flat_limits.fits') and not os.path.exists('processed/'+zpntFlatFolder+'_flat_slices_norm.fits'):
+        print('Flat limits do not exist for folder ' +zpntFlatFolder +', processing flat folder')
+        calFlat.runCalFlat(np.asarray([zpntFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=rowSplit,nlSplit=nlSplit, combSplit=combSplit,bpmCorRng=flatBpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile, flatCutOff=zpntFlatCutOff,distMapLimitsFile='processed/'+ronchiFlatFolder+'_flat_limits.fits')
+
+#******************************************************************************************************
+#******************************************************************************************************
+#now process the zero-point data. If it is a list, then co-add all ramp images
+if zpntLst is not None:
+    if os.path.exists('processed/'+zpntLst[0]+'_zpnt_obs_comb.fits'):
+        cont = wifisIO.userInput('Combined zero-point offset observation already exists, do you want to reprocess (y/n)?')
+        if not cont.lower() == 'y':
+            print('Reading combined zero-point data from file '+'processed/'+zpntLst[0]+'_zpnt_obs_comb.fits')
+            logfile.write('Reading combined zero-point data from file'+'processed/'+zpntLst[0]+'_zpnt_obs_comb.fits\n')
+            zpntComb = wifisIO.readImgsFromFile('processed/'+zpntLst[0]+'_zpnt_obs_comb.fits')[0]
     else:
-        cont = wifisIO.userInput('No corresponding master dark image could be found, do you want to proceed without dark subtraction (y/n)?')
-        if (cont.lower() == 'n'):
-            exit()
+        cont='y'
 
-    #******************************************************************************    
-    #write image to a file
+    if cont.lower()=='y':
+        obsAll = []
 
-    wifisIO.writeFits([fluxImg, satFrame], savename+'_spatCal.fits')
+        print('Processing and combining all zero-point observations')
+        logfile.write('Processing and combinging all zero-point observations\n')
+
+        for i in range(len(zpntLst)):
+            zpntFolder = zpntLst[i]
+                
+            if not os.path.exists('processed/'+zpntFolder+'_zpnt_obs.fits'):
+                print('Processing ' + zpntFolder)
+                logfile.write('Processing '+ zpntFolder+'\n')
+                
+                zpntObs, zpntSigma, zptnSatFrame, zpntHdr = processRamp.auto(zpntFolder, rootFolder,'processed/'+zpntFolder+'_zpnt_obs.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=False, bpmCorRng=obsBpmCorRng,nlFile=nlFile,satFile=satFile,bpmFile='', gain=gain, ron=ron,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,saveAll=True, rampNum=None, avgAll=True)
+                
+            else:
+                print('Processed data already exists for ' + zpntFolder + '. Reading data instead')
+                logfile.write('Processed data already exists for ' + zpntFolder + '. Reading data instead\n')
+
+                zpntObsLst, zpntHdr = wifisIO.readImgsFromFile('processed/'+zpntFolder+'_zpnt_obs.fits')
+                zpntObs = zpntObsLst[0]
+                zpntHdr = zpntHdr[0]
+                
+            #carry out sky subtraction
+            if zpntSkyLst is not None:
+                skyFolder = zpntSkyLst[i]
         
-    #******************************************************************************
+                if not os.path.exists('processed/'+skyFolder+'_sky.fits'):
+                    print('Processing sky folder '+skyFolder)
+                    logfile.write('\nProcessing sky folder ' + skyFolder+'\n')
 
-    #read in limits file
-    limits = wifisIO.readImgsFromFile(limitsFile)[0]
+                    sky, skySigmaImg, skySatFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=False, bpmCorRng=obsBpmCorRng, rampNum=None,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=ron,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True)
+                else:
+                    print('Reading sky data from ' + skyFolder)
+                    logfile.write('Reading processed sky image from:\n')
+                    logfile.write('processed/'+skyFolder+'_sky.fits\n')
+                        
+                    skyDataLst,skyHdr = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky.fits')
+                    sky = skyDataLst[0]
+                    skySigmaImg = skyDataLst[1]
+                    skySatFrame = skyDataLst[2]
+                    skyHdr = skyHdr[0]
+                    del skyDataLst
+            
+                print('Subtracting sky from obs')
+                logfile.write('Subtracting sky flux from zero-point image flux\n')
+                zpntObs -= sky
+                zpntHdr.add_history('Subtracted sky flux image using:')
+                zpntHdr.add_history(skyFolder)
+            
+            obsAll.append(zpntObs)
+                
+        print('Co-adding all zero-point data into a single image')
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', RuntimeWarning)
+            zpntComb = np.sum(np.asarray(obsAll),axis=0)
+
+        wifisIO.writeFits(zpntComb,'processed/'+zpntLst[0]+'_zpnt_obs_comb.fits', ask=False)
+
+    #now trace the data 
+    if os.path.exists('processed/'+zpntLst[0]+'_zpnt_traces.fits'):
+        cont = wifisIO.userInput('Zero-point traces already exist, do you want to re-trace (y/n)?')
+        if not cont.lower() == 'y':
+            zpntTraces = wifisIO.readImgExtFromFile('processed/'+zpntLst[0]+'_zpnt_traces.fits')[0]
+    else:
+        cont='y'
+
+    if cont.lower()=='y':
+        if zpntFlatFolder is not None:
+                print('Reading slice limits')
+                logfile.write('Reading slice limits from file:\n')
+                logfile.write('processed/'+zpntFlatFolder+'_flat_limits.fits\n')
+        else:
+            print(colorama.Fore.RED+'*** WARNING: No flat field associated with zero-point observations. Using Ronchi flat instead ***'+colorama.Style.RESET_ALL)
+            logfile.write('*** WARNING: No flat field associated with zero-point observations. Using Ronchi flat instead ***\n')
+            logfile.write('Reading slice limits from file:\n')
+            logfile.write('processed/'+ronchiFlatFolder+'_flat_limits.fits\n')
+            zpntFlatFolder = ronchiFlatFolder
+            
+        limits, limitsHdr = wifisIO.readImgsFromFile('processed/'+zpntFlatFolder+'_flat_limits.fits')
+        shft = limitsHdr['LIMSHIFT']
+
+        print('Reading flat field response function')
+        logfile.write('Reading flat field response function from file:\n')
+        logfile.write('processed/'+zpntFlatFolder+'_flat_slices_norm.fits\n')
+                
+        flatNormLst = wifisIO.readImgsFromFile('processed/'+zpntFlatFolder+'_flat_slices_norm.fits')[0]
+        flatNorm = flatNormLst[:18]
+        flatSigma = flatNormLst[18:36]
+                
+        if flatCor:
+            if os.path.exists(flatCorFile):
+                print('Correcting flat field response function')
+                logfile.write('Correcting flat field response function using file:\n')
+                logfile.write(flatCorFile+'\n')
+        
+                flatCorSlices = wifisIO.readImgsFromFile(flatCorFile)[0]
+                flatNorm = slices.ffCorrectAll(flatNorm, flatCorSlices)
+
+                if len(flatCorSlices)>18:
+                    logfile.write('*** WARNING: Response correction does not include uncertainties ***\n')
+                    flatSigma = wifisUncertainties.multiplySlices(flatNorm,flatSigma,flatCorSlices[:18],flatCorSlices[18:36])
+                else:
+                    print(colorama.Fore.RED+'*** WARNING: Flat field correction file does not exist, skipping ***'+colorama.Style.RESET_ALL)
+                    logfile.write('*** WARNING: Flat field correction file does not exist, skipping ***\n')
+                        
+        #extract slices
+        print('Extracting slices')
+        logfile.write('Extracting slices\n')
+        zpntSlices = slices.extSlices(zpntComb[4:-4,4:-4], limits, shft=shft, dispAxis=dispAxis)
+        wifisIO.writeFits(zpntSlices, 'processed/'+zpntLst[0]+'_zpnt_obs_comb_slices.fits',ask=False)
+
+        #correct remaining bad pixels using linear interpolation across the spatial axis
+        zpntSlices = fixSatPixelsAll(zpntSlices)
+        
+        #apply flat field
+        print('Applying flat field corrections')
+        logfile.write('Applying flat field corrections\n')
+        zpntFlat = slices.ffCorrectAll(zpntSlices, flatNorm)
+            
+        #now find traces
+        print('Tracing zero-point offset slices')
+        logfile.write('Tracing zero-point offset slices\n')
+        #zpntTrace = spatialCor.traceWireFrameSlice([zpntFlat[0], 1,61,False,3,True,120,None, 10])
+        
+        zpntTraces = spatialCor.traceWireFrameAll(zpntFlat, nbin=zpntNbin, bright=zpntBright, MP=True, plot=False, smooth=zpntSmooth, winRng=zpntWinRng,mxChange=zpntMxChange)
+
+        #optional section to address problematic slices
+        #print('Fixing problematic traces')
+        #zpntTraces[7] = spatialCor.traceWireFrameSlice([zpntSlices[7], 1,31,False,50,True,1,None])
+        #zpntTraces[17] = spatialCor.traceWireFrameSlice([zpntFlat[17], 1,120,False,50,True,120,None, 10])
+                
+        #now carry out polynomial fitting to further smooth the fits
+        polyFitLst = []
+
+        if hband:
+            #change the code here reflect limited range with hband data
+            pass
+        else:
+            xfit = np.arange(2040)
+
+        x = np.arange(zpntSlices[0].shape[1])
+        print('plotting results')
+        with PdfPages('quality_control/'+zpntLst[0]+'_zpnt_traces.pdf') as pdf:
+            for i in range(len(zpntSlices)):
+                
+                #if i==17:
+                #    xfit = np.arange(1100)
+                #    pord=3
+                #else:
+                xfit = np.where(np.isfinite(zpntTraces[i]))[0]
+                pord=3
+                    
+                fig=plt.figure()
+                interval = ZScaleInterval()
+                lims=interval.get_limits(zpntFlat[i])
+                plt.imshow(zpntFlat[i], aspect='auto', interpolation='nearest',cmap='jet', clim=lims, origin='lower')
+                plt.colorbar()
+                plt.plot(x,zpntTraces[i], 'k', linewidth=2)
+
+                #carry out a single iteration of sigma-clipping
+                pcof = np.polyfit(xfit, zpntTraces[i][xfit],pord)
+                poly = np.poly1d(pcof)
+                res = (zpntTraces[i]-poly(x))
+                med = np.nanmedian(res)
+                std = np.nanstd(res)
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore',RuntimeWarning)
+                    xfit = x[np.where(np.abs(res+med)<2.*std)]
+                pcof = np.polyfit(xfit, zpntTraces[i][xfit],3)
+                poly = np.poly1d(pcof)
+         
+                plt.plot(x,poly(x), 'r--')
+                polyFitLst.append(np.clip(poly(x),0,zpntFlat[i].shape[0]-1))
+                plt.title('Slice ' + str(i))
+                plt.tight_layout()
+
+                pdf.savefig(dpi=300)
+                plt.close()
+
+        wifisIO.writeFits(polyFitLst, 'processed/'+zpntLst[0]+'_zpnt_traces.fits',ask=False)
+        zpntTraces = polyFitLst
+    else:
+        zpntTraces = wifisIO.readImgExtFromFile('processed/'+zpntLst[0]+'_zpnt_traces.fits')[0]
+else:
+    zpntTraces = None
+
+#******************************************************************************************************
+#******************************************************************************************************
+#now deal with the Ronchi data
+
+#process Ronchi data first
+
+if ronchiFolder is not None:
+    if not os.path.exists('processed/'+ronchiFolder+'_ronchi.fits'):
+        ronchi, sigmaImg, satFrame, ronchiHdr = processRamp.auto(ronchiFolder, rootFolder,'processed/'+ronchiFolder+'_ronchi.fits', satCounts, nlCoeff, BPM,nChannel=nChannel, rowSplit=rowSplit, satSplit=satSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=False, bpmCorRng=flatBpmCorRng, saveAll=True)
+    else:
+        ronchiLst, ronchiHdr = wifisIO.readImgsFromFile('processed/'+ronchiFolder+'_ronchi.fits')
+        ronchi = ronchiLst[0]
+        ronchiHdr = ronchiHdr[0]
+
+    if os.path.exists('processed/'+ronchiFolder+'_ronchi_traces.fits'):
+        cont = wifisIO.userInput('Ronchi traces already exist, do you want to retrace (y/n)?')
+
+        if not cont.lower() =='y':
+            ronchiTraces = wifisIO.readImgsFromFile('processed/'+ronchiFolder+'_ronchi_traces.fits')[0]
+            ronchiSlices = wifisIO.readImgsFromFile('processed/'+ronchiFolder+'_ronchi_slices.fits')[0]
+    else:
+        cont='y'
+        
+    if cont.lower() == 'y':
+        print('Reading slice limits')
+        logfile.write('Reading slice limits from file:\n')
+        logfile.write('processed/'+ronchiFlatFolder+'_flat_limits.fits\n')
+
+        limits, limitsHdr = wifisIO.readImgsFromFile('processed/'+ronchiFlatFolder+'_flat_limits.fits')
+        shft = limitsHdr['LIMSHIFT']
+
+        print('Reading flat field response function')
+        logfile.write('Reading flat field response function from file:\n')
+        logfile.write('processed/'+ronchiFlatFolder+'_flat_slices_norm.fits\n')
+
+        flatSlicesLst = wifisIO.readImgsFromFile('processed/'+ronchiFlatFolder+'_flat_slices.fits')[0]
+        flatNormLst = wifisIO.readImgsFromFile('processed/'+ronchiFlatFolder+'_flat_slices_norm.fits')[0]
+        flatSlices = flatSlicesLst[:18]
+        flatNorm = flatNormLst[:18]
+
+        if flatCor:
+            if os.path.exists(flatCorFile):
+                print('Correcting flat field response function')
+                logfile.write('Correcting flat field response function using file:\n')
+                logfile.write(flatCorFile+'\n')
+                
+                flatCorSlices = wifisIO.readImgsFromFile(flatCorFile)[0]
+                flatNorm = slices.ffCorrectAll(flatNorm, flatCorSlices)
+
+        #extract ronchi slices
+        ronchiSlices = slices.extSlices(ronchi[4:-4,4:-4], limits, dispAxis=dispAxis)
+        wifisIO.writeFits(ronchiSlices, 'processed/'+ronchiFolder+'_ronchi_slices.fits',hdr=ronchiHdr, ask=False)
+
+        #apply flat field correction
+        ronchiFlat = slices.ffCorrectAll(ronchiSlices, flatNorm)
+
+        print('Getting Ronchi traces')
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore',RuntimeWarning)
+            ronchiTraces, ronchiWidths = spatialCor.traceRonchiAll(ronchiFlat, nbin=ronchiNbin, winRng=ronchiWinRng, mxWidth=ronchiMxWidth,smth=ronchiSmth, bright=ronchiBright, flatSlices=ronchiFlat, MP=True)
+        wifisIO.writeFits(ronchiTraces,'processed/'+ronchiFolder+'_ronchi_traces.fits',hdr=ronchiHdr,ask=False)
+        #if needed, address problematic fits here
+        
+    else:
+        ronchiTraces = wifisIO.readImgsFromFile('processed/'+ronchiFolder+'_ronchi_traces.fits')[0]
+        ronchiSlices = wifisIO.readImgsFromFile('processed/'+ronchiFolder+'_ronchi_slices.fits')[0]
+
+    if os.path.exists('processed/'+ronchiFolder+'_ronchi_poly_traces.fits'):
+        cont = wifisIO.userInput('Ronchi polynomial traces already exist, do you want to retrace (y/n)?')
+        if not cont.lower() == 'y':
+            print('Reading polynomial traces from file '+'processed/'+ronchiFolder+'_ronchi_poly_traces.fits')
+            logfile.write('Reading polynomial traces from file '+'processed/'+ronchiFolder+'_ronchi_poly_traces.fits\n')
+            ronchiPolyTraces = wifisIO.readImgsFromFile('processed/'+ronchiFolder+'_ronchi_poly_traces.fits')[0]
+    else:
+        cont = 'y'
+
+    if cont.lower()=='y':
+        print('Getting polynomial fits to traces')
+        #get polynomial fits
+        ronchiPolyTraces = []
+        with PdfPages('quality_control/'+ronchiFolder+'_ronchi_traces.pdf') as pdf:
+            interval = ZScaleInterval()
+        
+            for i in range(len(ronchiSlices)):
+                trace = ronchiTraces[i]
+
+                #add specific details to deal with bad traces
+                #for august
+                if i==17:
+                    goodReg = []
+                    for j in range(11):
+                        goodReg.append([0,2040])
+                    goodReg.append([0,1400])
+                else:
+                    goodReg = [[0,2040]]
+                
+                #for july
+                #if i==13:
+                #    goodReg=[[0,1600]]
+                #elif i==15:
+                #    goodReg=[[0,2040],[0,2040],[0,2040],[0,2040],[0,750]]
+                #    for j in range(0,11):
+                #        goodReg.append([0,2040])
+                #elif i ==17:
+                #    goodReg= []
+                #    for j in range(10):
+                #        goodReg.append([0,2040])
+                #    for j in range(3):
+                #        goodReg.append([0,1500])
+                #else:
+                #    goodReg=[[0,2040]]
+
+                polyTrace = spatialCor.polyFitRonchiTrace(trace, goodReg, order=ronchiPolyOrder, sigmaClipRounds=ronchiSigmaClipRounds)
+
+                #more details to deal with bad/extra traces
+                #for july
+                #if i==0:
+                #     polyTrace = polyTrace[2:,:]
+                #elif i==1:
+                #    polyTrace=polyTrace[1:,:]
+                #elif i==5:
+                #    polyTrace=polyTrace[:-1,:]
+                #elif i==8:
+                #    polyTrace=polyTrace[:-1,:]
+                #elif i ==14:
+                #    polyTrace = polyTrace[1:-1,:]
+                #elif i==15:
+                #    polyTrace[4,:] = np.nan
+                #    polyTrace = polyTrace[:-1,:]
+                #elif i==16:
+                #    polyTrace=polyTrace[:-2,:]
+                #    
+                #elif i==17:
+                #    polyTrace[np.logical_or(polyTrace<0, polyTrace>=ronchiSlices[17].shape[0])] = np.nan
+                #polyTrace = polyTrace[1:11]
+
+                #for august
+                if i==0 or i==2 or i==14 or i==16:
+                    polyTrace = polyTrace[1:-1,:]
+                elif i==1 or i==3 or i==4 or i==6 or i==7 or i==8 or i==9 or i==10 or i==11 or i==12:
+                    polyTrace = polyTrace[:-1,:]
+                elif i==13:
+                    polyTrace[13,:] = np.nan
+                    polyTrace = polyTrace[:-1]
+                elif i==15:
+                    polyTrace[10,:] = np.nan
+                elif i==17:
+                    polyTrace[np.logical_or(polyTrace<0, polyTrace>=ronchiSlices[17].shape[0])] = np.nan
+                    polyTrace = polyTrace[1::,:]
+                    
+                    
+                ronchiPolyTraces.append(polyTrace)
+                                    
+                plt.ioff()
+                fig = plt.figure()
+                lims = interval.get_limits(ronchiSlices[i])
+                plt.imshow(ronchiSlices[i], aspect='auto', origin='lower', cmap='jet', clim=lims)#clim=[0,np.nanmedian(ronchiSlices[i])*1.5])
+                plt.colorbar()
+                plt.title('slice number ' + str(i)+', # of dips: ' + str(len(trace)))
+                for j in range(trace.shape[0]):
+                    plt.plot(np.arange(trace.shape[1]),trace[j,:],'k', linewidth=2)
+                for j in range(polyTrace.shape[0]):
+                    plt.plot(np.arange(polyTrace.shape[1]), polyTrace[j,:],'r--', linewidth=1)
+                plt.tight_layout()
+                pdf.savefig(dpi=300)
+                plt.close(fig)
+
+        print('Saving Ronchi trace results')
+        wifisIO.writeFits(ronchiPolyTraces, 'processed/'+ronchiFolder+'_ronchi_poly_traces.fits', ask=False)
+
+if os.path.exists('processed/'+ronchiFolder+'_ronchi_distMap.fits') and os.path.exists('processed/'+ronchiFolder+'_ronchi_spatGridProps.dat'):
+    cont = wifisIO.userInput('Distortion map files already exist, do you want to continue (y/n)')
+else:
+    cont ='y'
+
+if cont.lower()=='y':
+    if ronchiTraces is not None:
+        print('Distortion correcting distortion map to get spatial limits')
+        #get full distortion maps
+
+        if zpntTraces is None:
+            print(colorama.Fore.RED+'*** WARNING: No zero-point offset traces used to determine distortion map ***'+colorama.Style.RESET_ALL)
+            logfile.write('*** WARNING: No zero-point offset traces used to determine distortion map ***\n')
     
-    #extract ronchi slices
-    ronchiSlices = slices.extSlices(fluxImg, limits, dispAxis=0)
+        distMap = spatialCor.extendTraceAll2(ronchiPolyTraces, ronchiSlices, zpntTraces,order=3, MP=True, method='linear')
+
+        #write maps
+        wifisIO.writeFits(distMap, 'processed/'+ronchiFolder+'_ronchi_distMap.fits', ask=False)
+        #distortion correct the flat field
+        flatSlices = wifisIO.readImgsFromFile('processed/'+ronchiFlatFolder+'_flat_slices.fits')[0][:18]
+        flatCor = createCube.distCorAll(flatSlices, distMap)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore',RuntimeWarning)
+            trimLims = slices.getTrimLimsAll(flatCor, spatTrim)
+        distCor = createCube.distCorAll(distMap, distMap)
+        distTrim = slices.trimSliceAll(distCor, trimLims)
+        spatGridProps = createCube.compSpatGrid(distTrim)
     
-    #Now trace Ronchi masks
-    #traces, widths = spatialCor.traceRonchiAll(ronchiSlices, nbin=2, winRng=5, mxWidth=2,smth=10, bright=False)
+        print('saving results')
+        #write results
+        wifisIO.writeTable(spatGridProps, 'processed/'+ronchiFolder+'_ronchi_spatGridProps.dat')
+        
+        with PdfPages('quality_control/'+ronchiFolder+'_ronchi_distMap.pdf') as pdf:
+            for i in range(len(distMap)):
+                fig=plt.figure()
+                interval = ZScaleInterval()
+                plt.imshow(distMap[i], aspect='auto', interpolation='nearest',cmap='jet', origin='lower')
+                plt.colorbar()
+                plt.title('Slice ' + str(i))
+                plt.tight_layout()
 
-    #build fake ronchi mask for now
-    
-    
-    #check if solution already exists.
-    if(os.path.exists(savename+'_waveFitResults.pkl') and (os.path.exists(savename+'_waveMap.fits'))):
-        cont = wifisIO.userInput('Dispersion solution and wavemap already exists for ' +foldername+', do you want to continue and replace (y/n)?')
-        if (cont.lower() == 'n'):
-            exit()
-
-    #first extract the slices
-    limits = wifisIO.readImgsFromFile(limitsFile)
-    waveSlices = slices.extSlices(fluxImg, limits, dispAxis=0)
-    
-    result = waveSol.getWaveSol(waveSlices, template, atlasname, 3, prevSol, winRng=9, mxCcor=30, weights=False, buildSol=False, sigmaClip=2, allowLower=True, lngthConstraint=True)
-
-    dispSolLst = result[0]
-    #Save all results
-    wifisIO.writePickle(savename+'_waveFitResults.pkl', results)
-
-    #Create wavemap
-    waveMapLst = waveSol.buildWaveMap(dispSolLst, waveSlices[0].shape[1])
-
-    #save wavemap solution
-    wifisIO.writeFits(waveMapLst, savename+'_waveMap.fits')
-
-print ("Total time to run entire script: ",time.time()-t0)
-
+                pdf.savefig(dpi=300)
+                plt.close()
