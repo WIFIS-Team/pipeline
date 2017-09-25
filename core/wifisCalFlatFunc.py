@@ -28,6 +28,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 import warnings
 from astropy import time as astrotime, coordinates as coord, units
 import colorama
+from astropy.visualization import ZScaleInterval
 
 def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowsAvg=0,rowSplit=1,nlSplit=32, combSplit=32,bpmCorRng=100, crReject=False, skipObsinfo=False,winRng=51, polyFitDegree=3, imgSmth=5,nlFile='',bpmFile='', satFile='',darkFile='',flatCutOff=0.1,flatSmooth=0, logfile=None, gain=1., ron=1., dispAxis=0,limSmth=20, ask=True, obsCoords=None,satSplit=32):
     
@@ -221,14 +222,17 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                     pdfName = 'quality_control/'+folder+'_flat_slices_traces.pdf'
                     with PdfPages(pdfName) as pdf:
                         fig = plt.figure()
-                        med1= np.nanmedian(flatImg)
-                            
-                        plt.imshow(flatImg[4:-4,4:-4], aspect='auto', cmap='jet', clim=[0,2.*med1], origin='lower')
+                        #med1= np.nanmedian(flatImg)
+                        interval = ZScaleInterval()
+                        lims = interval.get_limits(flatImg[4:-4,4:-4])
+                        #plt.imshow(flatImg[4:-4,4:-4], aspect='auto', cmap='jet', clim=[0,2.*med1], origin='lower')
+                        plt.imshow(flatImg[4:-4,4:-4], aspect='auto', cmap='jet', clim=lims, origin='lower')
                         plt.xlim=(0,2040)
                         plt.colorbar()
                         for l in range(limits.shape[0]):
                             plt.plot(limits[l], np.arange(limits.shape[1]),'k', linewidth=1) #drawn limits
                             plt.plot(np.clip(finalLimits[l]+shft,0, flatImg[4:-4,4:-4].shape[0]-1), np.arange(limits.shape[1]),'r--', linewidth=1) #shifted ronchi limits, if provided, or polynomial fit
+                        plt.tight_layout()
                         pdf.savefig()
                         plt.close(fig)
 
