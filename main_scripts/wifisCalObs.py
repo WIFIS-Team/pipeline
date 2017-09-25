@@ -101,14 +101,14 @@ else:
     #spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_june/20170607010313/processed/20170607001609_ronchi_spatGridProps.dat'
 
     #july
-    distMapFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707175840_ronchi_distMap.fits'
-    distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707180443_flat_limits.fits'
-    spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707175840_ronchi_spatGridProps.dat'
+    #distMapFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707175840_ronchi_distMap.fits'
+    #distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707180443_flat_limits.fits'
+    #spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707175840_ronchi_spatGridProps.dat'
 
     #august
-    #distMapFile = '/home/jason/wifis/data/ronchi_map_august/tb/processed/20170831211259_ronchi_distMap.fits'
-    #distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_august/tb/processed/20170831210255_flat_limits.fits'
-    #spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_august/tb/processed/20170831211259_ronchi_spatGridProps.dat'
+    distMapFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831211259_ronchi_distMap.fits'
+    distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831210255_flat_limits.fits'
+    spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831211259_ronchi_spatGridProps.dat'
     
 nlFile = pipelineFolder+'external_data/master_detLin_NLCoeff.fits'        
 satFile = pipelineFolder+'external_data/master_detLin_satCounts.fits'
@@ -432,8 +432,10 @@ for i in range(len(obsLst)):
             
             print('Subtracting sky from obs')
             logfile.write('Subtracting sky flux from science image flux\n')
-            obs -= sky
-            sigmaImg  = np.sqrt(sigmaImg**2 + skySigmaImg**2)
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore',RuntimeWarning)
+                obs -= sky
+                sigmaImg  = np.sqrt(sigmaImg**2 + skySigmaImg**2)
             hdr.add_history('Subtracted sky flux image using:')
             hdr.add_history(skyFolder)
         else:
