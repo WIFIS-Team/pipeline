@@ -25,6 +25,7 @@ from scipy.interpolate import interp1d
 from astropy import time as astrotime, coordinates as coord, units
 import astropy
 import colorama
+from matplotlib.backends.backend_pdf import PdfPages
 
 colorama.init()
 
@@ -50,7 +51,7 @@ darkFile = ''#'dark.lst'
 noFlat = False
 
 #sky subtraction options
-skySubFirst = True
+skySubFirst = False
 skyCorRegions = [[1025,1045],[1080,1105],[1140,1175],[1195,1245],[1265,1330]]
 
 #options for flexure/pixel shift between sky/obs cubes
@@ -64,13 +65,14 @@ skyShiftMxShift = 4
 skyShiftReject = 1
 
 #options to determine line strength scaling difference between sky and obs cubes
-skyScaleCor = False
-skyScaleMx = 0.5
+skyScaleCor = True
+skyScaleMx = 0.9
 skyScaleSigClip = 3
 skyScaleSigClipRnds = 1
+skyScaleUseMxOnly = 0.2 # only uses pixels with >0.2 of maximum signal for fitting/subtracting
 
 #determine additional RV corrections relative to sky emission template
-getSkyCorRV = False
+getSkyCorRV = True
 skyEmTempFile = pipelineFolder+'/external_data/sky_emission_template.dat'
 
 #telluric correction
@@ -78,7 +80,7 @@ tellCor = False
 
 #optional flat field correction to better match cal flats to dome flats
 flatCorFile = 'processed/flat_correction_slices.fits'
-flatCor = True
+flatCor = False
 
 #specify calibration files
 if hband:
@@ -91,9 +93,9 @@ else:
     waveTempResultsFile = '/data/pipeline/external_data/waveTemplateFittingResults.pkl'
 
     #may
-    #distMapFile = '/home/jason/wifis/data/ronchi_map_may/distortionMap.fits'
-    #distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_may/ronchiMap_limits.fits'
-    #spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_may/spatGridProps.dat'
+    distMapFile = '/home/jason/wifis/data/ronchi_map_may/distortionMap.fits'
+    distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_may/ronchiMap_limits.fits'
+    spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_may/spatGridProps.dat'
 
     #june
     #distMapFile = '/home/jason/wifis/data/ronchi_map_june/20170607010313/processed/20170607001609_ronchi_distMap.fits'
@@ -106,9 +108,9 @@ else:
     #spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707175840_ronchi_spatGridProps.dat'
 
     #august
-    distMapFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831211259_ronchi_distMap.fits'
-    distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831210255_flat_limits.fits'
-    spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831211259_ronchi_spatGridProps.dat'
+    #distMapFile = '/home/jason/wifis/data/ronchi_map_august/tb/processed/20170831211259_ronchi_distMap.fits'
+    #distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_august/tb/processed/20170831210255_flat_limits.fits'
+    #spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_august/tb/processed/20170831211259_ronchi_spatGridProps.dat'
     
 nlFile = pipelineFolder+'external_data/master_detLin_NLCoeff.fits'        
 satFile = pipelineFolder+'external_data/master_detLin_satCounts.fits'
@@ -432,10 +434,8 @@ for i in range(len(obsLst)):
             
             print('Subtracting sky from obs')
             logfile.write('Subtracting sky flux from science image flux\n')
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore',RuntimeWarning)
-                obs -= sky
-                sigmaImg  = np.sqrt(sigmaImg**2 + skySigmaImg**2)
+            obs -= sky
+            sigmaImg  = np.sqrt(sigmaImg**2 + skySigmaImg**2)
             hdr.add_history('Subtracted sky flux image using:')
             hdr.add_history(skyFolder)
         else:
@@ -612,7 +612,7 @@ for i in range(len(obsLst)):
                 
     #distortion correct data
     dataCor = createCube.distCorAll(dataFlat, distMap, spatGridProps=spatGridProps)
-
+    
     hdr.add_history('Used following file for distortion map:')
     hdr.add_history(distMapFile)
 
@@ -681,15 +681,36 @@ for i in range(len(obsLst)):
 
             #waveArray = 1e9*(np.arange(skyCube.shape[2])*skyHdr['CDELT3'] +skyHdr['CRVAL3'])
 
-            subSlices, fSlices = postProcess.subScaledSkySlices(waveMap, dataCor, skyCor, regions=skyCorRegions, mxScale=skyScaleMx, sigmaClip=skyScaleSigClip, sigmaClipRounds=skyScaleSigClipRnds,useMaxOnly=0.2)
+            subSlices, fSlices = postProcess.subScaledSkySlices(waveMap, dataCor, skyCor, regions=skyCorRegions, mxScale=skyScaleMx, sigmaClip=skyScaleSigClip, sigmaClipRounds=skyScaleSigClipRnds,useMaxOnly=skyScaleUseMxOnly)
 
+            #create quality control figures from fSlices
+            fMap = postProcess.buildfSlicesMap(fSlices)
+
+            with PdfPages('quality_control/'+obsLst[i]+'_sky_scalings.pdf') as pdf:
+                for i_slc in range(len(fMap)):
+                    slc = fMap[i_slc]
+                    fig=plt.figure()
+                    fig.add_subplot(111)
+                    xTickLabel = []
+                    for reg in skyCorRegions:
+                        xTickLabel.append(str(reg))
+
+                    plt.xlabel('Wavelength regions')
+                    plt.title('Slice '+str(i_slc))
+                    #ax.set_xticklabels(xTickLabel)
+                    xTickNums = np.asarray(np.arange(len(skyCorRegions)))
+                    plt.xticks(xTickNums,xTickLabel,rotation=45)
+                    plt.imshow(slc, aspect='auto', origin='lower')
+
+                    plt.colorbar()
+                    plt.tight_layout()
+                    pdf.savefig(dpi=300)
+                    plt.close()                    
+            
             dataCor = subSlices
             hdr.add_history('Subtracted scaled sky slices using sky obs:')
             hdr.add_history(skyFolder)
 
-            #***************************************************
-            #should save fSlices for quality control usage
-            #***************************************************
         else:
             print('Subtracting sky slices from science slices')
             logfile.write('Subtracting sky slices from science slices:\n')
