@@ -497,12 +497,19 @@ def subScaledSkyPix(input):
                     med = np.nanmedian(y)
                     std = np.nanstd(y)
                     goodPix = np.where(np.abs(y-med)<=sigmaClip*std)[0]
-                    badPix = np.where(np.abs(y-med)>sigmaClip*std)[0]
-                    
+                    #badPix = np.where(np.abs(y-med)>sigmaClip*std)[0]
+                    badPix = np.ones(stmp.shape[0])
                     #use only pixels with value useMax of maximum flux for fitting and subtracting
                     if useMaxOnly > 0:
-                        badPix = np.where(stmp < useMaxOnly*stmp.max())[0]
+                        #badPix2 = np.where(stmp < useMaxOnly*stmp[goodPix].max())[0]
                         goodPix = np.where(stmp >= useMaxOnly*stmp[goodPix].max())[0]
+                        badPix[goodPix] = 0
+                        #badPixAll = np.concatenate((badPix,badPix2))
+                        #goodPixAll = np.concatenate((goodPix,goodPix2))
+                        #badPixAll = np.unique(badPixAll)
+                        #goodPixAll = np.unique(goodPixAll)
+
+                    badPix[goodPix]=0
                         
                     f = fitSky(otmp[goodPix], stmp[goodPix])
 
@@ -512,7 +519,7 @@ def subScaledSkyPix(input):
                         f = bounds[1]
 
             skyCor[goodPix] = stmp[goodPix]*f
-            skyCor[badPix] = stmp[badPix]
+            skyCor[badPix.astype(bool)] = stmp[badPix.astype(bool)]
             
         skyScaled[whr] = skyCont[whr] + skyCor
         fOut.append(f)
