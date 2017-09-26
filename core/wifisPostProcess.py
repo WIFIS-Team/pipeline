@@ -460,10 +460,10 @@ def subScaledSkyPix(input):
             fOut.append(np.nan)
         return obs, fOut
     
-    #outside = []
-    fOut = []
-
     outside = np.ones(sky.shape).astype(bool)
+
+    #list to hold all scalings
+    fOut = []
     
     #construct the sky spectrum outside of the scaled region
     for reg in regions:
@@ -515,7 +515,7 @@ def subScaledSkyPix(input):
             skyCor[badPix] = stmp[badPix]
             
         skyScaled[whr] = skyCont[whr] + skyCor
-
+        fOut.append(f)
     return obs - skyScaled, fOut
     
 def subScaledSkyCube(wave, obs, sky, mxScale=0.5, regions=None, MP=True, ncpus=None,sigmaClip=3, sigmaClipRounds=1, useMaxOnly=0., nContFit=50):
@@ -687,3 +687,27 @@ def crossCorSlices(waveMap, slices1, slices2, regions=None, oversample=20, absor
 
     return shiftOut
     
+def buildfSlicesMap(fSlices):
+    """
+    """
+
+    outMap =[]
+
+    for slc in fSlices:
+        #get number of regions
+
+        mxRegs = 0
+        for i in range(len(slc)):
+            nRegs = len(slc[i])
+            if nRegs > mxRegs:
+                mxRegs = nRegs
+
+        #now construct the individual maps
+        tmpMap = np.zeros((len(slc),mxRegs),dtype='float32')
+
+        for i in range(len(slc)):
+            for j in range(mxRegs):
+                tmpMap[i,j] = slc[i][j]
+        outMap.append(tmpMap)
+
+    return outMap
