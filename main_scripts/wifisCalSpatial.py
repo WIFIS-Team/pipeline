@@ -502,8 +502,15 @@ if ronchiFolder is not None:
         with warnings.catch_warnings():
             warnings.simplefilter('ignore',RuntimeWarning)
             ronchiTraces, ronchiWidths = spatialCor.traceRonchiAll(ronchiFlat, nbin=ronchiNbin, winRng=ronchiWinRng, mxWidth=ronchiMxWidth,smth=ronchiSmth, bright=ronchiBright, flatSlices=ronchiFlat, MP=True)
-        wifisIO.writeFits(ronchiTraces,'processed/'+ronchiFolder+'_ronchi_traces.fits',hdr=ronchiHdr,ask=False)
+
         #if needed, address problematic fits here
+
+        #better for May
+        #ronchiTraces, ronchiWidths = spatialCor.traceRonchiAll(ronchiSlices, nbin=ronchiNbin, winRng=ronchiWinRng, mxWidth=ronchiMxWidth,smth=ronchiSmth, bright=ronchiBright, flatSlices=None, MP=True)
+
+        ronchiTraces[15],ronchiWidths[15] = spatialCor.traceRonchiSlice([ronchiSlices[15],2, ronchiWinRng,2040,False,ronchiMxWidth,ronchiSmth,False,None,0.5])
+        
+        wifisIO.writeFits(ronchiTraces,'processed/'+ronchiFolder+'_ronchi_traces.fits',hdr=ronchiHdr,ask=False)
         
     else:
         ronchiTraces = wifisIO.readImgsFromFile('processed/'+ronchiFolder+'_ronchi_traces.fits')[0]
@@ -529,14 +536,38 @@ if ronchiFolder is not None:
                 trace = ronchiTraces[i]
 
                 #add specific details to deal with bad traces
-                #for august
-                if i==17:
-                    goodReg = []
-                    for j in range(11):
+                #for may
+                if i==13:
+                    goodReg=[]
+                    for j in range(9):
                         goodReg.append([0,2040])
-                    goodReg.append([0,1400])
+                    goodReg.append([0,1500])
+                    for j in range(4):
+                        goodReg.append([0,2040])
+                    goodReg.append([0,1500])
+
+                elif i==15:
+                    goodReg = [[600,2040],[0,1250],[0,750],[0,500],[0,750],[0,1400],[0,1400],[0,1400],[0,1600],[0,1250],[0,900],[0,1250],[0,1250],[0,1500],[0,1250]]
+                elif i==16:
+                    goodReg=[]
+                    for j in range(4):
+                        goodReg.append([0,2040])
+                    goodReg.append([0,1500])
+                    for j in range(9):
+                        goodReg.append([0,2040])
+                elif i==17:
+                    goodReg=[[0,1100],[0,2040],[0,1100],[0,2040],[0,2040],[0,1500],[0,2040],[0,2040],[0,2040],[0,2040],[0,1100],[750,1750],[0,1100]]
                 else:
                     goodReg = [[0,2040]]
+                
+                #for august
+                #if i==17:
+                #    goodReg = []
+                #    for j in range(11):
+                #        goodReg.append([0,2040])
+                #    goodReg.append([0,1400])
+                #else:
+                #    goodReg = [[0,2040]]
                 
                 #for july
                 #if i==13:
@@ -557,6 +588,21 @@ if ronchiFolder is not None:
                 polyTrace = spatialCor.polyFitRonchiTrace(trace, goodReg, order=ronchiPolyOrder, sigmaClipRounds=ronchiSigmaClipRounds)
 
                 #more details to deal with bad/extra traces
+
+                #for may
+                if i==0 or i==14:
+                    polyTrace=polyTrace[1:,:]
+                elif i==7:
+                    polyTrace=polyTrace[:-1,:]
+                elif i==15:
+                    polyTrace = np.delete(polyTrace,4,axis=0)
+                    polyTrace[2,750:] = np.nan
+                    polyTrace[3,600:] = np.nan
+                    polyTrace[9,900:] = np.nan
+                elif i==17:
+                    polyTrace[np.logical_or(polyTrace<0, polyTrace>=ronchiSlices[17].shape[0])] = np.nan
+                    
+                
                 #for july
                 #if i==0:
                 #     polyTrace = polyTrace[2:,:]
@@ -579,18 +625,18 @@ if ronchiFolder is not None:
                 #polyTrace = polyTrace[1:11]
 
                 #for august
-                if i==0 or i==2 or i==14 or i==16:
-                    polyTrace = polyTrace[1:-1,:]
-                elif i==1 or i==3 or i==4 or i==6 or i==7 or i==8 or i==9 or i==10 or i==11 or i==12:
-                    polyTrace = polyTrace[:-1,:]
-                elif i==13:
-                    polyTrace[13,:] = np.nan
-                    polyTrace = polyTrace[:-1]
-                elif i==15:
-                    polyTrace[10,:] = np.nan
-                elif i==17:
-                    polyTrace[np.logical_or(polyTrace<0, polyTrace>=ronchiSlices[17].shape[0])] = np.nan
-                    polyTrace = polyTrace[1::,:]
+                #if i==0 or i==2 or i==14 or i==16:
+                #    polyTrace = polyTrace[1:-1,:]
+                #elif i==1 or i==3 or i==4 or i==6 or i==7 or i==8 or i==9 or i==10 or i==11 or i==12:
+                #    polyTrace = polyTrace[:-1,:]
+                #elif i==13:
+                #    polyTrace[13,:] = np.nan
+                #    polyTrace = polyTrace[:-1]
+                #elif i==15:
+                #    polyTrace[10,:] = np.nan
+                #elif i==17:
+                #    polyTrace[np.logical_or(polyTrace<0, polyTrace>=ronchiSlices[17].shape[0])] = np.nan
+                #    polyTrace = polyTrace[1::,:]
                     
                     
                 ronchiPolyTraces.append(polyTrace)
