@@ -55,18 +55,9 @@ def crossCorCube(wave, cube1, cube2, regions=None, oversample=20, absorption=Fal
     cube1tmp = np.empty(cube1.shape, dtype=cube1.dtype)
     cube2tmp = np.empty(cube1.shape, dtype=cube1.dtype)
 
-    cube1tmp[:] = np.nan
-    cube2tmp[:] = np.nan
-     
-    if regions is not None:
-        for reg in regions:
-            whr = np.where(np.logical_and(wave>=reg[0],wave<=reg[1]))[0]
-            cube1tmp[:,:,whr] = cube1[:,:,whr]
-            cube2tmp[:,:,whr] = cube2[:,:,whr]
-    else:
-        cube1tmp = cube1tmp
-        cube2tmp = cube2tmp
-        
+    np.copyto(cube1tmp, cube1)
+    np.copyto(cube2tmp,cube2)
+      
     #build input list
     
     inpLst = []
@@ -77,11 +68,11 @@ def crossCorCube(wave, cube1, cube2, regions=None, oversample=20, absorption=Fal
         
         for i in range(cube1.shape[0]):
             for j in range(cube1.shape[1]):
-                inpLst.append([vconst,v, cube1tmp[i,j,:], cube2tmp[i,j,:],oversample, absorption,mode, contFit1, contFit2,nContFit,contFitOrder,mxShift, False, reject])
+                inpLst.append([vconst,v, cube1tmp[i,j,:], cube2tmp[i,j,:],oversample, absorption,mode, contFit1, contFit2,nContFit,contFitOrder,mxShift, False, reject, regions, wave])
     else:
         for i in range(cube1.shape[0]):
             for j in range(cube1.shape[1]):
-                inpLst.append([cube1tmp[i,j,:], cube2tmp[i,j,:],oversample, absorption,mode, contFit1, contFit2,nContFit,contFitOrder,mxShift, False, reject])
+                inpLst.append([cube1tmp[i,j,:], cube2tmp[i,j,:],oversample, absorption,mode, contFit1, contFit2,nContFit,contFitOrder,mxShift, False, reject, regions,wave])
 
     if ncpus is None:
         ncpus = mp.cpu_count()
@@ -123,27 +114,43 @@ def crossCorPixMP(input):
     mxShift = input[9]
     plot = input[10]
     reject =input[11]
+    regions=input[12]
+    wave = input[13]
     
     #quit if either input arrays are all NaN
     if np.all(~np.isfinite(y1)) or np.all(~np.isfinite(y2)):
         return np.nan
-    
+
     if contFit1:
         y1tmp = y1 - splineContFitMP([y1,contFitOrder,nContFit, reject])
-    if contFit2:
-        y2tmp  = y2 - splineContFitMP([y2,contFitOrder,nContFit, reject])
-        
     else:
-        y1tmp = np.empty(y1.shape)
+        y1tmp = np.empty(y1.shape,dtype=y1.dtype)
         np.copyto(y1tmp,y1)
-        y2tmp = np.empty(y2.shape)
+
+    if contFit2:
+        y2tmp = y2 - splineContFitMP([y2,contFitOrder,nContFit, reject])    
+    else:
+        y2tmp = np.empty(y2.shape,dtype=y2.dtype)
         np.copyto(y2tmp,y2)
+        
+    y1Tmp = np.zeros(y1tmp.shape)
+    y2Tmp = np.zeros(y2tmp.shape)
+    
+    #now only use regions of interest
+    if regions is not None:
+        for reg in regions:
+            whr = np.where(np.logical_and(wave>=reg[0],wave<=reg[1]))[0]
+            y1Tmp[whr] = y1tmp[whr]
+            y2Tmp[whr] = y2tmp[whr]
+    else:
+        np.copyto(y1Tmp,y1tmp)
+        np.copyto(y2Tmp,y2tmp)
 
     x = np.arange(y1.shape[0])
     xInt = np.linspace(0,x[-1],num=y1.shape[0]*oversample)
     
-    y1Int = np.interp(xInt,x, y1tmp)
-    y2Int = np.interp(xInt, x, y2tmp)
+    y1Int = np.interp(xInt,x, y1Tmp)
+    y2Int = np.interp(xInt, x, y2Tmp)
     
     if absorption:
         y1tmp = 1. - y1tmp
@@ -155,11 +162,11 @@ def crossCorPixMP(input):
         rng = np.arange(-xInt.shape[0]-2, xInt.shape[0]-2)
 
     yCC = crossCorIDL([y1Int, y2Int, rng])
-    shiftOut = rng[np.argmax(yCC)]/oversample
+    shiftOut = rng[np.argmax(yCC)]/np.float(oversample)
 
     if plot:
         fig = plt.figure()
-        plt.plot(rng/oversample, yCC)
+        plt.plot(rng/np.float(oversample), yCC)
         plt.show()
  
     return shiftOut
@@ -170,32 +177,15 @@ def crossCorSpec(wave, spec1, spec2, regions=None, oversample=20, absorption=Fal
     Usage: 
     """
 
-    #go through regions list and construct whrLst
-    #whrLst = []
-
-    y1tmp = np.empty(spec1.shape, dtype=spec1.dtype)
-    y2tmp = np.empty(spec1.shape, dtype=spec1.dtype)
-
-    y1tmp[:] = np.nan
-    y2tmp[:] = np.nan
-    
-    if regions is not None:
-        for reg in regions:
-            whr = np.where(np.logical_and(wave>=reg[0],wave<=reg[1]))[0]
-            y1tmp[whr] = spec1[whr]
-            y2tmp[whr] = spec2[whr]
-    else:
-        y1tmp = spec1
-        y2tmp = spec2
-        
-    #now compute velocity grid and interpolate velocity grid
+      
+    #compute velocity grid and interpolate velocity grid
     v = (wave-wave[int(wave.shape[0]/2)])/wave[int(wave.shape[0]/2)]*2.99792458e5 # in km/s
     vconst = np.linspace(v[0],v[-1],num=v.shape[0]*oversample)
 
     if velocity:
-        rvOut = crossCorVelMP([vconst, v, y1tmp, y2tmp, oversample, absorption, mode,contFit1,contFit2,nContFit,contFitOrder,mxVel, plot, reject])
+        rvOut = crossCorVelMP([vconst, v, spec1, spec2, oversample, absorption, mode,contFit1,contFit2,nContFit,contFitOrder,mxVel, plot, reject,regions,wave])
     else:
-        rvOut = crossCorPixMP([y1tmp, y2tmp, oversample, absorption, mode,contFit,nContFit1,contFit2,contFitOrder,mxVel, plot, reject])
+        rvOut = crossCorPixMP([spec1, spec2, oversample, absorption, mode,contFit,nContFit1,contFit2,contFitOrder,mxVel, plot, reject,regions,wave])
 
     return rvOut
     
@@ -331,6 +321,8 @@ def crossCorVelMP(input):
     mxVel = input[11]
     plot = input[12]
     reject =input[13]
+    regions=input[14]
+    wave = input[15]
     
     #quit if either input arrays are all NaN
     if np.all(~np.isfinite(y1)) or np.all(~np.isfinite(y2)):
@@ -339,18 +331,37 @@ def crossCorVelMP(input):
     #go through regions list and construct new arrays from subsets
 
     if contFit1:
-        y1 -= splineContFitMP([y1,contFitOrder,nContFit, reject])
+        y1tmp = y1 - splineContFitMP([y1,contFitOrder,nContFit, reject])
+    else:
+        y1tmp = np.empty(y1.shape,dtype=y1.dtype)
+        np.copyto(y1tmp,y1)
     if contFit2:
-        y2 -= splineContFitMP([y2,contFitOrder,nContFit, reject])    
-
+        y2tmp = y2 - splineContFitMP([y2,contFitOrder,nContFit, reject])    
+    else:
+        y2tmp = np.empty(y2.shape,dtype=y2.dtype)
+        np.copyto(y2tmp,y2)
+        
     if mode != 'idl':    
         #now get rid of NaNs
-        y1[~np.isfinite(y1)] = 0.
-        y2[~np.isfinite(y2)] = 0.
+        y1tmp[~np.isfinite(y1)] = 0.
+        y2tmp[~np.isfinite(y2)] = 0.
+
+    y1Tmp = np.zeros(y1tmp.shape)
+    y2Tmp = np.zeros(y2tmp.shape)
+    
+    #now only use regions of interest
+    if regions is not None:
+        for reg in regions:
+            whr = np.where(np.logical_and(wave>=reg[0],wave<=reg[1]))[0]
+            y1Tmp[whr] = y1tmp[whr]
+            y2Tmp[whr] = y2tmp[whr]
+    else:
+        np.copyto(y1Tmp,y1tmp)
+        np.copyto(y2Tmp,y2tmp)
 
     #now compute and interpolate onto constant velocity grid, and converting to line intensity (i.e. 1 - continuum)
-    y1Const = np.interp(vconst,v,y1,left=0,right=0)
-    y2Const = np.interp(vconst, v, y2, left=0, right=0)
+    y1Const = np.interp(vconst,v,y1Tmp,left=0,right=0)
+    y2Const = np.interp(vconst, v, y2Tmp, left=0, right=0)
     dv = (vconst[1]-vconst[0])
 
     if absorption:
@@ -636,26 +647,6 @@ def crossCorSlices(waveMap, slices1, slices2, regions=None, oversample=20, absor
     Usage: 
     """
 
-    slices1tmp = []
-    slices2tmp = []
- 
-    #go through each slice and copy needed regions
-    if regions is not None:
-        for i in range(len(slices1)):
-            slices1tmp.append(np.zeros(slices1[i].shape,dtype=slices1[i].dtype))
-            slices2tmp.append(np.zeros(slices2[i].shape,dtype=slices2[i].dtype))
-            for reg in regions:
-                whr = np.where(np.logical_and(waveMap[i]>=reg[0],waveMap[i]<=reg[1]))
-                slices1tmp[i][whr[0],whr[1]] = slices1[i][whr[0],whr[1]]
-                slices2tmp[i][whr[0],whr[1]] = slices2[i][whr[0],whr[1]]
-    else:
-        for i in range(len(slices1)):
-            slices1tmp.append(np.zeros(slices1[i].shape,dtype=slices1[i].dtype))
-            slices2tmp.append(np.zeros(slices2[i].shape,dtype=slices2[i].dtype))
-            np.copyto(slices1tmp[i],slices1[i])
-            np.copyto(slices2tmp[i],slices2[i])
-
-
     #build input list
     inpLst = []
 
@@ -665,11 +656,11 @@ def crossCorSlices(waveMap, slices1, slices2, regions=None, oversample=20, absor
             for j in range(slices1[i].shape[0]):
                 v = (waveMap[i][j,:]-waveMap[i][j,:][int(waveMap[i][j,:].shape[0]/2)])/waveMap[i][j,:][int(waveMap[i][j,:].shape[0]/2)]*2.99792458e5 # in km/s
                 vconst = np.linspace(v[0],v[-1],num=v.shape[0]*oversample)
-                inpLst.append([vconst,v, slices1tmp[i,j,:], slices2tmp[i,j,:],oversample, absorption,mode, contFit1, contFit2,nContFit,contFitOrder,mxShift, False, reject])
+                inpLst.append([vconst,v, slices1[i,j,:], slices2[i,j,:],oversample, absorption,mode, contFit1, contFit2,nContFit,contFitOrder,mxShift, False, reject, regions,waveMap[i][j,:]])
     else:
         for i in range(len(slices1)):
             for j in range(slices1[i].shape[0]):
-                inpLst.append([slices1tmp[i][j,:], slices2tmp[i][j,:],oversample, absorption,mode, contFit1, contFit2,nContFit,contFitOrder,mxShift, False, reject])
+                inpLst.append([slices1[i][j,:], slices2[i][j,:],oversample, absorption,mode, contFit1, contFit2,nContFit,contFitOrder,mxShift, False, reject, regions,waveMap[i][j,:]])
 
     if ncpus is None:
         ncpus = mp.cpu_count()
@@ -718,3 +709,42 @@ def buildfSlicesMap(fSlices):
         outMap.append(tmpMap)
 
     return outMap
+
+def shiftSlicesAll(inpSlices, pixShift, MP=False, ncpus=None):
+    """
+    """
+
+    #create input list
+    inpLst = []
+    for slc in inpSlices:
+        inpLst.append([slc,pixShift])
+
+    if MP:
+        if ncpus is None:
+            ncpus = mp.cpu_count()
+        pool = mp.Pool(ncpus)
+        outSlices = pool.map(shiftSlice,inpLst)
+        pool.close()
+    else:
+        outSlices =[]
+        for lst in inpLst:
+            outSlices.append(shiftSlice(lst))
+    return outSlices
+        
+    
+def shiftSlice(input):
+    """
+    """
+
+    slc = input[0]
+    pixShift = input[1]
+    
+    xOrg = np.arange(slc.shape[1]).astype(float)-pixShift
+    xNew = np.arange(slc.shape[1])
+
+    slcNew = np.empty(slc.shape,dtype=slc.dtype)
+    
+    for i in range(slc.shape[0]):
+        slcNew[i,:] = np.interp(xNew,xOrg,slc[i,:])
+
+    return slcNew
