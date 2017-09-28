@@ -93,9 +93,9 @@ else:
     waveTempResultsFile = '/data/pipeline/external_data/waveTemplateFittingResults.pkl'
 
     #may
-    distMapFile = '/home/jason/wifis/data/ronchi_map_may/distortionMap.fits'
-    distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_may/ronchiMap_limits.fits'
-    spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_may/spatGridProps.dat'
+    distMapFile = '/home/jason/wifis/data/ronchi_map_may/testing/processed/20170511222022_ronchi_distMap.fits'
+    distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_may/testing/processed/20170511223518_flat_limits.fits'
+    spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_may/testing/processed/20170511222022_ronchi_spatGridProps.dat'
 
     #june
     #distMapFile = '/home/jason/wifis/data/ronchi_map_june/20170607010313/processed/20170607001609_ronchi_distMap.fits'
@@ -263,16 +263,21 @@ else:
     logfile.write('*** FAILURE: Observation list file ' + obsLstFile + ' does not exist ***\n')
     raise Warning('Observation list file does not exist')
 
-if skyLstFile is not None and os.path.exists(skyLstFile):
-    skyLst = wifisIO.readAsciiList(skyLstFile)
-    if skyLst.ndim == 0:
-        skyLst = np.asarray([skyLst])
+if skyLstFile is not None:
+    if os.path.exists(skyLstFile):
+        skyLst = wifisIO.readAsciiList(skyLstFile)
+        if skyLst.ndim == 0:
+            skyLst = np.asarray([skyLst])
+
+        if len(skyLst) != len(obsLst):
+            logfile.write('*** FAILURE: Observation list ' + obsLstFile + ' is not the same size as sky list ' + skyLstFile+' ***\n')
+            raise Warning('Observation list is not the same size as ' + skyLstFile)
+
+    else:
+        skyLst = None
 else:
     skyLst = None
 
-if len(skyLst) != len(obsLst):
-    logfile.write('*** FAILURE: Observation list ' + obsLstFile + ' is not the same size as sky list ' + skyLstFile+' ***\n')
-    raise Warning('Observation list is not the same size as ' + skyLstFile)
 
 if os.path.exists(flatLstFile):
     flatLst = wifisIO.readAsciiList(flatLstFile)
@@ -434,143 +439,144 @@ for i in range(len(obsLst)):
             
             print('Subtracting sky from obs')
             logfile.write('Subtracting sky flux from science image flux\n')
-            obs -= sky
-            sigmaImg  = np.sqrt(sigmaImg**2 + skySigmaImg**2)
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore',RuntimeWarning)
+                obs -= sky
+                sigmaImg  = np.sqrt(sigmaImg**2 + skySigmaImg**2)
+                
             hdr.add_history('Subtracted sky flux image using:')
             hdr.add_history(skyFolder)
         else:
-            if not os.path.exists('processed/'+skyFolder+'_sky_slices_distCor.fits'):
-   
-                #slices stage
-                if not os.path.exists('processed/'+skyFolder+'_sky_slices.fits'):
-                    print('Reading sky data from ' + skyFolder)
-                    logfile.write('Reading sky data from observation ' + skyFolder +'\n')
-                    skyDataLst,skyHdr = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky.fits')
-                    sky = skyDataLst[0]
-                    skySigmaImg = skyDataLst[1]
-                    skySatFrame = skyDataLst[2]
-                    skyHdr = skyHdr[0]
-                    del skyDataLst
+            #slices stage
+            if not os.path.exists('processed/'+skyFolder+'_sky_slices.fits'):
+                print('Reading sky data from ' + skyFolder)
+                logfile.write('Reading sky data from observation ' + skyFolder +'\n')
+                skyDataLst,skyHdr = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky.fits')
+                sky = skyDataLst[0]
+                skySigmaImg = skyDataLst[1]
+                skySatFrame = skyDataLst[2]
+                skyHdr = skyHdr[0]
+                del skyDataLst
                     
-                    sky = sky[4:-4,4:-4]
-                    skySigmaImg = skySigmaImg[4:-4,4:-4]
-                    skySatFrame = skySatFrame[4:-4,4:-4]
+                sky = sky[4:-4,4:-4]
+                skySigmaImg = skySigmaImg[4:-4,4:-4]
+                skySatFrame = skySatFrame[4:-4,4:-4]
                     
-                    print('Extracting sky slices')
-                    logfile.write('\nExtracting sky slices using:\n')
-                    logfile.write('flatFolder')
+                print('Extracting sky slices')
+                logfile.write('\nExtracting sky slices using:\n')
+                logfile.write('flatFolder')
              
-                    skySlices = slices.extSlices(sky, distMapLimits, shft=shft)
-                    skySigmaSlices = slices.extSlices(skySigmaImg, distMapLimits, shft=shft)
-                    skySatSlices = slices.extSlices(skySatFrame,distMapLimits, shft=shft)
+                skySlices = slices.extSlices(sky, distMapLimits, shft=shft)
+                skySigmaSlices = slices.extSlices(skySigmaImg, distMapLimits, shft=shft)
+                skySatSlices = slices.extSlices(skySatFrame,distMapLimits, shft=shft)
 
-                    skyHdr.add_history('Used following flat field file for slice limits:')
+                skyHdr.add_history('Used following flat field file for slice limits:')
+                skyHdr.add_history(flatFolder)
+
+                #apply flat-field
+                if not noFlat:
+                    skyFlat = slices.ffCorrectAll(skySlices, flatNorm)
+                    skySigmaSlices = wifisUncertainties.multiplySlices(skySlices,skySigmaSlices,flatNorm, flatSigma)
+
+                    logfile.write('Sky slices were flat fielded using:\n')
+                    logfile.write(flatFolder+'\n')
+                    
+                    skyHdr.add_history('Slices were flat fielded using')
                     skyHdr.add_history(flatFolder)
-
-                    #apply flat-field
-                    if not noFlat:
-                        skyFlat = slices.ffCorrectAll(skySlices, flatNorm)
-                        skySigmaSlices = wifisUncertainties.multiplySlices(skySlices,skySigmaSlices,flatNorm, flatSigma)
-
-                        logfile.write('Sky slices were flat fielded using:\n')
-                        logfile.write(flatFolder+'\n')
-
-                        skyHdr.add_history('Slices were flat fielded using')
-                        skyHdr.add_history(flatFolder)
-                    else:
-                        skyFlat = skySlices
-
-                    #remove previous description of file
-                    hdrTmp = skyHdr[::-1]
-                    hdrTmp.remove('COMMENT')
-                    skyHdr = hdrTmp[::-1]
-
-                    skyHdr.add_comment('File contains flux, sigma, sat info for each slice as multi-extensions')
-                    wifisIO.writeFits(skyFlat+skySigmaSlices+skySatSlices, 'processed/'+skyFolder+'_sky_slices.fits', ask=False, hdr=skyHdr)
-                    hdrTmp = skyHdr[::-1]
-                    hdrTmp.remove('COMMENT')
-                    skyHdr = hdrTmp[::-1]
                 else:
-                    print('Reading sky slices for ' + skyFolder)
-                    logfile.write('Reading sky slices from:\n')
-                    logfile.write('processed/'+skyFolder+'_sky_slices.fits\n')
+                    skyFlat = skySlices
+
+                #remove previous description of file
+                hdrTmp = skyHdr[::-1]
+                hdrTmp.remove('COMMENT')
+                skyHdr = hdrTmp[::-1]
+
+                skyHdr.add_comment('File contains flux, sigma, sat info for each slice as multi-extensions')
+                wifisIO.writeFits(skyFlat+skySigmaSlices+skySatSlices, 'processed/'+skyFolder+'_sky_slices.fits', ask=False, hdr=skyHdr)
+                hdrTmp = skyHdr[::-1]
+                hdrTmp.remove('COMMENT')
+                skyHdr = hdrTmp[::-1]
+
+            #distortion correction stage
+            if not os.path.exists('processed/'+skyFolder+'_sky_slices_distCor.fits'):
+                print('Distortion correcting sky slices and placing on uniform spatial grid')
+                logfile.write('Distortion correcting sky slices and placing on uniform spatial grid\n')
+
+                print('Reading sky slices for ' + skyFolder)
+                logfile.write('Reading sky slices from:\n')
+                logfile.write('processed/'+skyFolder+'_sky_slices.fits\n')
                 
-                    skySlicesLst,skyHdr = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky_slices.fits')
-                    skyFlat = skySlicesLst[0:18]
-                    skySigmaSlices = skySlicesLst[18:36]
-                    skySatSlices = skySlicesLst[36:]
-                    skyHdr =skyHdr[0]
-                    del skySlicesLst
+                skySlicesLst,skyHdr = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky_slices.fits')
+                skyFlat = skySlicesLst[0:18]
+                skySigmaSlices = skySlicesLst[18:36]
+                skySatSlices = skySlicesLst[36:]
+                skyHdr =skyHdr[0]
+                del skySlicesLst
 
-                #distortion correction stage
-                if not os.path.exists('processed/'+skyFolder+'_sky_slices_distCor.fits'):
-                    print('Distortion correcting sky slices and placing on uniform spatial grid')
-                    logfile.write('Distortion correcting sky slices and placing on uniform spatial grid\n')
-                
-                    skyCor = createCube.distCorAll(skyFlat, distMap, spatGridProps=spatGridProps)
-                    skyHdr.add_history('Used following file for distortion map:')
-                    skyHdr.add_history(distMapFile)
+                skyCor = createCube.distCorAll(skyFlat, distMap, spatGridProps=spatGridProps)
+                skyHdr.add_history('Used following file for distortion map:')
+                skyHdr.add_history(distMapFile)
 
-                    tmpHdr = skyHdr[::-1]
-                    tmpHdr.remove('COMMENT')
-                    skyHdr = tmpHdr[::-1]
-                    skyHdr.add_comment('File contains the distortion-corrected flux slices as multi-extensions')
+                tmpHdr = skyHdr[::-1]
+                tmpHdr.remove('COMMENT')
+                skyHdr = tmpHdr[::-1]
+                skyHdr.add_comment('File contains the distortion-corrected flux slices as multi-extensions')
 
-                    wifisIO.writeFits(skyCor, 'processed/'+skyFolder+'_sky_slices_distCor.fits', ask=False, hdr=skyHdr)
-                else:
-                    print('Reading distortion corrected sky slices for ' + skyFolder)
-                    logfile.write('Reading distortion corrected sky slices from:\n')
-                    logfile.write('processed/'+skyFolder+'_sky_slices_distCor.fits\n')
-                    skyCor,skyHdr = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky_slices_distCor.fits')
-                    skyHdr = skyHdr[0]
-                
-                #wavelength gridding stage
-                if not os.path.exists('processed/'+skyFolder+'_sky_slices_fullGrid.fits'):
-                    print('Placing sky slices on uniform wavelength grid')
-                    logfile.write('Placing sky slices on uniform wavelength grid using wavelength map:\n')
-                    logfile.write('processed/'+waveFolder+'_wave_waveMap.fits\n')
-                    skyGrid = createCube.waveCorAll(skyCor, waveMap, waveGridProps=waveGridProps)
-
-                    tmpHdr = skyHdr[::-1]
-                    tmpHdr.remove('COMMENT')
-                    skyHdr = tmpHdr[::-1]
-                    skyHdr.add_comment('File contains the spatial and wavelength gridded flux slices as multi-extensions')
-                    skyHdr.add_history('Used following observation to map wavelength:')
-                    skyHdr.add_history(waveFolder)
-                    wifisIO.writeFits(skyGrid, 'processed/'+skyFolder+'_sky_slices_fullGrid.fits', ask=False, hdr=skyHdr)
-                else:
-                    print('Reading fully gridded sky slices for ' + skyFolder)
-                    logfile.write('Reading fully gridded corrected sky slices from:\n')
-                    logfile.write('processed/'+skyFolder+'_sky_slices_fullGrid.fits\n')
-
-                    skyGrid,skyHdr = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky_slices_fullGrid.fits')
-          
-                #create cube stage
-                if not os.path.exists('processed/'+skyFolder+'_sky_cube.fits'):
-                    print('Creating sky cube')
-                    logfile.write('Creating sky cube from gridded slices\n')
-                    
-                    tmpHdr = skyHdr[::-1]
-                    tmpHdr.remove('COMMENT')
-                    tmpHdr.remove('COMMENT')
-                    skyHdr = tmpHdr[::-1]
-                    skyHdr.add_comment('File contains the flux data cube')
-                    skyCube = createCube.mkCube(skyGrid, ndiv=ndiv).astype('float32')
-                    
-                    #write WCS to header
-                    headers.getWCSCube(skyCube, skyHdr, xScale, yScale, waveGridProps)
-                    wifisIO.writeFits(skyCube, 'processed/'+skyFolder+'_sky_cube.fits', hdr=skyHdr, ask=False)
+                wifisIO.writeFits(skyCor, 'processed/'+skyFolder+'_sky_slices_distCor.fits', ask=False, hdr=skyHdr)
             else:
-                print('Reading distortion corrected sky slices from '+skyFolder)
-                logfile.write('Reading distortion corrected sky slices from ' + skyFolder+'\n')
-                skyCor, skyHdr = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky_slices_distCor.fits')
+                print('Reading distortion corrected sky slices for ' + skyFolder)
+                logfile.write('Reading distortion corrected sky slices from:\n')
+                logfile.write('processed/'+skyFolder+'_sky_slices_distCor.fits\n')
+                skyCor,skyHdr = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky_slices_distCor.fits')
+                skyHdr = skyHdr[0]
+                
+            #wavelength gridding stage
+            if not os.path.exists('processed/'+skyFolder+'_sky_slices_fullGrid.fits'):
+                print('Placing sky slices on uniform wavelength grid')
+                logfile.write('Placing sky slices on uniform wavelength grid using wavelength map:\n')
+                logfile.write('processed/'+waveFolder+'_wave_waveMap.fits\n')
+
+                skyGrid = createCube.waveCorAll(skyCor, waveMap, waveGridProps=waveGridProps)
+
+                tmpHdr = skyHdr[::-1]
+                tmpHdr.remove('COMMENT')
+                skyHdr = tmpHdr[::-1]
+                skyHdr.add_comment('File contains the spatial and wavelength gridded flux slices as multi-extensions')
+                skyHdr.add_history('Used following observation to map wavelength:')
+                skyHdr.add_history(waveFolder)
+                wifisIO.writeFits(skyGrid, 'processed/'+skyFolder+'_sky_slices_fullGrid.fits', ask=False, hdr=skyHdr)
+
+            #create cube stage
+            if not os.path.exists('processed/'+skyFolder+'_sky_cube.fits'):
+                print('Creating sky cube')
+                logfile.write('Creating sky cube from gridded slices\n')
+
+                print('Reading fully gridded sky slices for ' + skyFolder)
+                logfile.write('Reading fully gridded corrected sky slices from:\n')
+                logfile.write('processed/'+skyFolder+'_sky_slices_fullGrid.fits\n')
+                
+                skyGrid,skyHdr = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky_slices_fullGrid.fits')
+                skyHdr = skyHdr[0]
+
+                tmpHdr = skyHdr[::-1]
+                tmpHdr.remove('COMMENT')
+                tmpHdr.remove('COMMENT')
+                skyHdr = tmpHdr[::-1]
+                skyHdr.add_comment('File contains the flux data cube')
+                skyCube = createCube.mkCube(skyGrid, ndiv=ndiv).astype('float32')
+                
+                #write WCS to header
+                headers.getWCSCube(skyCube, skyHdr, xScale, yScale, waveGridProps)
+                wifisIO.writeFits(skyCube, 'processed/'+skyFolder+'_sky_cube.fits', hdr=skyHdr, ask=False)
+            
     else:
-        if darkLst is not None or darkLst[0] is not None:
+        if darkLst is not None and darkLst[0] is not None:
             print('Subtracting dark')
             logfile.write('Subtracting dark image from science image\n')
-                        
-            obs -= dark
-            sigmaImg = np.sqrt(darkSig**2 + sigmaImg**2)
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore', RuntimeWarning)
+                obs -= dark
+                sigmaImg = np.sqrt(darkSig**2 + sigmaImg**2)
 
             hdr.add_history('Subtracted dark image from file:')
             hdr.add_history(darkFile)
@@ -656,18 +662,26 @@ for i in range(len(obsLst)):
             if pixShift != 0:
                 #now correct for shift
                 print('Correcting sky slices for pixel shift')
-
-                for i in range(len(skyCor)):
-                    skyShift = shift(skyCor[i], [0,pixShift])
-                    skyCor[i] = skyShift
+                skyShift = postProcess.shiftSlicesAll(skyCor,pixShift)
+                skyCor = skyShift
                     
                 logfile.write('Sky slices corrected by pixel offset\n')
                 hdr.add_history('Sky slices corrected by offset')
 
-            #***************************************************
-            #should save pixDiff slices for quality control usage
-            #***************************************************
-                          
+            # save pixDiff slices for quality control monitoring
+            with PdfPages('quality_control/'+obsLst[i]+'_sky_PixDiff.pdf') as pdf:
+                for i_slc in range(len(pixDiff)):
+                    slc = pixDiff[i_slc]
+                    fig=plt.figure()
+
+                    plt.title('Slice '+str(i_slc))
+                    plt.imshow(slc, aspect='auto', origin='lower')
+
+                    plt.colorbar()
+                    plt.tight_layout()
+                    pdf.savefig(dpi=300)
+                    plt.close()                    
+             
         if skyScaleCor:
             print('Finding and correcting strength of sky emission lines to best match science observation')
             logfile.write('Finding and correcting strength of sky emission lines to best match science observation\n')
@@ -715,8 +729,8 @@ for i in range(len(obsLst)):
             print('Subtracting sky slices from science slices')
             logfile.write('Subtracting sky slices from science slices:\n')
             logfile.write(skyFolder+'\n')
-            for i in range(len(dataCor)):
-                dataCor[i] = dataCor[i] - skyCor[i]
+            for i_slc in range(len(dataCor)):
+                dataCor[i_slc] = dataCor[i_slc] - skyCor[i_slc]
 
             hdr.add_history('Subtracted sky slices using:')
             hdr.add_history(skyFolder)
@@ -746,10 +760,11 @@ for i in range(len(obsLst)):
             #interpolate sky template onto observed wavelength grid
             tempInterp = np.interp(waveArray, skyEmTemp[:,0],skyEmTemp[:,1])
             
-            rvSkyCor = postProcess.crossCorSpec(waveArray, avgSkySpec, tempInterp, plot=False, oversample=50, absorption=False, mode='idl', contFit1=True, contFit2=False,nContFit=50,contFitOrder=1, mxVel=200, reject=0, velocity=True)
+            rvSkyCor = postProcess.crossCorSpec(waveArray, avgSkySpec, tempInterp, plot=False, oversample=50, absorption=False, mode='idl', contFit1=True, contFit2=False,nContFit=50,contFitOrder=1, mxVel=1000, reject=0, velocity=True)
 
             hdr.set('RVSKYCOR',rvSkyCor,'RV offset between sky and template')
-            logfile.write('Found RV offset between sky spectrum and template of ' + str(rvSkyCor))
+            print('Found RV offset between sky spectrum and template of ' + str(rvSkyCor))
+            logfile.write('Found RV offset between sky spectrum and template of ' + str(rvSkyCor)+'\n')
 
     #add additional header info
     #barycentric corrections
