@@ -631,12 +631,13 @@ def subScaledSkySlices(waveMap, obsSlices, skySlices, mxScale=0.5, regions=None,
         fSlices=[]
 
         for i in range(len(skySlices)):
+            fSlices.append([])
             subSlices.append(np.empty(skySlices[i].shape, dtype=skySlices[i].dtype))
             subSlices[i][:]=np.nan
             for j in range(skySlices[i].shape[0]):
                 subLst = subScaledSkyPix(inpLst[k])
                 subSlices[i][j,:] = subLst[0]
-                fSlices[i].append(subLst[k][1])
+                fSlices[i].append(subLst[1])
                 k+=1
 
     return subSlices, fSlices
