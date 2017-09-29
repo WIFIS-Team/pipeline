@@ -33,7 +33,8 @@ def getWCSCube(data, hdr, xScale, yScale, waveGridProps, useSesameCoords=False):
             coords = coord.SkyCoord.from_name(objName)
             telRA = coords.ra.deg
             telDEC = coords.dec.deg
-        except('NameResolveError'):
+        #if any errors pop up, continue using the telescope coordinates instead
+        except:
             useSesameCoords=False
 
     if not useSesameCoords:
@@ -90,7 +91,7 @@ def getWCSImg(data, hdr, xScale, yScale, useSesameCoords=False):
             coords = coord.SkyCoord.from_name(objName)
             telRA = coords.ra.deg
             telDEC = coords.dec.deg
-        except('NameResolveError'):
+        except:
             useSesameCoords=False
 
     if not useSesameCoords:
