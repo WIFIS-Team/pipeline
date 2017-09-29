@@ -55,7 +55,7 @@ skySubFirst = False
 skyCorRegions = [[1025,1045],[1080,1105],[1140,1175],[1195,1245],[1265,1330]]
 
 #options for flexure/pixel shift between sky/obs cubes
-skyShiftCor = False
+skyShiftCor = True
 skyShiftOverSample = 20
 skyShiftContFit1 = True
 skyShiftContFit2 = True
@@ -93,14 +93,14 @@ else:
     waveTempResultsFile = '/data/pipeline/external_data/waveTemplateFittingResults.pkl'
 
     #may
-    distMapFile = '/home/jason/wifis/data/ronchi_map_may/testing/processed/20170511222022_ronchi_distMap.fits'
-    distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_may/testing/processed/20170511223518_flat_limits.fits'
-    spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_may/testing/processed/20170511222022_ronchi_spatGridProps.dat'
+    #distMapFile = '/home/jason/wifis/data/ronchi_map_may/testing/processed/20170511222022_ronchi_distMap.fits'
+    #distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_may/testing/processed/20170511223518_flat_limits.fits'
+    #spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_may/testing/processed/20170511222022_ronchi_spatGridProps.dat'
 
     #june
-    #distMapFile = '/home/jason/wifis/data/ronchi_map_june/20170607010313/processed/20170607001609_ronchi_distMap.fits'
-    #distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_june/20170607010313/processed/20170607001828_flat_limits.fits'
-    #spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_june/20170607010313/processed/20170607001609_ronchi_spatGridProps.dat'
+    distMapFile = '/home/jason/wifis/data/ronchi_map_june/testing/processed/20170611221759_ronchi_distMap.fits'
+    distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_june/testing/processed/20170611222844_flat_limits.fits'
+    spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_june/testing/processed/20170611221759_ronchi_spatGridProps.dat'
 
     #july
     #distMapFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707175840_ronchi_distMap.fits'
@@ -176,7 +176,7 @@ ron = 1.
 
 #coordinates
 obsCoords = [-111.600444444,31.9629166667,2071]
-useSesameCoords=False
+useSesameCoords=True
 #*****************************************************************************
 #*****************************************************************************
 
@@ -669,6 +669,7 @@ for i in range(len(obsLst)):
                 hdr.add_history('Sky slices corrected by offset')
 
             # save pixDiff slices for quality control monitoring
+            print('Plotting quality control results')
             with PdfPages('quality_control/'+obsLst[i]+'_sky_PixDiff.pdf') as pdf:
                 for i_slc in range(len(pixDiff)):
                     slc = pixDiff[i_slc]
@@ -695,11 +696,14 @@ for i in range(len(obsLst)):
 
             #waveArray = 1e9*(np.arange(skyCube.shape[2])*skyHdr['CDELT3'] +skyHdr['CRVAL3'])
 
-            subSlices, fSlices = postProcess.subScaledSkySlices(waveMap, dataCor, skyCor, regions=skyCorRegions, mxScale=skyScaleMx, sigmaClip=skyScaleSigClip, sigmaClipRounds=skyScaleSigClipRnds,useMaxOnly=skyScaleUseMxOnly)
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore', RuntimeWarning)
+                subSlices, fSlices = postProcess.subScaledSkySlices(waveMap, dataCor, skyCor, regions=skyCorRegions, mxScale=skyScaleMx, sigmaClip=skyScaleSigClip, sigmaClipRounds=skyScaleSigClipRnds,useMaxOnly=skyScaleUseMxOnly)
 
             #create quality control figures from fSlices
             fMap = postProcess.buildfSlicesMap(fSlices)
 
+            xsprint('Plotting quality control results')
             with PdfPages('quality_control/'+obsLst[i]+'_sky_scalings.pdf') as pdf:
                 for i_slc in range(len(fMap)):
                     slc = fMap[i_slc]
