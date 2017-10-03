@@ -703,7 +703,7 @@ for i in range(len(obsLst)):
             #create quality control figures from fSlices
             fMap = postProcess.buildfSlicesMap(fSlices)
 
-            xsprint('Plotting quality control results')
+            print('Plotting quality control results')
             with PdfPages('quality_control/'+obsLst[i]+'_sky_scalings.pdf') as pdf:
                 for i_slc in range(len(fMap)):
                     slc = fMap[i_slc]
