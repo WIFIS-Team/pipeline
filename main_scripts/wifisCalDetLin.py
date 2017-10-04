@@ -69,8 +69,8 @@ logfile.write('********************\n')
 logfile.write(time.strftime("%c")+'\n')
 logfile.write('Processing detector non-linearity ramps with WIFIS pyPline\n')
 logfile.write('Root folder containing raw data: ' + str(rootFolder)+'\n')
-logfile.write('Detector gain of' + str(gain) ' in electrons/count\n')
-logfile.write('Detector readout noise of' + str(ron) ' electrons per frame\n')
+logfile.write('Detector gain of' + str(gain)+ ' in electrons/counts\n')
+logfile.write('Detector readout noise of' + str(ron) +' electrons per frame\n')
 
 #read file list
 lst= wifisIO.readAsciiList(fileList)
@@ -80,6 +80,7 @@ if lst.ndim == 0:
 
 #create processed directory
 wifisIO.createDir('processed')
+wifisIO.createDir('quality_control')
 
 #check if processing needs to be done
 if(os.path.exists('processed/master_detLin_NLCoeff.fits') and os.path.exists('processed/master_detLin_satCounts.fits') and os.path.exists('processed/master_detLin_BPM.fits')):
