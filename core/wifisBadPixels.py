@@ -7,6 +7,7 @@ import numpy as np
 import multiprocessing as mp
 import wifisIO
 import matplotlib.pyplot as plt
+from astropy.visualization import ZScaleInterval
 
 def corBadPixelsAll(data,dispAxis=0,mxRng=2,MP=True, ncpus=None, sigma=False):
     """
@@ -113,7 +114,7 @@ def corBadPixel(input):
                 keepxb = True
                 break
 
-        #interpolate between values, if useable, else put in a NaN
+        #interpolate between values, if useable, else put in an NaN
         if (keepxa and keepxb):
             ia = (xb-badPix)/float(xb-xa)*ytmp[xa]*keepxa
             ib = (badPix-xa)/float(xb-xa)*ytmp[xb]*keepxa
@@ -294,6 +295,62 @@ def getBadPixelsFromDark(dark,hdr,darkFile='',saveFile = '',cutoff=1e-5, BPM=Non
     hdr.add_history('Dark level cutoff: ' + str(rng2))
 
     hdr.set('QC_NBADD',len(np.where(bpmTmp ==1)[0]),'Number of bad pixels based on dark current')
+    hdr.set('QC_NBAD',len(np.where(BPM ==1)[0]),'Total number of bad pixels')
+
+
+    return BPM, hdr
+
+def getBadPixelsFromRON(ron,hdr,ronFile='',saveFile = '',cutoff=1e-5, BPM=None):
+    """
+    """
+
+    print('Determining bad pixels from RON frame')
+    #based on nlCoeff
+    med = np.nanmedian(ron)
+
+    interval =  ZScaleInterval()
+    range = np.asarray(interval.get_limits(ron))
+    range[0]=0
+    range[1]*=2
+    
+    hist = np.histogram(ron.flatten(), bins=1000, range=range)
+    fig=plt.figure()
+
+    plt.hist(ron.flatten(), bins=1000, range=range)
+    cumsum = np.cumsum(hist[0])
+    cumsum = cumsum/cumsum.max().astype('float32')*hist[0].max()
+
+    histx = np.linspace(0,range[1], num=1000)+1/1000.
+    plt.plot(histx, cumsum)
+    cumsum/=cumsum.max()
+
+    whr = np.where(cumsum >=1-cutoff)[0]
+    rng2 = histx[whr[0]]
+    
+    plt.plot([rng2, rng2],[0,hist[0].max()])
+    plt.title('Histogram of RON')
+    plt.xlabel('RON value [counts]')
+    plt.savefig(saveFile+'_hist.png',dpi=300)
+    plt.close()
+
+    if BPM is None:
+        BPM = np.zeros(ron.shape,dtype='uint8')
+
+    bpmTmp = np.zeros(ron.shape,dtype='uint8')
+    BPM[ron>rng2] = 1
+    bpmTmp[ron>rng2] = 1
+    
+    refFrame=np.ones(ron.shape,dtype=bool)
+    refFrame[4:-4,4:-4]=False
+    BPM[refFrame] = 0
+    bpmTmp[refFrame] = 0
+    
+    hdr.add_history('Determined bad pix from RON frame:')
+    hdr.add_history(ronFile)
+    hdr.add_history('with normalized probability density of worse than ' + str(cutoff))
+    hdr.add_history('RON level cutoff: ' + str(rng2))
+
+    hdr.set('QC_NBADR',len(np.where(bpmTmp ==1)[0]),'Number of bad pixels based on RON')
     hdr.set('QC_NBAD',len(np.where(BPM ==1)[0]),'Total number of bad pixels')
 
 
