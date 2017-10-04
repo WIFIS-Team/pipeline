@@ -24,6 +24,7 @@ from astropy.io import fits
 from scipy.interpolate import interp1d
 from astropy import time as astrotime, coordinates as coord, units
 import astropy
+
 import colorama
 from matplotlib.backends.backend_pdf import PdfPages
 
@@ -51,8 +52,9 @@ darkFile = ''#'dark.lst'
 noFlat = False
 
 #sky subtraction options
-skySubFirst = False
+skySubFirst = True
 skyCorRegions = [[1025,1045],[1080,1105],[1140,1175],[1195,1245],[1265,1330]]
+subThermalFirst = True
 
 #options for flexure/pixel shift between sky/obs cubes
 skyShiftCor = True
@@ -63,6 +65,7 @@ skyShiftnPix = 50
 skyShiftContFitOrd = 1
 skyShiftMxShift = 4
 skyShiftReject = 1
+skyShitMaxLevel = 0. #only used for determining which columns to use if subtracting sky at the image level
 
 #options to determine line strength scaling difference between sky and obs cubes
 skyScaleCor = True
@@ -98,9 +101,9 @@ else:
     #spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_may/testing/processed/20170511222022_ronchi_spatGridProps.dat'
 
     #june
-    distMapFile = '/home/jason/wifis/data/ronchi_map_june/testing/processed/20170611221759_ronchi_distMap.fits'
-    distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_june/testing/processed/20170611222844_flat_limits.fits'
-    spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_june/testing/processed/20170611221759_ronchi_spatGridProps.dat'
+    #distMapFile = '/home/jason/wifis/data/ronchi_map_june/testing/processed/20170611221759_ronchi_distMap.fits'
+    #distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_june/testing/processed/20170611222844_flat_limits.fits'
+    #spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_june/testing/processed/20170611221759_ronchi_spatGridProps.dat'
 
     #july
     #distMapFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707175840_ronchi_distMap.fits'
@@ -108,13 +111,14 @@ else:
     #spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707175840_ronchi_spatGridProps.dat'
 
     #august
-    #distMapFile = '/home/jason/wifis/data/ronchi_map_august/tb/processed/20170831211259_ronchi_distMap.fits'
-    #distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_august/tb/processed/20170831210255_flat_limits.fits'
-    #spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_august/tb/processed/20170831211259_ronchi_spatGridProps.dat'
-    
-nlFile = pipelineFolder+'external_data/master_detLin_NLCoeff.fits'        
-satFile = pipelineFolder+'external_data/master_detLin_satCounts.fits'
-bpmFile = pipelineFolder+'external_data/bpm.fits'
+    distMapFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831211259_ronchi_distMap.fits'
+    distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831210255_flat_limits.fits'
+    spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831211259_ronchi_spatGridProps.dat'
+
+
+nlFile = '/home/jason/wifis/data/june_cals/processed/master_detLin_NLCoeff.fits'        
+satFile = '/home/jason/wifis/data/june_cals/processed/master_detLin_satCounts.fits'
+bpmFile = '/home/jason/wifis/data/june_cals/processed/master_dark_BPM.fits'
 atlasFile = pipelineFolder+'external_data/best_lines2.dat'
 
 #bad pixel mask correction range
@@ -436,7 +440,46 @@ for i in range(len(obsLst)):
             skySatFrame = skyDataLst[2]
             skyHdr = skyHdr[0]
             del skyDataLst
-            
+
+            if skyShiftCor:
+                pixDiff = postProcess.crossCorImage(obs[4:-4,4:-4],sky[4:-4,4:-4],maxFluxLevel = skyShitMaxLevel, oversample=20, regions=[[0,350]],position=np.arange(2040))
+
+                pixShift = np.nanmedian(pixDiff)
+                if pixShift !=0:
+                    print('Found median pixel shift of ' + str(pixShift))
+                    logfile.write('Found median pixel shift of '+str(pixShift)+'\n')
+                    hdr.add_history('Determined sky image was off by ' + str(pixShift) + ' pixels along the dispersion direction')
+                else:
+                    pixShift = np.nanmean(pixDiff)
+                    print('Found mean pixel shift of ' + str(pixShift))
+                    logfile.write('Found mean pixel shift of '+str(pixShift)+'\n')
+                    hdr.add_history('Determined sky image was off by ' + str(pixShift) + ' pixels along the dispersion direction')
+
+                # save pixDiff slices for quality control monitoring
+                print('Plotting quality control results')
+                with PdfPages('quality_control/'+obsLst[i]+'_sky_PixDiff.pdf') as pdf:
+                    fig=plt.figure()
+                    plt.plot(pixDiff, 'o')
+                    plt.x label('Pixel number along slice direction')
+                    plt.ylabel('Measured pixel shift')
+                    plt.title('Determined pixel shift of ' + str(pixShift))
+                    plt.tight_layout()
+                    pdf.savefig(dpi=300)
+                    plt.close()      
+
+                if pixShift != 0:
+                    #now correct for shift
+                    print('Correcting sky image for pixel shift')
+                    with warnings.catch_warnings():
+                        warnings.simplefilter('ignore',RuntimeWarning)
+                        skyShift = postProcess.shiftImage(sky,pixShift)
+                        sky = skyShift
+                    
+                    logfile.write('Sky image corrected by pixel offset\n')
+                    hdr.add_history('Sky image corrected by offset')
+
+                #skySmooth = postProcess.getSmoothedImage(sky[4:-4,4:-4],kernSize=4)
+                                
             print('Subtracting sky from obs')
             logfile.write('Subtracting sky flux from science image flux\n')
             with warnings.catch_warnings():
