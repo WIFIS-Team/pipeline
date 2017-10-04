@@ -8,6 +8,8 @@ from scipy.interpolate import interp1d
 import multiprocessing as mp
 from scipy.optimize import curve_fit
 import warnings
+from astropy.convolution import convolve_fft
+from astropy.convolution import Gaussian2DKernel
 
 def splineContFit(x,y,regions, lineRegions=None,order=3,winRng=10.):
     """
@@ -133,21 +135,35 @@ def crossCorPixMP(input):
         y2tmp = np.empty(y2.shape,dtype=y2.dtype)
         np.copyto(y2tmp,y2)
         
-    y1Tmp = np.zeros(y1tmp.shape)
-    y2Tmp = np.zeros(y2tmp.shape)
+    #y1Tmp = np.zeros(y1tmp.shape)
+    #y2Tmp = np.zeros(y2tmp.shape)
     
     #now only use regions of interest
+    #by building a new spectrum with only the good regions, padded by a 0 in between
+    
     if regions is not None:
+        y1Tmp = np.asarray([])
+        y2Tmp = np.asarray([])
+        
         for reg in regions:
             whr = np.where(np.logical_and(wave>=reg[0],wave<=reg[1]))[0]
-            y1Tmp[whr] = y1tmp[whr]
-            y2Tmp[whr] = y2tmp[whr]
+            y1Tmp= np.append(y1Tmp,y1tmp[whr])
+            y1Tmp = np.append(y1Tmp,np.zeros(mxShift))
+
+            y2Tmp=np.append(y2Tmp,y2tmp[whr])
+            y2Tmp=np.append(y2Tmp,np.zeros(mxShift))
+            #y1Tmp[whr] = y1tmp[whr]
+            #y2Tmp[whr] = y2tmp[whr]
+            
     else:
+        y1Tmp = np.empty(y1tmp.shape)
+        y2Tmp = np.empty(y2tmp.shape)
+
         np.copyto(y1Tmp,y1tmp)
         np.copyto(y2Tmp,y2tmp)
 
-    x = np.arange(y1.shape[0])
-    xInt = np.linspace(0,x[-1],num=y1.shape[0]*oversample)
+    x = np.arange(y1Tmp.shape[0])
+    xInt = np.linspace(0,x[-1],num=y1Tmp.shape[0]*oversample)
     
     y1Int = np.interp(xInt,x, y1Tmp)
     y2Int = np.interp(xInt, x, y2Tmp)
@@ -749,3 +765,95 @@ def shiftSlice(input):
         slcNew[i,:] = np.interp(xNew,xOrg,slc[i,:])
 
     return slcNew
+
+def shiftImage(img, pixShift,dispAxis=0):
+    """
+    """
+
+    #img = input[0]
+    #pixShift = input[1]
+    #dispAxis=input[2]
+
+    if dispAxis==0:
+        imgTmp = np.empty(img.shape, dtype=img.dtype)
+        np.copyto(imgTmp, img)
+    else:
+        imgTmp = np.empty(img.T.shape, dtype=img.dtype)
+        np.copyto(imgTmp, img.T)
+
+    xOrg = np.arange(imgTmp.shape[0]).astype(float)-pixShift
+    xNew = np.arange(imgTmp.shape[0])
+    outImg = np.empty(imgTmp.shape,dtype=imgTmp.dtype)
+    
+    for i in range(imgTmp.shape[1]):
+        outImg[:,i] = np.interp(xNew,xOrg,imgTmp[:,i])
+        
+    if dispAxis!=0:
+        outImg = outImg.T
+
+    return outImg
+
+def getSmoothedImage(img,kernSize=4):
+    """
+    """
+
+    kernel = Gaussian2DKernel(kernSize)
+
+    imgSmth = convolve_fft(img, kernel, nan_treatment='fill',normalize_kernel=True)
+
+    return imgSmth
+    
+def crossCorImage(img1, img2, regions=None, oversample=20, absorption=False, ncpus=None, mode='idl', contFit1=True, contFit2=True,nContFit=50, contFitOrder=1, mxShift=4,reject=0, dispAxis=0., maxFluxLevel=0, position=None):
+    """
+    Determine the pixel shift (if velocity=False) between input images img1 and img2, expected to be on the same wavelength grid/coordinate system x. Determines velocity difference, if velocity=True. mxShift is in pixels or km/s.
+    Usage: 
+    """
+
+    #build input list
+    inpLst = []
+
+    if dispAxis != 0:
+        img1Tmp = np.empty(img1.T.shape, dtype=img1.dtype)
+        img2Tmp = np.empty(img2.T.shape, dtype=img2.dtype)
+        np.copyto(img1Tmp, img1.T)
+        np.copyto(img2Tmp, img2.T)
+    else:
+        img1Tmp = img1
+        img2Tmp = img2
+
+
+    if maxFluxLevel > 0:
+        csSpec = np.nansum(img1Tmp,axis=0)
+
+        #rescale
+        csSpec = (csSpec-np.nanmin(csSpec))/(np.nanmax(csSpec)-np.nanmin(csSpec))
+        whr = np.where(csSpec<maxFluxLevel)[0]
+        for j in range(len(whr)):
+            inpLst.append([img1Tmp[:,whr[j]], img2Tmp[:,whr[j]],oversample, absorption,mode, contFit1, contFit2,nContFit,contFitOrder,mxShift, False, reject, None,position])
+    else:
+        for j in range(img1Tmp.shape[1]):
+            inpLst.append([img1Tmp[:,j], img2Tmp[:,j],oversample, absorption,mode, contFit1, contFit2,nContFit,contFitOrder,mxShift, False, reject, None,position])
+
+    if ncpus is None:
+        ncpus = mp.cpu_count()
+    pool = mp.Pool(ncpus)
+
+    shiftLst = pool.map(crossCorPixMP,inpLst)
+
+    pool.close()
+
+    if dispAxis==0:
+        shiftOut = np.empty(img1.shape[1])
+    else:
+        shiftOut = np.empty(img1.shape[0])
+    shiftOut[:] = np.nan
+    
+    if maxFluxLevel >0:
+        for i in range(len(whr)):
+            shiftOut[whr[i]] = shiftLst[i]
+    else:
+        for i in range(len(shiftLst)):
+            shiftOut[i] = shiftLst[i]
+    
+    return shiftOut
+    
