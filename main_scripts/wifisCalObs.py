@@ -53,8 +53,11 @@ noFlat = False
 
 #sky subtraction options
 skySubFirst = True
-skyCorRegions = [[1025,1045],[1080,1105],[1140,1175],[1195,1245],[1265,1330]]
-subThermalFirst = True
+
+if skySubFirst:
+    skyCorRegions = [[0,350]]
+else:
+    skyCorRegions = [[1025,1045],[1080,1105],[1140,1175],[1195,1245],[1265,1330]]
 
 #options for flexure/pixel shift between sky/obs cubes
 skyShiftCor = True
@@ -442,7 +445,7 @@ for i in range(len(obsLst)):
             del skyDataLst
 
             if skyShiftCor:
-                pixDiff = postProcess.crossCorImage(obs[4:-4,4:-4],sky[4:-4,4:-4],maxFluxLevel = skyShitMaxLevel, oversample=20, regions=[[0,350]],position=np.arange(2040))
+                pixDiff = postProcess.crossCorImage(obs[4:-4,4:-4],sky[4:-4,4:-4],maxFluxLevel = skyShitMaxLevel, oversample=20, regions=skyCorRegions,position=np.arange(obs[4:-4,4:-4].shape[1]))
 
                 pixShift = np.nanmedian(pixDiff)
                 if pixShift !=0:
@@ -460,7 +463,7 @@ for i in range(len(obsLst)):
                 with PdfPages('quality_control/'+obsLst[i]+'_sky_PixDiff.pdf') as pdf:
                     fig=plt.figure()
                     plt.plot(pixDiff, 'o')
-                    plt.x label('Pixel number along slice direction')
+                    plt.xlabel('Pixel number along slice direction')
                     plt.ylabel('Measured pixel shift')
                     plt.title('Determined pixel shift of ' + str(pixShift))
                     plt.tight_layout()
@@ -472,7 +475,8 @@ for i in range(len(obsLst)):
                     print('Correcting sky image for pixel shift')
                     with warnings.catch_warnings():
                         warnings.simplefilter('ignore',RuntimeWarning)
-                        skyShift = postProcess.shiftImage(sky,pixShift)
+                        skyShift = sky
+                        skyShift[4:-4,4:-4] = postProcess.shiftImage(sky[4:-4,4:-4],pixShift)
                         sky = skyShift
                     
                     logfile.write('Sky image corrected by pixel offset\n')
