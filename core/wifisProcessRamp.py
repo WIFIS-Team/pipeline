@@ -10,6 +10,7 @@ import wifisHeaders as headers
 import os
 import time
 import glob
+import warnings
 
 def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False,skipObsinfo=False, rampNum=None, satFile='', nlFile='', bpmFile='',logfile=None, fowler=False, gain=1., ron=1., obsCoords=None, avgAll=False):
     """
@@ -127,19 +128,35 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
             headers.addTelInfo(hdr, folder+'/obsinfo.dat',logfile=logfile, obsCoords=obsCoords)
         hdr.add_comment('File contains flux, sigma, and sat info as multi-extensions')
         #****************************************************************************
-        
-        # CORRECT BAD PIXELS
-        #check for BPM and read, if exists
-        if(BPM is not None and bpmCorRng > 0):
-            print('Correcting for bad pixels')
 
-            #assumes BPM is same dimensions as raw image file
-        
-            fluxImg[BPM.astype(bool)] = np.nan
+        #mark bad pixels
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore',RuntimeWarning)
             fluxImg[satFrame < 2] = np.nan
             #fluxImg[fluxImg < 0] = np.nan
             sigmaImg[~np.isfinite(fluxImg)] = np.nan
-        
+
+            #mark pixels with flux > than maximum achievable flux as bad pixels
+            dT = np.median(np.gradient(inttime))
+            mxFlux = 65535./dT # assumes 16-bit electronics
+            fluxImg[fluxImg>mxFlux] = np.nan
+            fluxImg[fluxImg<-mxFlux] = np.nan
+       
+        #check for BPM and read, if exists
+        if(BPM is not None):
+            #assumes BPM is same dimensions as raw image file
+            fluxImg[BPM.astype(bool)] = np.nan
+        else:
+            if not ignoreBPM:
+                cont = wifisIO.userInput('*** WARNING: No bad pixel mask provided. Do you want to continue? *** (y/n)?')
+                if (cont.lower()!='y'):
+                    logfile.write('*** WARNING: MISSING BAD PIXEL MASK ***')
+                    raise Warning('*** Missing bad pixel mask ***')
+
+        # CORRECT BAD PIXELS
+        if bpmCorRng > 0:
+            print('Correcting for bad pixels')
+                        
             #try and correct all pixels, but not the reference pixels
             imgCor = np.empty(fluxImg.shape, dtype = fluxImg.dtype)
             sigmaCor = np.empty(sigmaImg.shape, dtype= sigmaImg.dtype)
@@ -152,11 +169,6 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
             hdr.add_history('Bad pixels corrected using nearest pixels within ' + str(bpmCorRng) + ' pixel range')
             if logfile is not None:
                 logfile.write('Bad pixels corrected using nearest pixels within ' + str(bpmCorRng) + ' pixel range\n')
-        elif(BPM is None):
-            if not ignoreBPM:
-                cont = wifisIO.userInput('*** WARNING: No bad pixel mask provided. Do you want to continue? *** (y/n)?')
-                if (cont.lower()!='y'):
-                    raise Warning('*** Missing bad pixel mask ***')
                 
             imgCor = fluxImg
             sigmaCor = sigmaImg
@@ -190,7 +202,7 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
  
     return imgComb, sigComb, satComb, hdr
 
-def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False, skipObsinfo=False, rampNum=None, bpmFile='', satFile='', nlFile='', gain=1., ron=1., logfile=None,obsCoords=None, avgAll=False):
+def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=1, saveAll=True, ignoreBPM=False, skipObsinfo=False, rampNum=None, bpmFile='', satFile='', nlFile='', gain=1., ron=1., logfile=None,obsCoords=None, avgAll=False):
     """
     """
 
