@@ -29,10 +29,16 @@ import warnings
 import wifisUncertainties
 import astropy.io.fits as fits
 import wifisBadPixels as badPixels
-import colorama
+from astropy.visualization import ZScaleInterval
+import copy
 
-colorama.init()
-
+try:
+    import colorama
+    colorama.init()
+    colorFlag =True
+except:
+    colorFlag = False
+    
 os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
 os.environ['PYOPENCL_CTX'] = '2' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
 
@@ -44,20 +50,25 @@ fileList = 'dark.lst'
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
 pipelineFolder = '/data/pipeline/'
 
-nlFile = '/home/jason/wifis/data/non-linearity/july/processed/master_detLin_NLCoeff.fits' # the non-linearity correction coefficients file        
+nlFile = '/home/jason/wifis/data/june_cals/processed/master_detLin_NLCoeff.fits' # the non-linearity correction coefficients file        
 satFile = '/home/jason/wifis/data/non-linearity/july/processed/master_detLin_satCounts.fits' # the saturation limits file
-bpmFile = '/home/jason/wifis/data/non-linearity/july/processed/master_detLin_BPM.fits'
+bpmFile = '//home/jason/wifis/data/non-linearity/july/processed/master_detLin_BPM.fits'
 
 nRowSplit = 5
 nRowAvg =  4
 nChannels = 32
-getBadPix = True
-
+getBadPixDark = True
+getBadPixRON = True
 #*****************************************************************************
+
+interval=ZScaleInterval()
 
 #first check if required input exists
 if not os.path.exists(nlFile):
+    if colorFlag:
         print(colorama.Fore.RED+'*** WARNING: No non-linearity corrections provided. Skipping non-linearity corrections ***'+colorama.Style.RESET_ALL)
+    else:
+        print('*** WARNING: No non-linearity corrections provided. Skipping non-linearity corrections ***')
 
 if not os.path.exists(satFile):
         print(colorama.Fore.RED+'*** WARNING: No saturation info provided. Using all frames ***'+colorama.Style.RESET_ALL)
@@ -208,9 +219,9 @@ if (contProc):
                     warnings.simplefilter('ignore',RuntimeWarning)
                     for k in range(4):
                         stdDark = np.nanstd(fluxImg[np.logical_and(fluxImg >= medDark-stdDark, fluxImg <= medDark+stdDark)])
-
+                    lims = interval.get_limits(fluxImg.flatten())
                     fig = plt.figure()
-                    plt.hist(fluxImg.flatten(), bins=100, range=[medDark-5*stdDark, medDark+5*stdDark])
+                    plt.hist(fluxImg.flatten(), bins=100, range=lims)#[medDark-5*stdDark, medDark+5*stdDark])
                     plt.xlabel('Dark current')
                     plt.ylabel('# of pixels')
                     plt.title('Median dark current of ' + '{:10.2e}'.format(medDark))
@@ -233,7 +244,8 @@ if (contProc):
 
                 
                 fig = plt.figure()
-                plt.hist(ron.flatten(),range=[medRon-5.*stdRon,medRon+5.*stdRon],bins=100)
+                lims = interval.get_limits(ron.flatten())
+                plt.hist(ron.flatten(),range=lims,bins=100)#np.round([medRon-5.*stdRon,medRon+5.*stdRon]),bins=100)
                 plt.title('Median RON of ' + '{: e}'.format(medRon))
                 plt.xlabel('counts')
                 plt.ylabel('# of pixels')
@@ -263,6 +275,9 @@ if (contProc):
             procSatFrame.append(satFrame)
             procVarImg.append(varImg)
 
+    print('Getting master images')
+    #logfile.write('Getting master images\n')
+    
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', RuntimeWarning)
         #now combine all dark images into master dark, propagating uncertainties as needed
@@ -286,7 +301,9 @@ if (contProc):
     for i in range(len(lst)):
         hdr.add_history(lst[i] + ' with ' +  str(nRampsLst[i]) + ' ramps;')
 
-        
+    print('plotting quality control figures')
+    #logfile.write('plotting quality control figures\n')
+    
     #plot quality control stuff here
     medDark = np.nanmedian(masterDark)
     stdDark = np.nanstd(masterDark)
@@ -298,7 +315,8 @@ if (contProc):
             stdDark = np.nanstd(masterDark[np.logical_and(masterDark >= medDark-stdDark, masterDark <= medDark+stdDark)])
 
     fig = plt.figure()
-    plt.hist(fluxImg.flatten(), bins=100, range=[medDark-5*stdDark, medDark+5*stdDark])
+    lims = interval.get_limits(fluxImg.flatten())
+    plt.hist(fluxImg.flatten(), bins=100, range=lims)#[medDark-5*stdDark, medDark+5*stdDark])
     plt.xlabel('Dark current')
     plt.ylabel('# of pixels')
     plt.title('Median dark current of ' + '{:10.2e}'.format(medDark))
@@ -317,17 +335,18 @@ if (contProc):
             stdRon = np.nanstd(ron[np.logical_and(ron >= medRon-stdRon, ron <= medRon+stdRon)])
 
     fig = plt.figure()
-    plt.hist(ron.flatten(),range=[medRon-5.*stdRon,medRon+5.*stdRon],bins=100)
+    lims = interval.get_limits(ron.flatten())
+    plt.hist(ron.flatten(),range=lims,bins=100)#[medRon-5.*stdRon,medRon+5.*stdRon],bins=100)
     plt.title('Median RON of ' + '{: e}'.format(medRon))
     plt.xlabel('Counts')
     plt.ylabel('# of pixels')
-    plt.savefig('quality_control/'+folder+'_dark_ron_hist.png',dpi=300)
+    plt.savefig('quality_control/'+folder+'_ron_hist.png',dpi=300)
     plt.close()
 
     hdr.set('QC_RON', medRon, 'Median readout noise, in counts')
     hdr.set('QC_STDRN',stdRon, 'Standard deviation of readout noise, in counts')
     hdr.add_comment('File contains the estimated readout noise per pixel')
-    wifisIO.writeFits(ron, masterSave +'_dark_RON.fits',ask=False,hdr=hdr)
+    wifisIO.writeFits(ron, masterSave +'_RON.fits',ask=False,hdr=hdr)
 
     hdrTmp = hdr[::-1]
     hdrTmp.remove('COMMENT')
@@ -347,11 +366,11 @@ if (contProc):
     hdrTmp.remove('COMMENT')
     hdr = hdrTmp[::-1]
 
-    #determine bad pixels from master dark
-    if getBadPix:
+    #determine bad pixels from master dark and master RON
+    if getBadPixDark:
         if bpmFile is not None and os.path.exists(bpmFile):
                 cont = 'n'
-                cont = wifisIO.userInput('Bad pixel mask ' + bpmFile + ' already exists, do you want to update to reflect bad dark current levels (y/n)?')
+                cont = wifisIO.userInput('Bad pixel mask ' + bpmFile + ' already exists, do you want to update to reflect bad dark current levels and high readout noise (y/n)?')
 
                 if (cont.lower() == 'y'):
                         print('Updating bad pixel mask')
@@ -359,10 +378,16 @@ if (contProc):
                         with warnings.catch_warnings():
                                 warnings.simplefilter('ignore', RuntimeWarning)
                                 bpm, bpmHdr = badPixels.getBadPixelsFromDark(masterDark,bpmHdr, saveFile='quality_control/master_dark',darkFile=masterSave+'.fits',BPM=bpm)
-                        wifisIO.writeFits(bpmFile,masterSave+'_BPM.fits',hdr=bpmHdr,ask=False)
+
+                                if getBadPixRON:
+                                    bpm, bpmHdr = badPixels.getBadPixelsFromRON(ron, bpmHdr, saveFile='quality_control/master_ron',ronFile=masterSave+'_ron.fits',BPM=bpm)
+                                
+                        wifisIO.writeFits(bpm,masterSave+'_BPM.fits',hdr=bpmHdr,ask=False)
         else:
                 print('Creating bad pixel mask')
                 bpm,hdr = badPixels.getBadPixelsFromDark(masterDark,hdr,saveFile='quality_control/master_dark', darkFile=masterSave+'.fits',BPM=None)
+                if getBadPixRON:
+                    bpm, bpmHdr = badPixels.getBadPixelsFromRON(ron, bpmHdr, saveFile='quality_control/master_ron',ronFile=masterSave+'_ron.fits',BPM=bpm)
                 hdr.add_comment('File contains the bad pixel mask')
                 wifisIO.writeFits(bpm,masterSave+'_BPM.fits' ,hdr=hdr,ask=False)
 
