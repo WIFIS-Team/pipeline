@@ -308,7 +308,7 @@ def getSolQuick(input):
                                 winRngTmp = winRng
                                 amp,cent,wid = gaussFit(pixRng,yRng, winRng/3.,plot=plot,title=str(atlasPix[i]))
 
-                                if (adjustFitWin and wid > winRng/3):
+                                if (adjustFitWin and wid > winRng/3 and cent>=mnLngth and cent<=mxLngth):
                                     if (plot):
                                         print('adjusting fit window')
                                         
@@ -319,8 +319,8 @@ def getSolQuick(input):
                                     winRngTmp = wid*4
                                     amp,cent,wid = gaussFit(pixRng,yRng, winRngTmp/3.,plot=plot,title=str(atlasPix[i]))
                                 
-                                #only keep line if amplitude of fit >2*noise level #and width of fit <1/2 of winRng
-                                if (amp/nse >= sigmaLimit and np.abs(wid) < winRngTmp/2.):
+                                #only keep line if amplitude of fit >2*noise level #and width of fit <1/2 of winRng and cent in expected range
+                                if (amp/nse >= sigmaLimit and np.abs(wid) < winRngTmp/2. and cent >= mnLngth and cent <= mxLngth):
                                     if plot:
                                         print('Keeping line')
                                         
