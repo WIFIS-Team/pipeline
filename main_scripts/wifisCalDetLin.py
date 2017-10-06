@@ -28,29 +28,17 @@ import wifisHeaders as headers
 import warnings
 import wifisBadPixels as badPixels
 
-os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
-os.environ['PYOPENCL_CTX'] = '2' # Used to specify which OpenCL device to target, should uncomment and set to preferred device to avoid interactively selecting each time
-
 t0 = time.time()
 
 #*****************************************************************************
 #*************************** Required input **********************************
+#INPUT VARIABLE FILE NAME
+varFile = 'wifisConfig.inp'
 
 #set file list
-fileList = 'det.lst'
-
+detLstFile = 'det.lst'
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
-
-#assume that if rootFolder is blank, than the folders to read from are local and folderType is not needed
-if rootFolder == '':
-    folderType = ''
-else:
-    folderType = '/UpTheRamp/'
-
-#if exists and to be updated
-#bpmFile = 'processed/bad_pixel_mask.fits'
-
-nChannels = 32
+nChannel = 32
 nRowsAvg = 4
 nRowSplit = 1
 nSatSplit = 1
@@ -68,15 +56,27 @@ logfile = open('wifis_reduction_log.txt','a')
 logfile.write('********************\n')
 logfile.write(time.strftime("%c")+'\n')
 logfile.write('Processing detector non-linearity ramps with WIFIS pyPline\n')
+
+print('Reading input variables from file ' + varFile)
+logfile.write('Reading input variables from file ' + varFile+'\n')
+varInp = wifisIO.readInputVariables(varFile)
+for var in varInp:
+    locals()[var[0]]=var[1]
+    
+#execute pyOpenCL section here
+os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut 
+os.environ['PYOPENCL_CTX'] = pyCLCTX    
+
 logfile.write('Root folder containing raw data: ' + str(rootFolder)+'\n')
 logfile.write('Detector gain of' + str(gain)+ ' in electrons/counts\n')
 logfile.write('Detector readout noise of' + str(ron) +' electrons per frame\n')
 
 #read file list
-lst= wifisIO.readAsciiList(fileList)
+lst= wifisIO.readAsciiList(detLstFile)
 
 if lst.ndim == 0:
     lst = np.asarray([lst])
+
 
 #create processed directory
 wifisIO.createDir('processed')
@@ -103,6 +103,9 @@ if (contProc):
     
     for folder in lst:
 
+        #first get ramp type
+        folderType = wifisIO.getRampType(folder,rootFolder=rootFolder)
+        
         #check if folder contains multiple ramps
         nRamps = wifisIO.getNumRamps(folder, rootFolder=rootFolder)
 
@@ -137,7 +140,7 @@ if (contProc):
                 ta = time.time()
                 print('Reading data into cube')
                 #adjust accordingly depending on data source
-                data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + folder, rampNum=rampNum, nSkip=2)
+                data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + folder, rampNum=rampNum, nSkip=nReadSkip)
                 hdr.add_history('Processed using WIFIS pyPline')
                 hdr.add_history('on '+time.strftime("%c"))
                 #data, inttime, hdr = wifisIO.readRampFromAsciiList(filename)
@@ -150,10 +153,10 @@ if (contProc):
                 #Correct data for reference pixels
                 #ta = time.time()
                 print("Subtracting reference pixel channel bias")
-                refCor.channelCL(data, nChannels)
+                refCor.channelCL(data, nChannel)
                 
-                hdr.add_history('Channel reference pixel corrections applied using '+ str(nChannels) +' channels')
-                logfile.write('Subtracted reference pixel channel bias using ' + str(nChannels) + ' channels\n')
+                hdr.add_history('Channel reference pixel corrections applied using '+ str(nChannel) +' channels')
+                logfile.write('Subtracted reference pixel channel bias using ' + str(nChannel) + ' channels\n')
 
                 if nRowsAvg > 0:
                     print("Subtracting reference pixel row bias")
@@ -198,7 +201,7 @@ if (contProc):
                 satCountsLst.append(satCounts)
         
                 #find the first saturated frames
-                satFrame = satInfo.getSatFrameCL(data,satCounts,32, ignoreRefPix=True)
+                satFrame = satInfo.getSatFrameCL(data,satCounts,nSatSplit, ignoreRefPix=True)
 
                 logfile.write('Determined first saturated frame based on saturation limits\n')
                 #**********************************************************************
@@ -218,7 +221,7 @@ if (contProc):
                 if (cont.lower() == 'y'):
                     print('Determining non-linearity corrections')
                     ta = time.time()
-                    nlCoeff, zpntImg, rampImg = NLCor.getNLCorCL(data,satFrame,32)
+                    nlCoeff, zpntImg, rampImg = NLCor.getNLCorCL(data,satFrame,nlSplit)
 
                     #hard code the NLCoeff for reference pixels
                     #reset the values of the reference pixels so that all frames are used
