@@ -54,39 +54,34 @@ def fixSatPixelsAll(allSlices):
 #main script starts here
 
 colorama.init()
-os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
-os.environ['PYOPENCL_CTX'] = '2' # Used to specify which OpenCL device to target
+
+#INPUT VARIABLE FILE NAME
+varFile = 'wifisConfig.inp'
 
 #*****************************************************************************
-#************************** Required input ***********************************
+#************************** user input ***********************************
+#initialize all variables.
+#DO NOT CHANGE VALUES HERE, EDIT THE 'variables.inp' FILE, WHICH OVERWRITES VALUES HERE
+
 ronchiFile = 'ronchi.lst' #expected to be a single entry
 ronchiFlatFile = 'ronchiFlat.lst' #expected to be a single entry
-
 zpntFlatFile = 'zpntFlat.lst' #expected to be a single entry
 zpntLstFile = 'zpntObs.lst'
-
 zpntSkyFile = 'zpntSky.lst'
-
 darkFile = ''
-
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
 satFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_satCounts.fits'
 nlFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_NLCoeff.fits' 
 bpmFile = '/data/pipeline/external_data/bpm.fits'
-
 hband = False
 
 #flat field specific options
 flatWinRng = 51
 flatImgSmth = 5
 flatPolyFitDegree=2
-flatBpmCorRng=20 #specifies the maximum separation of pixel search to use during bad pixel correction
-
-#optional flat field correction to better match cal flats to dome flats
+flatbpmCorRng=20 
 flatCorFile = 'processed/flat_correction_slices.fits'
 flatCor = True
-
-#zero-point tracing parameters
 zpntNbin=1
 zpntBright=True
 zpntSmooth=10
@@ -108,12 +103,12 @@ ronchiSigmaClipRounds=2
 spatTrim = 0.5
 
 #parameters used for processing of ramps
-nChannel=32 #specifies the number of channels used during readout of detector
-nRowsAvg=4 # specifies the number of rows of reference pixels to use to correct for row bias (+/- nRowsAvg)
-rowSplit=1 # specifies how many processing steps to use during reference row correction. Must be integer multiple of number of frames. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
-nlSplit=32 #specifies how many processing steps to use during non-linearity correction. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
-satSplit=32 #specifies how many processing steps to use during identification of first saturated frame. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
-combSplit=32 #specifies how many processing steps to use during creation of ramp image. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
+nChannel=32 
+nRowsAvg=4 
+nRowSplit=1 
+nlSplit=32 
+nSatSplit=32 
+nCombSplit=32 
 gain =1.
 ron = 1.
 dispAxis=0
@@ -126,6 +121,17 @@ logfile = open('wifis_reduction_log.txt','a')
 logfile.write('********************\n')
 logfile.write(time.strftime("%c")+'\n')
 logfile.write('Processing flatfield files with WIFIS pyPline\n')
+
+print('Reading input variables from file ' + varFile)
+logfile.write('Reading input variables from file ' + varFile+'\n')
+varInp = wifisIO.readInputVariables(varFile)
+for var in varInp:
+    locals()[var[0]]=var[1]
+    
+#execute pyOpenCL section here
+os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut 
+os.environ['PYOPENCL_CTX'] = pyCLCTX
+
 logfile.write('Root folder containing raw data: ' + str(rootFolder)+'\n')
 
 #first calibrate ronchi flat
@@ -231,7 +237,7 @@ else:
 
 if not os.path.exists('processed/'+ronchiFlatFolder+'_flat_limits.fits') or not os.path.exists('processed/'+ronchiFlatFolder+'_flat_slices_norm.fits'):
     print('Processed flat field data does not exist for folder ' +ronchiFlatFolder +', processing flat folder')
-    calFlat.runCalFlat(np.asarray([ronchiFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=rowSplit,nlSplit=nlSplit, combSplit=combSplit,bpmCorRng=flatBpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile,satSplit=satSplit)
+    calFlat.runCalFlat(np.asarray([ronchiFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplit,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile,satSplit=nSatSplit)
 
 #******************************************************************************************************
 #******************************************************************************************************
@@ -240,7 +246,8 @@ if not os.path.exists('processed/'+ronchiFlatFolder+'_flat_limits.fits') or not 
 if zpntFlatFolder is not None:
     if not os.path.exists('processed/'+zpntFlatFolder+'_flat_limits.fits') and not os.path.exists('processed/'+zpntFlatFolder+'_flat_slices_norm.fits'):
         print('Flat limits do not exist for folder ' +zpntFlatFolder +', processing flat folder')
-        calFlat.runCalFlat(np.asarray([zpntFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=rowSplit,nlSplit=nlSplit, combSplit=combSplit,bpmCorRng=flatBpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile, flatCutOff=zpntFlatCutOff,distMapLimitsFile='processed/'+ronchiFlatFolder+'_flat_limits.fits')
+
+        calFlat.runCalFlat(np.asarray([zpntFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplit,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile, flatCutOff=zpntFlatCutOff,distMapLimitsFile='processed/'+ronchiFlatFolder+'_flat_limits.fits')
 
 #******************************************************************************************************
 #******************************************************************************************************
@@ -267,8 +274,8 @@ if zpntLst is not None:
             if not os.path.exists('processed/'+zpntFolder+'_zpnt_obs.fits'):
                 print('Processing ' + zpntFolder)
                 logfile.write('Processing '+ zpntFolder+'\n')
-                
-                zpntObs, zpntSigma, zptnSatFrame, zpntHdr = processRamp.auto(zpntFolder, rootFolder,'processed/'+zpntFolder+'_zpnt_obs.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=False, bpmCorRng=obsBpmCorRng,nlFile=nlFile,satFile=satFile,bpmFile='', gain=gain, ron=ron,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,saveAll=True, rampNum=None, avgAll=True)
+
+                zpntObs, zpntSigma, zptnSatFrame, zpntHdr = processRamp.auto(zpntFolder, rootFolder,'processed/'+zpntFolder+'_zpnt_obs.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=obsBpmCorRng,nlFile=nlFile,satFile=satFile,bpmFile='', gain=gain, ron=ron,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,saveAll=True, rampNum=None, avgAll=True)
                 
             else:
                 print('Processed data already exists for ' + zpntFolder + '. Reading data instead')
@@ -286,7 +293,7 @@ if zpntLst is not None:
                     print('Processing sky folder '+skyFolder)
                     logfile.write('\nProcessing sky folder ' + skyFolder+'\n')
 
-                    sky, skySigmaImg, skySatFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=False, bpmCorRng=obsBpmCorRng, rampNum=None,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=ron,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True)
+                    sky, skySigmaImg, skySatFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=obsBpmCorRng, rampNum=None,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=ron,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True)
                 else:
                     print('Reading sky data from ' + skyFolder)
                     logfile.write('Reading processed sky image from:\n')
@@ -447,7 +454,8 @@ else:
 
 if ronchiFolder is not None:
     if not os.path.exists('processed/'+ronchiFolder+'_ronchi.fits'):
-        ronchi, sigmaImg, satFrame, ronchiHdr = processRamp.auto(ronchiFolder, rootFolder,'processed/'+ronchiFolder+'_ronchi.fits', satCounts, nlCoeff, BPM,nChannel=nChannel, rowSplit=rowSplit, satSplit=satSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=False, bpmCorRng=flatBpmCorRng, saveAll=True)
+
+        ronchi, sigmaImg, satFrame, ronchiHdr = processRamp.auto(ronchiFolder, rootFolder,'processed/'+ronchiFolder+'_ronchi.fits', satCounts, nlCoeff, BPM,nChannel=nChannel, rowSplit=nRowSplit, satSplit=nSatSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=flatbpmCorRng, saveAll=True)
     else:
         ronchiLst, ronchiHdr = wifisIO.readImgsFromFile('processed/'+ronchiFolder+'_ronchi.fits')
         ronchi = ronchiLst[0]
@@ -498,19 +506,60 @@ if ronchiFolder is not None:
         print('Getting Ronchi traces')
         with warnings.catch_warnings():
             warnings.simplefilter('ignore',RuntimeWarning)
-            #ronchiTraces, ronchiWidths = spatialCor.traceRonchiAll(ronchiFlat, nbin=ronchiNbin, winRng=ronchiWinRng, mxWidth=ronchiMxWidth,smth=ronchiSmth, bright=ronchiBright, flatSlices=flatSlices, MP=True)
+            ronchiTraces, ronchiAmps = spatialCor.traceRonchiAll(ronchiFlat, nbin=ronchiNbin, winRng=ronchiWinRng, mxWidth=ronchiMxWidth,smth=ronchiSmth, bright=ronchiBright, flatSlices=flatSlices, MP=True)
 
             #if needed, address problematic fits here
             #better for May and june
-            ronchiTraces, ronchiWidths = spatialCor.traceRonchiAll(ronchiSlices, nbin=ronchiNbin, winRng=ronchiWinRng, mxWidth=ronchiMxWidth,smth=ronchiSmth, bright=ronchiBright, flatSlices=None, MP=True)
+            #ronchiTraces, ronchiAmps = spatialCor.traceRonchiAll(ronchiSlices, nbin=ronchiNbin, winRng=ronchiWinRng, mxWidth=ronchiMxWidth,smth=ronchiSmth, bright=ronchiBright, flatSlices=None, MP=True)
 
             #needed for june
-            ronchiTraces[4],ronchiWidths[4] = spatialCor.traceRonchiSlice([ronchiFlat[4],ronchiNbin,ronchiWinRng,2040, False,ronchiMxWidth,ronchiSmth,False,flatSlices[4],0.5])
-
-            ronchiTraces[17],ronchiWidths[17] = spatialCor.traceRonchiSlice([ronchiFlat[17],ronchiNbin,ronchiWinRng,2040, False,ronchiMxWidth,ronchiSmth,False,flatSlices[17],0.5])
+            #ronchiTraces[4],ronchiAmps[4] = spatialCor.traceRonchiSlice([ronchiFlat[4],ronchiNbin,ronchiWinRng,2040, False,ronchiMxWidth,ronchiSmth,False,flatSlices[4],0.5])
+            #ronchiTraces[17],ronchiAmps[17] = spatialCor.traceRonchiSlice([ronchiFlat[17],ronchiNbin,ronchiWinRng,2040, False,ronchiMxWidth,ronchiSmth,False,flatSlices[17],0.5])
             
-        wifisIO.writeFits(ronchiTraces,'processed/'+ronchiFolder+'_ronchi_traces.fits',hdr=ronchiHdr,ask=False)
+        print('Plotting amplitude map')
+        #build resolution map
+        ampMapLst = spatialCor.buildAmpMap(ronchiTraces, ronchiAmps, ronchiSlices)
+
+        #get median FWHM
+        ampAll = []
+        for f in ronchiAmps:
+            for i in range(len(f)):
+                for j in range(len(f[i])):
+                    ampAll.append(f[i][j])
+            
+        ampMed = np.nanmedian(ampAll)
         
+        ntot = 0
+        for r in ronchiSlices:
+            ntot += r.shape[0]
+    
+        ampMap = np.empty((r.shape[1],ntot),dtype='float32')
+    
+        strt=0
+        for a in ampMapLst:
+            ampMap[:,strt:strt+a.shape[0]] = a.T
+            strt += a.shape[0]
+
+        fig = plt.figure()
+        m = np.nanmedian(ampMap)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore',RuntimeWarning)
+            s = np.nanstd(ampMap[ampMap < 10*m])
+            
+        interval = ZScaleInterval()
+        clim=interval.get_limits(ampMap)
+        
+        plt.imshow(ampMap, origin='lower', aspect='auto', clim=clim,cmap='jet')
+        plt.title('Ronchi amplitude map - Med amp ' + '{:4.2f}'.format(ampMed))
+        
+        plt.colorbar()
+        plt.tight_layout()
+        plt.savefig('quality_control/'+ronchiFolder+'_ronchi_amp_map.pdf',dpi=300)
+        plt.close()
+
+        ronchiHdr.set('QC_AMP',ampMed,'Median Ronchi amplitude of all slices')
+        wifisIO.writeFits(ronchiTraces,'processed/'+ronchiFolder+'_ronchi_traces.fits',hdr=ronchiHdr,ask=False)
+
     else:
         ronchiTraces = wifisIO.readImgsFromFile('processed/'+ronchiFolder+'_ronchi_traces.fits')[0]
         ronchiSlices = wifisIO.readImgsFromFile('processed/'+ronchiFolder+'_ronchi_slices.fits')[0]
@@ -536,46 +585,46 @@ if ronchiFolder is not None:
 
                 #add specific details to deal with bad traces
                 #for june
-                if i==5:
-                    goodReg = []
-                    for j in range(10):
-                        goodReg.append([0,2040])
-                    goodReg.append([0,1000])
-                    goodReg.append([0,2040])
-                    goodReg.append([400,1500])
-                    goodReg.append([0,2040])
-                    goodReg.append([0,2040])
-                    
-                elif i==6:
-                    goodReg = []
-                    for j in range(10):
-                        goodReg.append([0,2040])
-                    goodReg.append([400,2040])
-                    goodReg.append([0,2040])
-                    goodReg.append([0,2040])
-                    goodReg.append([0,2040])
-                    goodReg.append([0,2040])
-                elif i==7:
-                    goodReg =[]
-                    for j in range(10):
-                        goodReg.append([0,2040])
-                    goodReg.append([0,1500])
-                    goodReg.append([0,2040])
-                    goodReg.append([0,2040])
-                    goodReg.append([0,2040])
-                    goodReg.append([0,2040])
-                elif i==15:
-                    goodReg = []
-                    for j in range(10):
-                        goodReg.append([0,2040])
-                    for j in range(5):
-                        goodReg.append([0,1600])
-                elif i==17:
-                    #goodReg = [[0,2040]]
-                    for j in range(11):
-                        goodReg.append([0,2040])
-                    goodReg.append([0,1000])
-                    goodReg.append([0,2040])
+               #if i==5:
+               #    goodReg = []
+               #    for j in range(10):
+               #        goodReg.append([0,2040])
+               #    goodReg.append([0,1000])
+               #    goodReg.append([0,2040])
+               #    goodReg.append([400,1500])
+               #    goodReg.append([0,2040])
+               #    goodReg.append([0,2040])
+               #    
+               #elif i==6:
+               #    goodReg = []
+               #    for j in range(10):
+               #        goodReg.append([0,2040])
+               #    goodReg.append([400,2040])
+               #    goodReg.append([0,2040])
+               #    goodReg.append([0,2040])
+               #    goodReg.append([0,2040])
+               #    goodReg.append([0,2040])
+               #elif i==7:
+               #    goodReg =[]
+               #    for j in range(10):
+               #        goodReg.append([0,2040])
+               #    goodReg.append([0,1500])
+               #    goodReg.append([0,2040])
+               #    goodReg.append([0,2040])
+               #    goodReg.append([0,2040])
+               #    goodReg.append([0,2040])
+               #elif i==15:
+               #    goodReg = []
+               #    for j in range(10):
+               #        goodReg.append([0,2040])
+               #    for j in range(5):
+               #        goodReg.append([0,1600])
+               #elif i==17:
+               #    #goodReg = [[0,2040]]
+               #    for j in range(11):
+               #        goodReg.append([0,2040])
+               #    goodReg.append([0,1000])
+               #    goodReg.append([0,2040])
                 
                     #goodReg=[]
                     #for j in range(9):
@@ -583,8 +632,8 @@ if ronchiFolder is not None:
                     #goodReg.append([0,500])
                     #goodReg.append([300,900])
                     #goodReg.append([300,1750])
-                else:
-                    goodReg =[[0,2040]]
+              #  else:
+              #      goodReg =[[0,2040]]
 
                 #for may
                 #if i==13:
@@ -613,11 +662,23 @@ if ronchiFolder is not None:
                 #for august
                 #if i==17:
                 #    goodReg = []
-                #    for j in range(11):
+                #    for j in range(10):
                 #        goodReg.append([0,2040])
                 #    goodReg.append([0,1400])
                 #else:
                 #    goodReg = [[0,2040]]
+
+                #for october
+                if i==13:
+                    goodReg = [[0,2040],[0,2040],[800,2040]]
+                    for i in range(11):
+                        goodReg.append([0,2040])
+                    
+                elif i==17:
+                    goodReg = [[0,2040],[0,2040],[0,2040],[0,1400],[0,2040],[0,2040],[0,2040],[0,2040],[0,2040],[0,1550],[0,1500],[0,1100]]
+                  
+                else:
+                    goodReg = [[0,2040]]
                 
                 #for july
                 #if i==13:
@@ -639,16 +700,16 @@ if ronchiFolder is not None:
 
                 #more details to deal with bad/extra traces
                 #for june
-                if i==5 or i==13:
-                    polyTrace = polyTrace[:-1,:]
-                if i==15:
-                    polyTrace = polyTrace[1:,:]
-                elif i==17:
-                    polyTrace[np.logical_or(polyTrace<0, polyTrace>=ronchiSlices[17].shape[0])] = np.nan
-                    #polyTrace[9,500:] = np.nan
-                    polyTrace = np.delete(polyTrace,10,axis=0)
-                    polyTrace[10,:]=np.nan
-                    polyTrace[11,:] = np.nan
+                #if i==5 or i==13:
+                #    polyTrace = polyTrace[:-1,:]
+                #if i==15:
+                #    polyTrace = polyTrace[1:,:]
+                #elif i==17:
+                #    polyTrace[np.logical_or(polyTrace<0, polyTrace>=ronchiSlices[17].shape[0])] = np.nan
+                #    #polyTrace[9,500:] = np.nan
+                #    polyTrace = np.delete(polyTrace,10,axis=0)
+                #    polyTrace[10,:]=np.nan
+                #    polyTrace[11,:] = np.nan
                                 
                 #for may
                 #if i==0 or i==14:
@@ -685,20 +746,10 @@ if ronchiFolder is not None:
                 #    polyTrace[np.logical_or(polyTrace<0, polyTrace>=ronchiSlices[17].shape[0])] = np.nan
                 #polyTrace = polyTrace[1:11]
 
-                #for august
-                #if i==0 or i==2 or i==14 or i==16:
-                #    polyTrace = polyTrace[1:-1,:]
-                #elif i==1 or i==3 or i==4 or i==6 or i==7 or i==8 or i==9 or i==10 or i==11 or i==12:
-                #    polyTrace = polyTrace[:-1,:]
-                #elif i==13:
-                #    polyTrace[13,:] = np.nan
-                #    polyTrace = polyTrace[:-1]
-                #elif i==15:
-                #    polyTrace[10,:] = np.nan
-                #elif i==17:
-                #    polyTrace[np.logical_or(polyTrace<0, polyTrace>=ronchiSlices[17].shape[0])] = np.nan
-                #    polyTrace = polyTrace[1::,:]
-                    
+                #for october
+                if i==17:
+                    polyTrace[np.logical_or(polyTrace<0, polyTrace>=ronchiSlices[17].shape[0])] = np.nan
+                    polyTrace[3,1450:] = np.nan
                     
                 ronchiPolyTraces.append(polyTrace)
                                     
