@@ -12,10 +12,14 @@ import time
 import glob
 import warnings
 
-def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=2, saveAll=True, ignoreBPM=False,skipObsinfo=False, rampNum=None, satFile='', nlFile='', bpmFile='',logfile=None, fowler=False, gain=1., ron=1., obsCoords=None, avgAll=False):
+def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=1, saveAll=True, ignoreBPM=False,skipObsinfo=False, rampNum=None, satFile='', nlFile='', bpmFile='',logfile=None, fowler=False, gain=1., ron=1., obsCoords=None, avgAll=False):
     """
     """
 
+    print('Processing folder ' + folder)
+    if logfile is not None:
+        logfile.write('Processing folder ' + folder+'\n')
+        
     #first determine number of ramps
     rampLst = glob.glob(folder+'/*N01.fits')
     nRamps = len(rampLst)
@@ -160,7 +164,7 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
             #try and correct all pixels, but not the reference pixels
             imgCor = np.empty(fluxImg.shape, dtype = fluxImg.dtype)
             sigmaCor = np.empty(sigmaImg.shape, dtype= sigmaImg.dtype)
-    
+
             imgCor[4:-4,4:-4] = badPixels.corBadPixelsAll(fluxImg[4:-4,4:-4], dispAxis=0, mxRng=bpmCorRng, MP=True) 
             sigmaCor[4:-4, 4:-4]  = badPixels.corBadPixelsAll(sigmaImg[4:-4,4:-4], dispAxis=0, mxRng=bpmCorRng, MP=True, sigma=True)
 
@@ -169,9 +173,8 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
             hdr.add_history('Bad pixels corrected using nearest pixels within ' + str(bpmCorRng) + ' pixel range')
             if logfile is not None:
                 logfile.write('Bad pixels corrected using nearest pixels within ' + str(bpmCorRng) + ' pixel range\n')
-                
-            imgCor = fluxImg
-            sigmaCor = sigmaImg
+
+            
         elif(bpmCorRng==0):
             imgCor = fluxImg
             sigmaCor = sigmaImg
