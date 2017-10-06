@@ -117,6 +117,7 @@ def getSolQuick(input):
     allowSearch = input[15]
     sigmaClipRounds = input[16]
     nCont = input[17]
+    nSearchRounds = input[18]
     totPix = len(yRow)
 
     #first make sure that the yRow isn't all NaNs
@@ -276,22 +277,34 @@ def getSolQuick(input):
                 if plot:
                     print('*********')
                     print('Fitting line ' +str(atlas[i,0]))
-                    
-                while (mxPos != prevMx):
-                    #update the search range to centre on peak
-                    if (plot):
-                        print(pixRng)
-                        plt.plot(pixRng, yRng)
-                        plt.show()
-                        
-                    prevMx = mxPos
-                    pixRng = (np.arange(winRng)-winRng2 + pixRng[mx]).astype('int')
-                    yRng = yRow[pixRng]
-                    mx = np.argmax(yRng)
-                    mxPos = pixRng[mx]
+                    print('Noise level ' + str(sigmaLimit*nse))
 
-                    if (not allowSearch):
-                        break
+                if allowSearch:
+                    while (mxPos != prevMx):
+                        #update the search range to centre on peak
+                        if (plot):
+                            print(pixRng)
+                            plt.plot(pixRng, yRng)
+                            plt.show()
+                        
+                        prevMx = mxPos
+                        pixRng = (np.arange(winRng)-winRng2 + pixRng[mx]).astype('int')
+                        yRng = yRow[pixRng]
+                        mx = np.argmax(yRng)
+                        mxPos = pixRng[mx]
+                else:
+                    for iSrch in range(nSearchRounds):
+                        #update the search range to centre on peak
+                        if (plot):
+                            print(pixRng)
+                            plt.plot(pixRng, yRng)
+                            plt.show()
+                        
+                        prevMx = mxPos
+                        pixRng = (np.arange(winRng)-winRng2 + pixRng[mx]).astype('int')
+                        yRng = yRow[pixRng]
+                        mx = np.argmax(yRng)
+                        mxPos = pixRng[mx]
                         
                 pixRng = pixRng[np.logical_and(pixRng >=0, pixRng<totPix)]
                 if(plot):
@@ -308,30 +321,35 @@ def getSolQuick(input):
                                 winRngTmp = winRng
                                 amp,cent,wid = gaussFit(pixRng,yRng, winRng/3.,plot=plot,title=str(atlasPix[i]))
 
-                                if (adjustFitWin and wid > winRng/3 and cent>=mnLngth and cent<=mxLngth):
-                                    if (plot):
-                                        print('adjusting fit window')
-                                        
-                                    pixRng = int(cent) + np.arange(int(wid)*5)-int(wid*5/2)
-                                    pixRng= pixRng[np.logical_and(pixRng >=0, pixRng<totPix)]
-                                    yRng = yRow[pixRng]
-
-                                    winRngTmp = wid*4
-                                    amp,cent,wid = gaussFit(pixRng,yRng, winRngTmp/3.,plot=plot,title=str(atlasPix[i]))
-                                
-                                #only keep line if amplitude of fit >2*noise level #and width of fit <1/2 of winRng and cent in expected range
-                                if (amp/nse >= sigmaLimit and np.abs(wid) < winRngTmp/2. and cent >= mnLngth and cent <= mxLngth):
+                                #only continue if cent is within fitting window
+                                if (cent < pixRng[0] or cent > pixRng[-1]):
                                     if plot:
-                                        print('Keeping line')
-                                        
-                                    centFit.append(cent)
-                                    widthFit.append(wid)
-                                    ampFit.append(amp)
-                                    atlasFit.append(atlas[i,0])
-                                    atlasPixFit.append(atlasPix[i])
+                                        print('badly fit line (centre outside of window range), excluding')
                                 else:
-                                    if (plot):
-                                        print('badly fit line, excluding')
+                                    if (adjustFitWin and wid > winRng/3):
+                                        if (plot):
+                                            print('adjusting fit window')
+                                        
+                                        pixRng = int(cent) + np.arange(int(wid)*5)-int(wid*5/2)
+                                        pixRng= pixRng[np.logical_and(pixRng >=0, pixRng<totPix)]
+                                        yRng = yRow[pixRng]
+
+                                        winRngTmp = wid*4
+                                        amp,cent,wid = gaussFit(pixRng,yRng, winRngTmp/3.,plot=plot,title=str(atlasPix[i]))
+                                
+                                    #only keep line if amplitude of fit >2*noise level #and width of fit <1/2 of winRng and cent in expected range
+                                    if (amp/nse >= sigmaLimit and np.abs(wid) < winRngTmp/2.):
+                                        if plot:
+                                            print('Keeping line')
+                                        
+                                        centFit.append(cent)
+                                        widthFit.append(wid)
+                                        ampFit.append(amp)
+                                        atlasFit.append(atlas[i,0])
+                                        atlasPixFit.append(atlasPix[i])
+                                    else:
+                                        if (plot):
+                                            print('badly fit line, excluding')
                                         
                                 if (len(centFit)>mxorder and buildSol):
                                     #update "guessed" dispersion solution to get better line centres
@@ -485,7 +503,7 @@ def getSolQuick(input):
         return np.repeat(np.nan,mxorder+1), [],[], [],np.nan, np.repeat(np.nan,mxorder+1)
     
 
-def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None, allowLower=False, sigmaClip=2., lngthConstraint=False, MP=True, adjustFitWin=False, sigmaLimit=3, allowSearch=False, sigmaClipRounds=1,nPixContFit=50):
+def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None, allowLower=False, sigmaClip=2., lngthConstraint=False, MP=True, adjustFitWin=False, sigmaLimit=3, allowSearch=False, sigmaClipRounds=1,nPixContFit=50,nSearchRounds=1):
     """
     Computes dispersion solution for each set of pixels along the dispersion axis in the provided image slices.
     Usage: output = getWaveSol(dataSlices, template, mxorder, prevSolution, winRng, mxCcor, weights, buildSol, ncpus, allowLower, sigmaClip, lngthConstraint)
@@ -582,11 +600,11 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
                         tmpSol = prevSol[i][j]
                         tmpTemp = tmpLst[i][j,:]
 
-                lst.append([dataLst[i][j,:],tmpTemp, bestLines, mxorder,tmpSol,winRng, mxCcor,weights, False, buildSol,allowLower,sigmaClip,lngthConstraint, adjustFitWin, sigmaLimit, allowSearch, sigmaClipRounds,nPixContFit])
+                lst.append([dataLst[i][j,:],tmpTemp, bestLines, mxorder,tmpSol,winRng, mxCcor,weights, False, buildSol,allowLower,sigmaClip,lngthConstraint, adjustFitWin, sigmaLimit, allowSearch, sigmaClipRounds,nPixContFit,nSearchRounds])
                         
         else:
             for j in range(dataLst[i].shape[0]):
-                    lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, False, buildSol, allowLower, sigmaClip,lngthConstraint, adjustFitWin,sigmaLimit, allowSearch,sigmaClipRounds,nPixContFit])
+                    lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, False, buildSol, allowLower, sigmaClip,lngthConstraint, adjustFitWin,sigmaLimit, allowSearch,sigmaClipRounds,nPixContFit,nSearchRounds])
 
     if (MP):
         #setup multiprocessing routines
