@@ -30,36 +30,25 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 colorama.init()
 
-os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
-os.environ['PYOPENCL_CTX'] = '2' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
+#INPUT VARIABLE FILE NAME
+varFile = 'wifisConfig.inp'
 
-#*****************************************************************************
-#REQUIRED INPUT
+#initialize all variables.
+#DO NOT CHANGE VALUES HERE, EDIT THE 'variables.inp' FILE, WHICH OVERWRITES VALUES HERE
 
-#specifies whether data is hband or not
+os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' 
+os.environ['PYOPENCL_CTX'] = '2' 
 hband = False
-
-#likely static
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
 pipelineFolder = '/data/pipeline/'
-
-#input list/file names
 flatLstFile = 'flat.lst'
 waveLstFile = 'wave.lst'
 obsLstFile = 'obs.lst'
 skyLstFile = 'sky.lst'
 darkFile = ''#'dark.lst'
 noFlat = False
-
-#sky subtraction options
 skySubFirst = True
-
-if skySubFirst:
-    skyCorRegions = [[0,350]]
-else:
-    skyCorRegions = [[1025,1045],[1080,1105],[1140,1175],[1195,1245],[1265,1330]]
-
-#options for flexure/pixel shift between sky/obs cubes
+skyCorRegions = [[0,350]]
 skyShiftCor = True
 skyShiftOverSample = 20
 skyShiftContFit1 = True
@@ -68,122 +57,55 @@ skyShiftnPix = 50
 skyShiftContFitOrd = 1
 skyShiftMxShift = 4
 skyShiftReject = 1
-skyShitMaxLevel = 0. #only used for determining which columns to use if subtracting sky at the image level
-
-#options to determine line strength scaling difference between sky and obs cubes
+skyShitMaxLevel = 0. 
 skyScaleCor = True
 skyScaleMx = 0.9
 skyScaleSigClip = 3
 skyScaleSigClipRnds = 1
-skyScaleUseMxOnly = 0.2 # only uses pixels with >0.2 of maximum signal for fitting/subtracting
-
-#determine additional RV corrections relative to sky emission template
+skyScaleUseMxOnly = 0.2
 getSkyCorRV = True
 skyEmTempFile = pipelineFolder+'/external_data/sky_emission_template.dat'
-
-#telluric correction
 tellCor = False
-
-#optional flat field correction to better match cal flats to dome flats
 flatCorFile = 'processed/flat_correction_slices.fits'
 flatCor = False
-
-#specify calibration files
-if hband:
-    waveTempFile = '/data/pipeline/external_data/waveTemplate_hband.fits'
-    waveTempResultsFile = '/data/pipeline/external_data/waveTemplate_hband_fitResults.pkl'
-    distMapFile = '/home/jason/wifis/data/ronchi_map_june/hband/processed/20170607222050_ronchi_distMap.fits'
-    spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_june/hband/processed/20170607222050_ronchi_spatGridProps.dat'
-else:
-    waveTempFile = '/data/pipeline/external_data/waveTemplate.fits'
-    waveTempResultsFile = '/data/pipeline/external_data/waveTemplateFittingResults.pkl'
-
-    #may
-    #distMapFile = '/home/jason/wifis/data/ronchi_map_may/testing/processed/20170511222022_ronchi_distMap.fits'
-    #distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_may/testing/processed/20170511223518_flat_limits.fits'
-    #spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_may/testing/processed/20170511222022_ronchi_spatGridProps.dat'
-
-    #june
-    #distMapFile = '/home/jason/wifis/data/ronchi_map_june/testing/processed/20170611221759_ronchi_distMap.fits'
-    #distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_june/testing/processed/20170611222844_flat_limits.fits'
-    #spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_june/testing/processed/20170611221759_ronchi_spatGridProps.dat'
-
-    #july
-    #distMapFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707175840_ronchi_distMap.fits'
-    #distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707180443_flat_limits.fits'
-    #spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707175840_ronchi_spatGridProps.dat'
-
-    #august
-    distMapFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831211259_ronchi_distMap.fits'
-    distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831210255_flat_limits.fits'
-    spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831211259_ronchi_spatGridProps.dat'
-
-
+waveTempFile = '/data/pipeline/external_data/waveTemplate.fits'
+waveTempResultsFile = '/data/pipeline/external_data/waveTemplateFittingResults.pkl'
+distMapFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831211259_ronchi_distMap.fits'
+distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831210255_flat_limits.fits'
+spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831211259_ronchi_spatGridProps.dat'
 nlFile = '/home/jason/wifis/data/june_cals/processed/master_detLin_NLCoeff.fits'        
 satFile = '/home/jason/wifis/data/june_cals/processed/master_detLin_satCounts.fits'
 bpmFile = '/home/jason/wifis/data/june_cals/processed/master_dark_BPM.fits'
 atlasFile = pipelineFolder+'external_data/best_lines2.dat'
-
-#bad pixel mask correction range
 bpmCorRng = 1
-
-#pixel scale
-#may old
 xScale = 0.532021532706
 yScale = -0.545667026386
-
-#may new
-#xScale = 0.529835976681
-#yScale = 0.576507533367
-
-#june
-#xScale = 0.549419840181
-#yScale = -0.581389824133
-
-#wavelength fitting
 mxOrder = 3
 cleanDispSol = True
-if hband:
-    cleanDispThresh = 1.5
-    waveTrimThresh=0.25
-else:
-    cleanDispThresh = 1.5
-    waveTrimThresh = 0
-    
-sigmaClipRounds=2 #number of iterations when sigma-clipping of dispersion solution
-sigmaClip = 2 #sigma-clip cutoff when sigma-clipping dispersion solution
-sigmaLimit= 3 #relative noise limit (x * noise level) for which to reject lines
-
-#determine final cube parameters
+cleanDispThresh = 1.5
+waveTrimThresh = 0
+sigmaClipRounds=2 
+sigmaClip = 2 
+sigmaLimit= 3 
 ndiv = 1
-if ndiv == 0:
-    yScale = yScale*35/18.
-
 crReject = False
-
-#optional behaviour
 skipObsinfo = False
-
-#flat field specific options
 flatWinRng = 51
 flatImgSmth = 5
 flatPolyFitDegree=2
-
-#parameters used for processing of ramps
 dispAxis=0
-nChannel=32 #specifies the number of channels used during readout of detector
-flatbpmCorRng=20 #specifies the maximum separation of pixel search to use during bad pixel correction
-nRowsAvg=4 # specifies the number of rows of reference pixels to use to correct for row bias (+/- nRowsAvg)
-rowSplit=1 # specifies how many processing steps to use during reference row correction. Must be integer multiple of number of frames. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
-nlSplit=32 #specifies how many processing steps to use during non-linearity correction. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
-satSplit=32 #specifies how many processing steps to use during identification of first saturated frame. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
-combSplit=32 #specifies how many processing steps to use during creation of ramp image. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
+nChannel=32 
+flatbpmCorRng=20 
+nRowsAvg=4 
+nRowSplit=1 
+nlSplit=32 
+nSatSplit=32 
+nCombSplit=32
 gain = 1.
 ron = 1.
-
-#coordinates
 obsCoords = [-111.600444444,31.9629166667,2071]
 useSesameCoords=True
+
 #*****************************************************************************
 #*****************************************************************************
 
@@ -191,6 +113,18 @@ logfile = open('wifis_reduction_log.txt','a')
 logfile.write('******************************\n')
 logfile.write(time.strftime("%c")+'\n')
 logfile.write('Processing science observations with WIFIS pyPline\n')
+print('Reading input variables from file ' + varFile)
+logfile.write('Reading input variables from file ' + varFile)
+
+varInp = wifisIO.readInputVariables(varFile)
+for var in varInp:
+    locals()[var[0]]=var[1]
+    
+
+#execute pyOpenCL section here
+os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut 
+os.environ['PYOPENCL_CTX'] = pyCLCTX 
+
 logfile.write('Root folder containing raw data: ' + str(rootFolder)+'\n')
 
 #create processed directory, in case it doesn't exist
@@ -336,7 +270,7 @@ for i in range(len(obsLst)):
         print('\n*** Processed flat field files do not exist for folder ' +flatFolder +', processing flat folder ***')
         logfile.write('Processed flat field files do not exist for folder ' +flatFolder +', processing flat folder\n')
         
-        calFlat.runCalFlat(np.asarray([flatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, distMapLimitsFile = distMapLimitsFile, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=rowSplit,nlSplit=nlSplit, combSplit=combSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile,darkFile=darkFile, logfile=logfile, ask=False, obsCoords=obsCoords)
+        calFlat.runCalFlat(np.asarray([flatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, distMapLimitsFile = distMapLimitsFile, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplit,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile,darkFile=darkFile, logfile=logfile, ask=False, obsCoords=obsCoords, limSmth=flatLimSmth, flatCutOff=flatCutOff)
         
     print('Reading slice limits')
     logfile.write('Reading slice limits from file:\n')
@@ -378,7 +312,7 @@ for i in range(len(obsLst)):
         print('\n*** Processed arc files do not exist for folder ' +waveFolder +', processing wave folder ***')
         logfile.write('\nProcessed arc files do not exist for folder ' +waveFolder +', processing wave folder\n')
         
-        calWave.runCalWave(waveLst, flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=True, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, bpmCorRng=flatbpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, flatWinRng=flatWinRng,flatImgSmth=flatImgSmth, flatPolyFitDegree=mxOrder, distMapFile=distMapFile, spatGridPropsFile=spatGridPropsFile, atlasFile=atlasFile, templateFile=waveTempFile, prevResultsFile=waveTempResultsFile,  sigmaClip=sigmaClip, sigmaClipRounds=sigmaClipRounds, sigmaLimit=sigmaLimit, cleanDispSol=cleanDispSol,cleanDispThresh = cleanDispThresh, waveTrimThresh=waveTrimThresh,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile,darkFile=darkFile,logfile=logfile,ask=False, obsCoords=obsCoords)
+        calWave.runCalWave(waveLst, flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=True, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, bpmCorRng=flatbpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, flatWinRng=flatWinRng,flatImgSmth=flatImgSmth, flatPolyFitDegree=mxOrder, distMapFile=distMapFile, spatGridPropsFile=spatGridPropsFile, atlasFile=atlasFile, templateFile=waveTempFile, prevResultsFile=waveTempResultsFile,  sigmaClip=sigmaClip, sigmaClipRounds=sigmaClipRounds, sigmaLimit=sigmaLimit, cleanDispSol=cleanDispSol,cleanDispThresh = cleanDispThresh, waveTrimThresh=waveTrimThresh,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile,darkFile=darkFile,logfile=logfile,ask=False, obsCoords=obsCoords)
 
     print('Reading in wavelength mapping files')
     logfile.write('Using wavelength map from file:\n')
@@ -409,7 +343,7 @@ for i in range(len(obsLst)):
         contProc = True
     
     if (contProc):
-        obs, sigmaImg, satFrame, hdr = processRamp.auto(obsFolder, rootFolder,'processed/'+obsFolder+'_obs.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=ron,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True, satSplit=satSplit)
+        obs, sigmaImg, satFrame, hdr = processRamp.auto(obsFolder, rootFolder,'processed/'+obsFolder+'_obs.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=crReject, bpmCorRng=bpmCorRng, nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=ron,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True, satSplit=nSatSplit)
             
     else:
         print('Reading science data from file')
@@ -431,7 +365,7 @@ for i in range(len(obsLst)):
         if not os.path.exists('processed/'+skyFolder+'_sky.fits'):
             print('Processing sky folder '+skyFolder)
             logfile.write('\nProcessing sky folder ' + skyFolder+'\n')
-            sky, skySigmaImg, skySatFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=ron,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True,satSplit=satSplit)
+            sky, skySigmaImg, skySatFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=crReject, bpmCorRng=bpmCorRng,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=ron,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True,satSplit=nSatSplit)
                 
         if skySubFirst:
             #subtract sky from data at this stage
