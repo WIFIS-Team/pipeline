@@ -20,52 +20,38 @@ import time
 import colorama
 
 colorama.init()
-os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
-os.environ['PYOPENCL_CTX'] = '2' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
 
 #*****************************************************************************
 #******************************* Required input ******************************
+#INPUT VARIABLE FILE NAME
+varFile = 'wifisConfig.inp'
 
-flatListFile = 'flat.lst' # a simple ascii file containing a list of the folder names that contain the ramp data
-darkListFile = '' #None # list of processed dark ramps
-
+#initialize all variables.
+#DO NOT CHANGE VALUES HERE, EDIT THE 'variables.inp' FILE, WHICH OVERWRITES VALUES HERE
+flatLstFile = 'flat.lst' 
+darkFile = ''
 hband = False
-
-#pipeline location and RAW data location
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
 pipelineFolder = '/data/pipeline/'
-
-#location of calibration files
 nlFile = pipelineFolder + 'external_data/master_detLin_NLCoeff.fits' # the non-linearity correction coefficients file        
 satFile = pipelineFolder+'external_data/master_detLin_satCounts.fits' # the saturation limits file
 bpmFile = pipelineFolder+'external_data/bpm.fits' # the bad pixel mask
-
-if hband:
-    distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_june/hband/processed/20170607221050_flat_limits.fits'
-else:
-    #distMapLimitsFile = pipelineFolder+'external_data/distMap_limits.fits'
-    distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_august/tb/processed/20170831210255_flat_limits.fits'
-    
-#distMapLimitsFile = ''
-#optional behaviour of pipeline
+distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_august/tb/processed/20170831210255_flat_limits.fits'
 plot = True #whether to plot the traces
 crReject = False
 skipObsinfo = False
-winRng = 51
-imgSmth = 5
-limSmth = 20
-polyFitDegree=2
+flatWinRng = 51
+flatImgSmth = 5
+flatLimSmth = 20
+flatPolyFitDegree=2
 dispAxis=0
-
-flatSmooth=0
 flatCutOff = 0.1
-#parameters used for processing of ramps
 nChannel=32 #specifies the number of channels used during readout of detector
-bpmCorRng=20 #specifies the maximum separation of pixel search to use during bad pixel correction
+flatbpmCorRng=20 #specifies the maximum separation of pixel search to use during bad pixel correction
 nRowsAvg=0 # specifies the number of rows of reference pixels to use to correct for row bias (+/- nRowAvg)
-rowSplit=1 # specifies how many processing steps to use during reference row correction. Must be integer multiple of number of frames. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
+nRowSplit=1 # specifies how many processing steps to use during reference row correction. Must be integer multiple of number of frames. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
 nlSplit=32 #specifies how many processing steps to use during non-linearity correction. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption. 
-combSplit=32 #specifies how many processing steps to use during creation of ramp image. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
+nCombSplit=32 #specifies how many processing steps to use during creation of ramp image. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
 gain = 1.
 ron = 1.
 
@@ -74,10 +60,23 @@ obsCoords = [-111.600444444,31.9629166667,2071]
 #*****************************************************************************
 #*****************************************************************************
 
+#override some variables
 logfile = open('wifis_reduction_log.txt','a')
 logfile.write('********************\n')
 logfile.write(time.strftime("%c")+'\n')
 logfile.write('Processing flatfield files with WIFIS pyPline\n')
+
+print('Reading input variables from file ' + varFile)
+logfile.write('Reading input variables from file ' + varFile)
+
+varInp = wifisIO.readInputVariables(varFile)
+for var in varInp:
+    locals()[var[0]]=var[1]
+  
+#execute pyOpenCL section here
+os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut 
+os.environ['PYOPENCL_CTX'] = pyCLCTX 
+
 logfile.write('Root folder containing raw data: ' + str(rootFolder)+'\n')
 
 #first check if required input exists
@@ -115,8 +114,8 @@ else:
     logfile.write('*** WARNING: No bad pixel mask provided or file ' + str(bpmFile) +' does not exist ***\n')
     
 
-if (darkListFile is not None) and os.path.exists(darkListFile):
-    darkLst = wifisIO.readAsciiList(darkListFile)
+if (darkFile is not None) and os.path.exists(darkFile):
+    darkLst = wifisIO.readAsciiList(darkFile)
     
     if darkLst.ndim == 0:
         darkLst = [darkLst]
@@ -124,20 +123,20 @@ if (darkListFile is not None) and os.path.exists(darkListFile):
         darkLst = None
 else:
     darkLst = None
-    logfile.write('*** WARNING: No darks provided or dark list ' + str(darkListFile) +' does not exist ***\n')
+    logfile.write('*** WARNING: No darks provided or dark list ' + str(darkFile) +' does not exist ***\n')
 
 #read file list
-if os.path.exists(flatListFile):
-    flatLst= wifisIO.readAsciiList(flatListFile)
+if os.path.exists(flatLstFile):
+    flatLst= wifisIO.readAsciiList(flatLstFile)
 else:
-    logfile.write('*** FAILURE: Flat file list ' + str(flatListFile) +' does not exist ***\n')
-    raise Warning('*** Flat file list ' + flatListFile + ' does not exist ***')
+    logfile.write('*** FAILURE: Flat file list ' + str(flatLstFile) +' does not exist ***\n')
+    raise Warning('*** Flat file list ' + flatLstFile + ' does not exist ***')
 
 if flatLst.ndim == 0:
     flatLst = np.asarray([flatLst])
 
 logfile.write('\n')
-calFlat.runCalFlat(flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=plot, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, bpmCorRng=bpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, imgSmth=imgSmth, polyFitDegree=polyFitDegree, avgRamps=True, nlFile=nlFile, satFile=satFile, bpmFile=bpmFile, flatCutOff=flatCutOff, logfile=logfile, winRng=winRng, dispAxis=dispAxis, limSmth=limSmth, obsCoords=obsCoords)
+calFlat.runCalFlat(flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=plot, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, bpmCorRng=flatbpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, imgSmth=flatImgSmth, polyFitDegree=flatPolyFitDegree,nlFile=nlFile, satFile=satFile, bpmFile=bpmFile, flatCutOff=flatCutOff, logfile=logfile, winRng=flatWinRng, dispAxis=dispAxis, limSmth=flatLimSmth, obsCoords=obsCoords, darkFile=darkFile)
 
 logfile.write('********************\n')
 logfile.write('\n')
