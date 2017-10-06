@@ -12,6 +12,8 @@ import os
 import sys
 import astropy
 import cPickle
+import numpy as np
+import ast
 
 def readRampFromFile(filename):
     """
@@ -494,3 +496,44 @@ def getPath(folder, rootFolder=''):
     else:
         raise Warning('*** Folder ' + folder +' does not exist ***')
     return path
+
+def readInputVariables(fileName='wifisConfig.inp'):
+    """
+    """
+
+    #read all file contents into list
+    with open(fileName) as fle:
+        inpLst = list(fle)
+
+    inpVars = []
+    for line in inpLst:
+        tmp = line.strip('\n')
+        tmp = tmp.lstrip()
+        if len(tmp)>0:
+            if tmp[0][0] !='#': #ignore comment lines
+                #remove comment sections from line
+                tmp = tmp.split('#')[0].rstrip(' ') # only keep first part of line
+                tmp = tmp.split('=')
+                tmp[0] = tmp[0].rstrip()
+                tmp[1] = tmp[1].lstrip().rstrip()
+                tmp[1] = ast.literal_eval(tmp[1])
+                inpVars.append(tmp)
+
+
+    return inpVars
+
+def getRampType(folder, rootFolder=''):
+    """
+    """
+    
+    #CDS
+    if os.path.exists(rootFolder+'/CDSReference/'+folder):
+        rampType = '/CDSReference/'
+    #Fowler
+    elif os.path.exists(rootFolder+'/FSRamp/'+folder):
+        rampType = '/FSRamp/'
+    elif os.path.exists(rootFolder + '/UpTheRamp/'+folder):
+        rampType = '/UpTheRamp/'
+    else:
+        raise Warning('*** Folder ' + folder +' does not exist ***')
+    return rampType
