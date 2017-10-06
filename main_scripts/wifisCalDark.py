@@ -12,6 +12,8 @@ Produces:
 - master dark image
 - bad pixel map (merged) *** STILL TO DO ***
 
+
+TODO: ADD LOGFILE WRITING
 """
 
 import matplotlib
@@ -39,27 +41,40 @@ try:
 except:
     colorFlag = False
     
-os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0' # Used to show compile errors for debugging, can be removed
-os.environ['PYOPENCL_CTX'] = '2' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
-
 t0 = time.time()
 
 #*****************************************************************************
-#************************** Required user input ******************************
-fileList = 'dark.lst'
+#************************** user input ******************************
+varFile = 'wifisConfig.inp'
+
+#initialize all variables here.
+#DO NOT CHANGE VALUES HERE, EDIT THE 'variables.inp' FILE, WHICH OVERWRITES VALUES HERE
+darkLstFile = 'dark.lst'
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
 pipelineFolder = '/data/pipeline/'
-
 nlFile = '/home/jason/wifis/data/june_cals/processed/master_detLin_NLCoeff.fits' # the non-linearity correction coefficients file        
 satFile = '/home/jason/wifis/data/non-linearity/july/processed/master_detLin_satCounts.fits' # the saturation limits file
 bpmFile = '//home/jason/wifis/data/non-linearity/july/processed/master_detLin_BPM.fits'
-
-nRowSplit = 5
-nRowAvg =  4
-nChannels = 32
+nRowsAvg =  4
+nChannel = 32
+nCombSplit=32
+nSatSplit=32
 getBadPixDark = True
 getBadPixRON = True
+
+print('Reading input variables from file ' + varFile)
+#logfile.write('Reading input variables from file ' + varFile)
+varInp = wifisIO.readInputVariables(varFile)
+for var in varInp:
+    locals()[var[0]]=var[1]
+
+#VARIABLE OVERRIDES - USEFUL FOR STICKING WITH SAME INPUT SCRIPT, BUT FOR DIFFERENT USES
+nRowSplit=5
 #*****************************************************************************
+
+#execute pyOpenCL section here
+os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut 
+os.environ['PYOPENCL_CTX'] = pyCLCTX 
 
 interval=ZScaleInterval()
 
@@ -78,7 +93,7 @@ wifisIO.createDir('processed')
 wifisIO.createDir('quality_control')
 
 #read file list
-lst= wifisIO.readAsciiList(fileList)
+lst= wifisIO.readAsciiList(darkLstFile)
 
 if lst.ndim == 0:
     lst = np.asarray([lst])
@@ -165,19 +180,19 @@ if (contProc):
                 #******************************************************************************
                 #Correct data for reference pixels
                 print("Subtracting reference pixel channel bias")
-                refCor.channelCL(data, nChannels)
-                hdr.add_history('Channel reference pixel corrections applied using '+ str(nChannels) +' channels')
+                refCor.channelCL(data, nChannel)
+                hdr.add_history('Channel reference pixel corrections applied using '+ str(nChannel) +' channels')
                 
                 print("Subtracting reference pixel row bias")
-                refCor.rowCL(data, nRowAvg,nRowSplit) 
-                hdr.add_history('Row reference pixel corrections applied using '+ str(int(nRowAvg+1))+ ' pixels')
+                refCor.rowCL(data, nRowsAvg,nRowSplit) 
+                hdr.add_history('Row reference pixel corrections applied using '+ str(int(nRowsAvg+1))+ ' pixels')
                 
                 #******************************************************************************
                 #find if any pixels are saturated to avoid use in future calculations
 
                 if os.path.exists(satFile):
                     satCounts = wifisIO.readImgsFromFile(satFile)[0]
-                    satFrame = satInfo.getSatFrameCL(data, satCounts,32, ignoreRefPix=True)
+                    satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit, ignoreRefPix=True)
                     hdr.add_history('Saturation levels determined from file:')
                     hdr.add_history(satFile)
 
@@ -192,14 +207,14 @@ if (contProc):
 
                 if os.path.exists(nlFile):
                     nlCoeff = wifisIO.readImgsFromFile(nlFile)[0]
-                    NLCor.applyNLCorCL(data, nlCoeff, 32)
+                    NLCor.applyNLCorCL(data, nlCoeff, nlSplit)
                     hdr.add_history('Non-linearity corrections applied using file:')
                     hdr.add_history(nlFile)
                     
                 #******************************************************************************
                 #Combine data cube into single image
-                fluxImg, zpntImg, varImg = combData.upTheRampCL(inttime, data, satFrame, 32)
-                #fluxImg = combData.upTheRampCRRejectCL(inttime, data, satFrame, 32)
+                fluxImg, zpntImg, varImg = combData.upTheRampCL(inttime, data, satFrame, nCombSplit)
+                #fluxImg = combData.upTheRampCRRejectCL(inttime, data, satFrame, nCombSplit)
                 hdr.add_history('Flux determined from linear regression')
 
                 #reset cube to reduce memory impact 
