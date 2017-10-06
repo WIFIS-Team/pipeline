@@ -21,11 +21,12 @@ import wifisWaveSol as waveSol
 import wifisProcessRamp as processRamp
 from matplotlib.backends.backend_pdf import PdfPages
 import wifisSpatialCor as spatialCor
-
+from astropy.visualization import ZScaleInterval
 #******************************************************************************
 
 def initPaths(hband=False):
     """
+    THIS FUNCTION IS DEPRECATED. IT IS NO LONGER NEEDED AS ALL VARIABLES ARE INITIALIZED FROM A CONFIGURATION FILE WITHIN THE INDIVIDUAL ROUTINES
     """
 
     #create global variables
@@ -42,11 +43,11 @@ def initPaths(hband=False):
     global prevResultsFile
     global atlasFile
     global nlFile
+    global obsCoords
 
     #set paths here
 
     rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319/'
-
     pipelineFolder = '/data/pipeline/'
 
     if hband:
@@ -65,28 +66,45 @@ def initPaths(hband=False):
         spatGridPropsFile = pipelineFolder + '/external_data/distMap_spatGridProps.dat'
         distMapLimitsFile = pipelineFolder+'/external_data/distMap_limits.fits'
 
+        #july
         distMapFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707175840_ronchi_distMap.fits'
         spatGridPropsFile ='/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707175840_ronchi_spatGridProps.dat'
         distMapLimitsFile ='/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707180443_flat_limits.fits'
-        
-        #should be (mostly) static
-        atlasFile = pipelineFolder + '/external_data/best_lines2.dat'
-        satFile = pipelineFolder + '/external_data/master_detLin_satCounts.fits'
-        bpmFile = pipelineFolder+'external_data/bpm.fits'
-        nlFile = pipelineFolder + 'external_data/master_detLin_NLCoeff.fits' 
 
-        #set the pixel scale
-        xScale = 0.532021532706
-        yScale = -0.545667026386 #valid for npix=1, i.e. 35 pixels spanning the 18 slices. This value needs to be updated in agreement with the choice of interpolation
+        #august
+        distMapFile = '/home/jason/wifis/data/ronchi_map_august/tb/processed/20170831211259_ronchi_distMap.fits'
+        distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_august/tb/processed/20170831210255_flat_limits.fits'
+        spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_august/tb/processed/20170831211259_ronchi_spatGridProps.dat'
+        
+    #should be (mostly) static
+    atlasFile = pipelineFolder + '/external_data/best_lines2.dat'
+    satFile = pipelineFolder + '/external_data/master_detLin_satCounts.fits'
+    bpmFile = pipelineFolder+'external_data/bpm.fits'
+    nlFile = pipelineFolder + 'external_data/master_detLin_NLCoeff.fits' 
+
+    #set the pixel scale
+    xScale = 0.532021532706
+    yScale = -0.545667026386 #valid for npix=1, i.e. 35 pixels spanning the 18 slices. This value needs to be updated in agreement with the choice of interpolation
+    obsCoords = [-111.600444444,31.9629166667,2071]
+
 
     return
 #*******************************************************************************
 
 
-def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRange=None):
+def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRange=None, varFile=''):
     """
     """
-    
+
+    #initialize variables using configuration file
+    varInp = wifisIO.readInputVariables(varFile)
+    for var in varInp:
+        globals()[var[0]]=var[1]    
+
+    #execute pyOpenCL section here
+    os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut 
+    os.environ['PYOPENCL_CTX'] = pyCLCTX 
+
     satCounts = wifisIO.readImgsFromFile(satFile)[0]
 
     wifisIO.createDir('quick_reduction')
@@ -110,10 +128,10 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
             data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + rampFolder)
 
             #find if any pixels are saturated and avoid usage
-            satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+            satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit)
 
             #get processed ramp
-            fluxImg = combData.FowlerSamplingCL(inttime, data, satFrame, 32)[0]
+            fluxImg = combData.FowlerSamplingCL(inttime, data, satFrame, nCombSplit)[0]
             data = 0
     elif os.path.exists(rootFolder + '/UpTheRamp/'+rampFolder):
         UTR = True
@@ -135,10 +153,10 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
             data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + rampFolder)
 
             #find if any pixels are saturated and avoid usage
-            satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+            satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit)
 
             #get processed ramp
-            fluxImg = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
+            fluxImg = combData.upTheRampCL(inttime, data, satFrame, nCombSplit)[0]
             data = 0
     else:
         raise SystemExit('*** Ramp folder ' + rampFolder + ' does not exist ***')
@@ -167,10 +185,10 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
                 data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + skyFolder)
 
                 #find if any pixels are saturated and avoid usage
-                satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+                satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit)
 
                 #get processed ramp
-                skyImg = combData.FowlerSamplingCL(inttime, data, satFrame, 32)[0]
+                skyImg = combData.FowlerSamplingCL(inttime, data, satFrame,nCombSplit)[0]
                 data = 0
         elif os.path.exists(rootFolder + '/UpTheRamp/'+skyFolder):
             UTR = True
@@ -190,16 +208,18 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
                 data, inttime, hdrSky = wifisIO.readRampFromFolder(rootFolder + folderType + skyFolder)
             
                 #find if any pixels are saturated and avoid usage
-                satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+                satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit)
                 
                 #get processed ramp
-                skyImg = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
+                skyImg = combData.upTheRampCL(inttime, data, satFrame, nCombSplit)[0]
                 data = 0
         else:
             raise SystemExit('*** sky Ramp folder ' + skyFolder + ' does not exist ***')
 
         #subtract
-        fluxImg -= skyImg
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore',RuntimeWarning)
+            fluxImg -= skyImg
 
     #remove bad pixels
     if os.path.exists(bpmFile):
@@ -212,7 +232,7 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
             if UTR and not noProc:
                 fluxImg[fluxImg < 0] = np.nan
                 fluxImg[satFrame < 2] = np.nan
-            
+                
     fluxImg = fluxImg[4:-4, 4:-4]
 
     #first check if limits already exists
@@ -239,10 +259,10 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
                 data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + flatFolder)
 
                 #find if any pixels are saturated and avoid usage
-                satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+                satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit)
                 
                 #get processed ramp
-                flat = combData.FowlerSamplingCL(inttime, data, satFrame, 32)[0]  
+                flat = combData.FowlerSamplingCL(inttime, data, satFrame, nCombSplit)[0]  
                 data = 0
         elif os.path.exists(rootFolder + '/UpTheRamp/'+flatFolder):
             folderType = '/UpTheRamp/'
@@ -262,10 +282,10 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
                 data, inttime, hdrFlat = wifisIO.readRampFromFolder(rootFolder + folderType + flatFolder)
             
                 #find if any pixels are saturated and avoid usage
-                satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+                satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit)
                 
                 #get processed ramp
-                flat = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
+                flat = combData.upTheRampCL(inttime, data, satFrame, nCombSplit)[0]
                 data = 0 
         else:
             raise SystemExit('*** flat folder ' + flatFolder + ' does not exist ***')
@@ -319,7 +339,7 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
     gFit = fitG(gInit, x,y,dataImg)
     
     #fill in header info
-    headers.addTelInfo(hdr, obsinfoFile)
+    headers.addTelInfo(hdr, obsinfoFile, obsCoords=obsCoords)
 
     #save distortion corrected slices
     wifisIO.writeFits(dataGrid, 'quick_reduction/'+rampFolder+'_quickRed_slices_grid.fits', hdr=hdr, ask=False)
@@ -335,7 +355,9 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
     print('Plotting data')
     fig = plt.figure()
     ax = fig.add_subplot(111, projection=WCS)
-    plt.imshow(dataImg, origin='lower', cmap='jet')
+    interval=ZScaleInterval()
+    lims=interval.get_limits(dataImg)
+    plt.imshow(dataImg, origin='lower', cmap='jet', clim=lims)
     r = np.arange(360)*np.pi/180.
     fwhmX = np.abs(2.3548*gFit.x_stddev*xScale)
     fwhmY = np.abs(2.3548*gFit.y_stddev*yScale)
@@ -359,26 +381,30 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
     ax.text((cent+raAx)[0]+1, (cent+raAx)[1]+1,"E",ha="left", va="bottom", rotation=rotAng, color='w')
 
     plt.title(hdr['Object'] + ': FWHM of object is: '+'{:4.2f}'.format(fwhmX)+' in x and ' + '{:4.2f}'.format(fwhmY)+' in y, in arcsec')
+    plt.tight_layout()
     plt.savefig('quick_reduction/'+rampFolder+'_quickRedImg.png', dpi=300)
     plt.show()
     plt.close('all')
     return
 
-def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None):
+def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFile=''):
     """
     """
 
-    sigmaClipRounds=1 #number of iterations when sigma-clipping of dispersion solution
-    sigmaClip = 3 #sigma-clip cutoff when sigma-clipping dispersion solution
-    sigmaLimit= 3 #relative noise limit (x * noise level) for which to reject lines
-    mxOrder = 3
+    #initialize variables using configuration file
+    varInp = wifisIO.readInputVariables(varFile)
+    for var in varInp:
+        globals()[var[0]]=var[1]    
 
-    
+    #execute pyOpenCL section here
+    os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut 
+    os.environ['PYOPENCL_CTX'] = pyCLCTX 
+
     wifisIO.createDir('quick_reduction')
 
     #read in previous results and template
-    template = wifisIO.readImgsFromFile(templateFile)[0]
-    prevResults = wifisIO.readPickle(prevResultsFile)
+    template = wifisIO.readImgsFromFile(waveTempFile)[0]
+    prevResults = wifisIO.readPickle(waveTempResultsFile)
     prevSol = prevResults[5]
     distMap = wifisIO.readImgsFromFile(distMapFile)[0]
     spatGridProps = wifisIO.readTable(spatGridPropsFile)
@@ -403,18 +429,18 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None):
                 data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + waveFolder)
 
                 #find if any pixels are saturated and avoid usage
-                satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+                satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit)
 
                 #get processed ramp
-                wave = combData.FowlerSamplingCL(inttime, data, satFrame, 32)[0]
+                wave = combData.FowlerSamplingCL(inttime, data, satFrame, nCombSplit)[0]
                 data = 0
         elif os.path.exists(rootFolder+'/UpTheRamp/'+waveFolder):
             #assume up-the-ramp
             data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + '/UpTheRamp/'+waveFolder)
-            satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+            satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit)
             
             #get processed ramp
-            wave = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
+            wave = combData.upTheRampCL(inttime, data, satFrame, nCombSplit)[0]
             wave = wave[4:-4,4:-4]
             data = 0
         else:
@@ -430,7 +456,7 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None):
             if (os.path.exists(rootFolder + '/CDSReference/'+flatFolder+'/Result/CDSResult.fits')):
                 #CDS image
                 flat, flatHdr = wifisIO.readImgsFromFile(rootFolder + '/CDSReference/'+flatFolder+'/Result/CDSResult.fits')
-            elif os.path.exists(rootfolder+'/FSRamp/'+flatFolder):
+            elif os.path.exists(rootFolder+'/FSRamp/'+flatFolder):
                 folderType = '/FSRamp/'
                 UTR =  False
                 if os.path.exists(rootFolder + folderType + flatFolder+'/Result/CDSResult.fits'):
@@ -439,17 +465,17 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None):
                     data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + flatFolder)
                     
                     #find if any pixels are saturated and avoid usage
-                    satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+                    satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit)
 
                     #get processed ramp
-                    flat = combData.FowlerSamplingCL(inttime, data, satFrame, 32)[0]  
+                    flat = combData.FowlerSamplingCL(inttime, data, satFrame, nCombSplit)[0]  
                     data = 0
             elif os.path.exists(rootFolder + '/UpTheRamp/'+flatFolder):
                 data, inttime, flatHdr = wifisIO.readRampFromFolder(rootFolder + '/UpTheRamp/'+flatFolder)
                 satCounts = wifisIO.readImgsFromFile(satFile)[0]
-                satFrame = satInfo.getSatFrameCL(data, satCounts,32)
+                satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit)
                 #get processed ramp
-                flat = combData.upTheRampCL(inttime, data, satFrame, 32)[0]
+                flat = combData.upTheRampCL(inttime, data, satFrame, nCombSplit)[0]
                 data = 0
             else:
                 raise SystemExit('*** Flat folder ' + flatFolder + ' does not exist ***')
@@ -560,20 +586,35 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None):
         print('plotting results')
         fig = plt.figure()
 
-        plt.imshow(fwhmMap, aspect='auto', cmap='jet', clim=colorbarLims, origin='lower')
+        if colorbarLims is None:
+            interval=ZScaleInterval()
+            lims=interval.get_limits(fwhmMap)
+        else:
+            lims = colorbarLims
+
+        plt.imshow(fwhmMap, aspect='auto', cmap='jet', clim=lims, origin='lower')
 
         plt.colorbar()
         plt.title('Median FWHM is '+'{:3.1f}'.format(fwhmMed) +', min wave is '+'{:6.1f}'.format(waveMin)+', max wave is '+'{:6.1f}'.format(waveMax))
+        plt.tight_layout()
         plt.savefig('quick_reduction/'+waveFolder+'_wave_fwhm_map.png', dpi=300)
         plt.show()
         plt.close()
 
     return
 
-def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxWidth=4):
+def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxWidth=4, varFile=''):
     """
     """
 
+    #initialize variables using configuration file
+    varInp = wifisIO.readInputVariables(varFile)
+    for var in varInp:
+        globals()[var[0]]=var[1]    
+
+    #execute pyOpenCL section here
+    os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut 
+    os.environ['PYOPENCL_CTX'] = pyCLCTX 
     
     #read in calibration data
     satCounts = wifisIO.readImgsFromFile(satFile)[0]
@@ -592,24 +633,28 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxW
     else:
         print('processing flat ' + flatFolder)
 
-        flat, sigmaImg, satFrame, hdr = processRamp.auto(flatFolder, rootFolder,'quick_reduction/'+flatFolder+'_flat.fits', satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=20, saveAll=False)
+        flat, sigmaImg, satFrame, hdr = processRamp.auto(flatFolder, rootFolder,'quick_reduction/'+flatFolder+'_flat.fits', satCounts, nlCoeff, BPM,nChannel=nChannel, rowSplit=nRowSplit, satSplit=nSatSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=flatbpmCorRng, saveAll=False)
     
         #find limits
         print('finding limits and extracting flat slices')
-        limits = slices.findLimits(flat, dispAxis=0, limSmth=5, rmRef=True)
+        limits = slices.findLimits(flat, dispAxis=dispAxis, limSmth=flatLimSmth, rmRef=True)
 
-        polyLims = slices.polyFitLimits(limits, degree=2, sigmaClipRounds=1)
+        polyLims = slices.polyFitLimits(limits, degree=flatPolyFitDegree, sigmaClipRounds=1)
 
+        interval = ZScaleInterval()
+        
         with PdfPages('quick_reduction/'+flatFolder+'_flat_slices_traces.pdf') as pdf:
             fig = plt.figure()
             med1= np.nanmedian(flat)
-            
-            plt.imshow(flat[4:-4,4:-4], aspect='auto', cmap='jet', clim=[0,2.*med1], origin='lower')
+
+            lims = interval.get_limits(flat[4:-4,4:-4])
+            plt.imshow(flat[4:-4,4:-4], aspect='auto', cmap='jet', clim=lims, origin='lower')
             plt.xlim=(0,2040)
             plt.colorbar()
             for l in range(limits.shape[0]):
                 plt.plot(limits[l], np.arange(limits.shape[1]),'k', linewidth=1) #drawn limits
                 plt.plot(np.clip(polyLims[l],0, flat[4:-4,4:-4].shape[0]-1), np.arange(limits.shape[1]),'r--', linewidth=1) #shifted ronchi limits, if provided, or polynomial fit
+            plt.tight_layout()
             pdf.savefig()
             plt.close(fig)
            
@@ -628,7 +673,7 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxW
         
         #now process the Ronchi ramp
         #check the type of raw data, only assumes CDS or up-the-ramp
-        ronchi, sigmaImg, satFrame, hdr = processRamp.auto(ronchiFolder, rootFolder,'quick_reduction/'+ronchiFolder+'_ronchi.fits', satCounts, nlCoeff, BPM,nChannel=32, rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=20, saveAll=False)
+        ronchi, sigmaImg, satFrame, hdr = processRamp.auto(ronchiFolder, rootFolder,'quick_reduction/'+ronchiFolder+'_ronchi.fits', satCounts, nlCoeff, BPM,nChannel=nChannel, rowSplit=nRowSplit, satSplit=nSatSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=20, saveAll=False)
 
         print('extracting ronchi slices')
         ronchi=ronchi[4:-4, 4:-4]
@@ -637,38 +682,21 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxW
         wifisIO.writeFits(ronchiSlices, 'quick_reduction/'+ronchiFolder+'_ronchi_slices.fits',ask=False)
 
         print('Getting traces')
-        ronchiTraces = []
-        ronchiAmps =[]
-        for i in range(len(ronchiSlices)):
-            ronchiTraces.append([])
-            ronchiAmps.append([])
-
-        #easy traces
-        
-        inp = [ronchiSlices[0],ronchiSlices[1],ronchiSlices[2],ronchiSlices[3],ronchiSlices[4],ronchiSlices[5],ronchiSlices[6],ronchiSlices[7],ronchiSlices[8],ronchiSlices[9],ronchiSlices[10],ronchiSlices[11],ronchiSlices[14]]
-        out = spatialCor.traceRonchiAll(inp, nbin=2, winRng=7, mxWidth=mxWidth,smth=20, bright=False, flatSlices=None, MP=True)
-
-        ronchiTraces[:12] = out[0][:12]
-        ronchiTraces[14] = out[0][12]
-
-        ronchiAmps[:12] = out[1][:12]
-        ronchiAmps[14] = out[1][12]
-
-        #difficult slices
-        out = spatialCor.traceRonchiAll([ronchiFlat[12], ronchiFlat[13],ronchiFlat[15], ronchiFlat[16], ronchiFlat[17]], nbin=1, winRng=7, mxWidth=mxWidth,smth=20, bright=False, flatSlices=[flatSlices[12],flatSlices[13],flatSlices[15],flatSlices[16], flatSlices[17]], MP=True, threshold=0.75)
-        
-        [ronchiTraces[12], ronchiTraces[13], ronchiTraces[15], ronchiTraces[16], ronchiTraces[17]] = out[0]
-        [ronchiAmps[12], ronchiAmps[13], ronchiAmps[15], ronchiAmps[16], ronchiAmps[17]] = out[1]
-
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore',RuntimeWarning)
+            ronchiTraces, ronchiAmps = spatialCor.traceRonchiAll(ronchiFlat, nbin=ronchiNbin, winRng=ronchiWinRng, mxWidth=ronchiMxWidth,smth=ronchiSmth, bright=ronchiBright, flatSlices=flatSlices, MP=True)
+            
         #get rid of bad traces
         for i in range(len(ronchiTraces)):
             r = ronchiTraces[i]
-
-            whr = np.where(np.logical_or(r<0, r>=ronchiSlices[i].shape[0]))
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore',RuntimeWarning)
+                whr = np.where(np.logical_or(r<0, r>=ronchiSlices[i].shape[0]))
             ronchiTraces[i][whr] = np.nan
             ronchiAmps[i][whr] = np.nan
 
-            
+        interval=ZScaleInterval()
+        
         with PdfPages('quick_reduction/'+ronchiFolder+'_ronchi_slices_traces.pdf') as pdf:
             for i in range(len(ronchiSlices)):
                 fig = plt.figure()
@@ -676,12 +704,14 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxW
                 with warnings.catch_warnings():
                     warnings.simplefilter('ignore',RuntimeWarning)
                     s = np.nanstd(ronchiSlices[i][np.logical_and(ronchiSlices[i] < 5*m, ronchiSlices[i]>0)])
-            
-                plt.imshow(ronchiSlices[i], aspect='auto', clim=[0,m+1.5*s], origin='lower')
+
+                lims = interval.get_limits(ronchiSlices[i])
+                plt.imshow(ronchiSlices[i], aspect='auto', clim=lims, origin='lower')
 
                 for j in range(len(ronchiTraces[i])):
                     plt.plot(ronchiTraces[i][j,:], 'r--')
                 plt.title('Slices #'+str(i))
+                plt.tight_layout()
                 pdf.savefig(dpi=300)
                 plt.close()
 
@@ -700,7 +730,7 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxW
 
 
         print('**************************************')
-        print('*** MEDIAN amplitude IS '+ str(ampMed) + ' ***')
+        print('*** MEDIAN AMPLITUDE IS '+ str(ampMed) + ' ***')
         print('**************************************')
         
         ntot = 0
@@ -715,19 +745,23 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxW
             strt += a.shape[0]
 
         fig = plt.figure()
+
         m = np.nanmedian(ampMap)
         with warnings.catch_warnings():
+            warnings.simplefilter('ignore',RuntimeWarning)
             s = np.nanstd(ampMap[ampMap < 10*m])
             
         if colorbarLims is None:
-            clim = [0, m+3*s]
+            interval = ZScaleInterval()
+            clim=interval.get_limits(ampMap)
         else:
             clim=colorbarLims
-        
+
         plt.imshow(ampMap, origin='lower', aspect='auto', clim=clim,cmap='jet')
         plt.title('Ronchi amplitude map - Med amp ' + '{:4.2f}'.format(ampMed))
-        
         plt.colorbar()
+        plt.tight_layout()
+        plt.show()
         plt.savefig('quick_reduction/'+ronchiFolder+'_ronchi_amp_map.png',dpi=300)
         plt.close()
         
