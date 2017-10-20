@@ -21,46 +21,11 @@ import colorama
 
 colorama.init()
 
-#*****************************************************************************
 #******************************* Required input ******************************
 #INPUT VARIABLE FILE NAME
 varFile = 'wifisConfig.inp'
-
-#initialize all variables.
-#DO NOT CHANGE VALUES HERE, EDIT THE 'variables.inp' FILE, WHICH OVERWRITES VALUES HERE
-flatLstFile = 'flat.lst' 
-darkFile = ''
-hband = False
-rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
-pipelineFolder = '/data/pipeline/'
-nlFile = pipelineFolder + 'external_data/master_detLin_NLCoeff.fits' # the non-linearity correction coefficients file        
-satFile = pipelineFolder+'external_data/master_detLin_satCounts.fits' # the saturation limits file
-bpmFile = pipelineFolder+'external_data/bpm.fits' # the bad pixel mask
-distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_august/tb/processed/20170831210255_flat_limits.fits'
-plot = True #whether to plot the traces
-crReject = False
-skipObsinfo = False
-flatWinRng = 51
-flatImgSmth = 5
-flatLimSmth = 20
-flatPolyFitDegree=2
-dispAxis=0
-flatCutOff = 0.1
-nChannel=32 #specifies the number of channels used during readout of detector
-flatbpmCorRng=20 #specifies the maximum separation of pixel search to use during bad pixel correction
-nRowsAvg=0 # specifies the number of rows of reference pixels to use to correct for row bias (+/- nRowAvg)
-nRowSplit=1 # specifies how many processing steps to use during reference row correction. Must be integer multiple of number of frames. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
-nlSplit=32 #specifies how many processing steps to use during non-linearity correction. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption. 
-nCombSplit=32 #specifies how many processing steps to use during creation of ramp image. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
-gain = 1.
-ron = 1.
-
-obsCoords = [-111.600444444,31.9629166667,2071]
-
-#*****************************************************************************
 #*****************************************************************************
 
-#override some variables
 logfile = open('wifis_reduction_log.txt','a')
 logfile.write('********************\n')
 logfile.write(time.strftime("%c")+'\n')
@@ -136,7 +101,7 @@ if flatLst.ndim == 0:
     flatLst = np.asarray([flatLst])
 
 logfile.write('\n')
-calFlat.runCalFlat(flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=plot, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, bpmCorRng=flatbpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, imgSmth=flatImgSmth, polyFitDegree=flatPolyFitDegree,nlFile=nlFile, satFile=satFile, bpmFile=bpmFile, flatCutOff=flatCutOff, logfile=logfile, winRng=flatWinRng, dispAxis=dispAxis, limSmth=flatLimSmth, obsCoords=obsCoords, darkFile=darkFile)
+calFlat.runCalFlat(flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=True, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=nRowSplitFlat, nlSplit=nlSplit, combSplit=nCombSplit, bpmCorRng=flatbpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, imgSmth=flatImgSmth, polyFitDegree=flatPolyFitDegree,nlFile=nlFile, satFile=satFile, bpmFile=bpmFile, flatCutOff=flatCutOff, logfile=logfile, winRng=flatWinRng, dispAxis=dispAxis, limSmth=flatLimSmth, obsCoords=obsCoords, darkFile=darkFile)
 
 logfile.write('********************\n')
 logfile.write('\n')
