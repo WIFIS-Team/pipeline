@@ -29,7 +29,7 @@ from astropy import time as astrotime, coordinates as coord, units
 import colorama
 from astropy.visualization import ZScaleInterval
 
-def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowsAvg=0,rowSplit=1,nlSplit=1, combSplit=1,bpmCorRng=2, crReject=False, skipObsinfo=False, darkLst=None, flatWinRng=51, flatImgSmth=5, flatPolyFitDegree=3, rootFolder='', distMapFile='', spatGridPropsFile='', atlasFile='', templateFile='', prevResultsFile='', sigmaClip=2, sigmaClipRounds=2, sigmaLimit=3,cleanDispSol=False,cleanDispThresh = 0, waveTrimThresh=0, smoothSol=False, waveSmooth=1, nlFile='', bpmFile='', satFile='',darkFile='',logfile=None, ask=True, obsCoords=None, dispAxis=0, mxOrder=3,winRng=9):
+def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowsAvg=0,rowSplit=1,nlSplit=1, combSplit=1,bpmCorRng=2, crReject=False, skipObsinfo=False, darkLst=None, flatWinRng=51, flatImgSmth=5, flatPolyFitDegree=3, rootFolder='', distMapFile='', spatGridPropsFile='', atlasFile='', templateFile='', prevResultsFile='', sigmaClip=2, sigmaClipRounds=2, sigmaLimit=3,cleanDispSol=False,cleanDispThresh = 0, waveTrimThresh=0, waveSmooth=1, nlFile='', bpmFile='', satFile='',darkFile='',logfile=None, ask=True, obsCoords=None, dispAxis=0, mxOrder=3,winRng=9,waveSolMP=True,waveSolPlot=False, nRowSplitFlat=1):
     """
     """
 
@@ -123,7 +123,7 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                     distMap = wifisIO.readImgsFromFile(distMapFile)[0]
                     print('Flat limits do not exist for folder ' +flatFolder +', processing flat folder')
 
-                    calFlat.runCalFlat(np.asarray([flatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, distMapLimitsFile = distMapLimitsFile, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=rowSplit,nlSplit=nlSplit, combSplit=combSplit,bpmCorRng=20, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile, logfile=logfile)
+                    calFlat.runCalFlat(np.asarray([flatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, distMapLimitsFile = distMapLimitsFile, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=combSplit,bpmCorRng=20, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile, logfile=logfile)
 
                 print('Reading slice limits file')
                 limits, limHdr = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_limits.fits')
@@ -215,7 +215,7 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                 with warnings.catch_warnings():
                     warnings.simplefilter('ignore', RuntimeWarning)
 
-                    results = waveSol.getWaveSol(waveCor, template, atlasFile, mxOrder, prevSol, winRng=winRng, mxCcor=150, weights=False, buildSol=False, sigmaClip=sigmaClip, allowLower=False, lngthConstraint=True, MP=True, adjustFitWin=True, sigmaLimit=sigmaLimit, allowSearch=False, sigmaClipRounds=sigmaClipRounds)
+                    results = waveSol.getWaveSol(waveCor, template, atlasFile, mxOrder, prevSol, winRng=winRng, mxCcor=150, weights=False, buildSol=False, sigmaClip=sigmaClip, allowLower=False, lngthConstraint=True, MP=waveSolMP, adjustFitWin=True, sigmaLimit=sigmaLimit, allowSearch=False, sigmaClipRounds=sigmaClipRounds,plot=waveSolPlot)
 
                 hdr.add_history('Used the following file as template for wavelength mapping:')
                 hdr.add_history(templateFile)
@@ -277,8 +277,11 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                     hdr.add_history('Used linear interpolation and a linear polynomial fitting to fill missing/badly fit wavelength regions')
 
                     #smooth waveMap solution to avoid pixel-to-pixel jumps
-                    if smoothSol:
-                        print('Smooth wavelength map')
+                    if waveSmooth>0:
+                        print('Smoothing wavelength map')
+                        if logfile is not None:
+                            logfile.write('Gaussian smoothed wavelength map using 1-sigma width of ' + str(waveSmooth)+'\n')
+                            
                         waveMap = waveSol.smoothWaveMapAll(waveMapLst,smth=waveSmooth,MP=True )
                         hdr.add_history('Gaussian smoothed wavelength map using 1-sigma width of ' + str(waveSmooth))
                     else:
