@@ -34,12 +34,7 @@ import wifisBadPixels as badPixels
 from astropy.visualization import ZScaleInterval
 import copy
 
-try:
-    import colorama
-    colorama.init()
-    colorFlag =True
-except:
-    colorFlag = False
+import colorama
     
 t0 = time.time()
 
@@ -47,29 +42,12 @@ t0 = time.time()
 #************************** user input ******************************
 varFile = 'wifisConfig.inp'
 
-#initialize all variables here.
-#DO NOT CHANGE VALUES HERE, EDIT THE 'variables.inp' FILE, WHICH OVERWRITES VALUES HERE
-darkLstFile = 'dark.lst'
-rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
-pipelineFolder = '/data/pipeline/'
-nlFile = '/home/jason/wifis/data/june_cals/processed/master_detLin_NLCoeff.fits' # the non-linearity correction coefficients file        
-satFile = '/home/jason/wifis/data/non-linearity/july/processed/master_detLin_satCounts.fits' # the saturation limits file
-bpmFile = '//home/jason/wifis/data/non-linearity/july/processed/master_detLin_BPM.fits'
-nRowsAvg =  4
-nChannel = 32
-nCombSplit=32
-nSatSplit=32
-getBadPixDark = True
-getBadPixRON = True
-
 print('Reading input variables from file ' + varFile)
 #logfile.write('Reading input variables from file ' + varFile)
 varInp = wifisIO.readInputVariables(varFile)
 for var in varInp:
     locals()[var[0]]=var[1]
 
-#VARIABLE OVERRIDES - USEFUL FOR STICKING WITH SAME INPUT SCRIPT, BUT FOR DIFFERENT USES
-nRowSplit=5
 #*****************************************************************************
 
 #execute pyOpenCL section here
@@ -80,11 +58,8 @@ interval=ZScaleInterval()
 
 #first check if required input exists
 if not os.path.exists(nlFile):
-    if colorFlag:
-        print(colorama.Fore.RED+'*** WARNING: No non-linearity corrections provided. Skipping non-linearity corrections ***'+colorama.Style.RESET_ALL)
-    else:
-        print('*** WARNING: No non-linearity corrections provided. Skipping non-linearity corrections ***')
-
+    print(colorama.Fore.RED+'*** WARNING: No non-linearity corrections provided. Skipping non-linearity corrections ***'+colorama.Style.RESET_ALL)
+    
 if not os.path.exists(satFile):
         print(colorama.Fore.RED+'*** WARNING: No saturation info provided. Using all frames ***'+colorama.Style.RESET_ALL)
 
@@ -411,3 +386,7 @@ else:
      print('No processing necessary')   
 
 print ("Total time to run entire script: ",time.time()-t0)
+
+logfile.write('********************\n')
+logfile.write('\n')
+logfile.close()
