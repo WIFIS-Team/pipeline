@@ -56,6 +56,32 @@ def gaussian(x,amp,cen,wid):
     z = (x-cen)/wid    
     return amp*np.exp(-z**2/2.)
 
+def getWeightedCent(x,y):
+    """
+    """
+
+    #get the 4-pixels with the greatest flux
+    srt = np.argsort(y)
+
+    #check if the first or last pixel is >2 pixel difference from the rest
+    xsrt = np.sort(srt[-4:])
+
+    if np.abs(xsrt[0]-xsrt[1]) >2:
+        xsrt = np.sort(np.append(np.asarray(srt[-5]),xsrt[1:]))
+    elif np.abs(xsrt[-1]-xsrt[-2]) >2:
+        xsrt = np.sort(np.append(np.asarray(srt[-5]),xsrt[:-1]))
+        
+    #check once again
+    if np.abs(xsrt[0]-xsrt[1]) >2:
+        xsrt = np.sort(np.append(np.asarray(srt[-6]),xsrt[1:]))
+    elif np.abs(xsrt[-1]-xsrt[-2]) >2:
+        xsrt = np.sort(np.append(np.asarray(srt[-6]),xsrt[:-1]))
+        
+    #compute the weigthed mean
+    cent = np.sum(y[xsrt]*x[xsrt])/np.sum(y[xsrt])
+
+    return cent
+
 def gaussFit(x, y, guessWidth, plot=False,title=''):
     """
     Routine to fit a Gaussian to provided x and y data points and return the fitted coefficients.
@@ -99,6 +125,7 @@ def getSolQuick(input):
     """
     
     yRow = input[0]
+    ySigma = np.sqrt(yRow)
     template = input[1]
     atlas = input[2]
     mxorder = input[3]
@@ -120,6 +147,8 @@ def getSolQuick(input):
     nSearchRounds = input[18]
     totPix = len(yRow)
 
+    useQCWeights = False
+    
     #first make sure that the yRow isn't all NaNs
 
     if np.all(~np.isfinite(yRow)):
@@ -185,7 +214,9 @@ def getSolQuick(input):
         nse = nse/(np.nanmax(yRow))
     
         #normalize the spectra so that the predicted line strengths are on the same scale as the observed spectrum
+        ySigma = ySigma/np.nanmax(yRow)
         yRow = yRow/np.nanmax(yRow)
+
         template = template/np.nanmax(template) #for plotting purposes only
 
     #use this offset to determine window range and list of lines to use
@@ -258,6 +289,7 @@ def getSolQuick(input):
         ampFit = []
         atlasFit = []
         atlasPixFit = []
+        QCFit = []
         
         #print(pixOffset)
         #print('Going to fit', nlines)
@@ -269,7 +301,8 @@ def getSolQuick(input):
                 pixRng = (np.arange(winRng)-winRng2 + atlasPix[i]).astype('int') #Centre window on predicted line centre
                 
                 yRng = yRow[pixRng]
-
+                sRng = ySigma[pixRng]
+                
                 #find location of maximum signal
                 mx = np.argmax(yRng)
                 mxPos = pixRng[mx]
@@ -290,6 +323,8 @@ def getSolQuick(input):
                         prevMx = mxPos
                         pixRng = (np.arange(winRng)-winRng2 + pixRng[mx]).astype('int')
                         yRng = yRow[pixRng]
+                        sRng = ySigma[pixRng]
+                        
                         mx = np.argmax(yRng)
                         mxPos = pixRng[mx]
                 else:
@@ -321,6 +356,15 @@ def getSolQuick(input):
                                 winRngTmp = winRng
                                 amp,cent,wid = gaussFit(pixRng,yRng, winRng/3.,plot=plot,title=str(atlasPix[i]))
 
+                                #get weighted average as well
+                                #cent2 = getWeightedCent(pixRng,yRng)
+ 
+                                #if the two centres don't agree, favour the weighted average
+                                #if np.abs(cent2-cent)>0.5:
+                                #    cent = cent2
+                                #    if plot:
+                                #        print('Using weighted centre instead')
+                                
                                 #only continue if cent is within fitting window
                                 if (cent < pixRng[0] or cent > pixRng[-1]):
                                     if plot:
@@ -333,10 +377,20 @@ def getSolQuick(input):
                                         pixRng = int(cent) + np.arange(int(wid)*5)-int(wid*5/2)
                                         pixRng= pixRng[np.logical_and(pixRng >=0, pixRng<totPix)]
                                         yRng = yRow[pixRng]
+                                        sRng = ySigma[pixRng]
 
                                         winRngTmp = wid*4
                                         amp,cent,wid = gaussFit(pixRng,yRng, winRngTmp/3.,plot=plot,title=str(atlasPix[i]))
-                                
+
+                                        #get weighted average as well
+                                        #cent2 = getWeightedCent(pixRng,yRng)
+ 
+                                        #if the two centres don't agree, favour the weighted average
+                                        #if np.abs(cent2-cent)>0.5:
+                                        #    cent = cent2
+                                        #    if plot:
+                                        #        print('Using weighted centre instead')
+                                                
                                     #only keep line if amplitude of fit >2*noise level #and width of fit <1/2 of winRng and cent in expected range
                                     if (amp/nse >= sigmaLimit and np.abs(wid) < winRngTmp/2.):
                                         if plot:
@@ -347,6 +401,7 @@ def getSolQuick(input):
                                         ampFit.append(amp)
                                         atlasFit.append(atlas[i,0])
                                         atlasPixFit.append(atlasPix[i])
+                                        QCFit.append(np.sum((yRng-gaussian(pixRng,amp,cent,wid))**2/sRng**2))
                                     else:
                                         if (plot):
                                             print('badly fit line, excluding')
@@ -356,7 +411,7 @@ def getSolQuick(input):
                                     tmpCoef = np.polyfit(centFit, atlasFit,1, w=ampFit)
                                     atlasPix = (atlas[:,0]-tmpCoef[1])/tmpCoef[0]
                                     
-                            except (RuntimeError):
+                            except:
                                 pass
                         else:
                             if plot:
@@ -364,7 +419,7 @@ def getSolQuick(input):
                     else:
                         if plot:
                             print('S/N too low, excluding')
-            except (IndexError, ValueError):
+            except (IndexError, ValueError, RuntimeWarning):
                 pass
 
         #exclude poorly fit lines based on width of line
@@ -388,10 +443,11 @@ def getSolQuick(input):
             #if (plot == True):
             #plt.plot(centFit,atlasFit, 'bo')
 
-            centFit = np.array(centFit)
-            atlasFit = np.array(atlasFit)
-            widthFit = np.array(widthFit)
-            ampFit = np.array(ampFit)
+            centFit = np.asarray(centFit)
+            atlasFit = np.asarray(atlasFit)
+            widthFit = np.asarray(widthFit)
+            ampFit = np.asarray(ampFit)
+            QCFit = np.asarray(QCFit)
                 
             #centFit = centFit[whr[0]]
             #atlasFit = atlasFit[whr[0]]
@@ -408,6 +464,8 @@ def getSolQuick(input):
                 
             if (useWeights):        
                 fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
+            elif useQCWeights:
+                fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=1./np.sqrt(QCFit)) # returns polynomial coefficients in reverse order
             else:
                 fitCoef = np.polyfit(centFit, atlasFit,mxorder) # returns polynomial coefficients in reverse order
 
@@ -423,6 +481,7 @@ def getSolQuick(input):
                 atlasFit = atlasFit[whr[0]]
                 widthFit = widthFit[whr[0]]
                 ampFit = ampFit[whr[0]]
+                QCFit = QCFit[whr[0]]
 
             if (len(centFit) > mxorder):
                 #constrain fit to a line if line separation is <1000
@@ -435,6 +494,8 @@ def getSolQuick(input):
                             
                         if (useWeights):        
                             fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
+                        elif useQCWeights:
+                            fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=1./np.sqrt(QCFit)) # returns polynomial coefficients in reverse order
                         else:
                             fitCoef = np.polyfit(centFit, atlasFit,mxorder) # returns polynomial coefficients in reverse order
 
@@ -448,7 +509,7 @@ def getSolQuick(input):
                         atlasFit = atlasFit[whr[0]]
                         widthFit = widthFit[whr[0]]
                         ampFit = ampFit[whr[0]]
-                        
+                        QCFit = QCFit[whr[0]]
                 if (useWeights):
                     fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
                 else:
@@ -503,7 +564,7 @@ def getSolQuick(input):
         return np.repeat(np.nan,mxorder+1), [],[], [],np.nan, np.repeat(np.nan,mxorder+1)
     
 
-def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None, allowLower=False, sigmaClip=2., lngthConstraint=False, MP=True, adjustFitWin=False, sigmaLimit=3, allowSearch=False, sigmaClipRounds=1,nPixContFit=50,nSearchRounds=1):
+def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None, allowLower=False, sigmaClip=2., lngthConstraint=False, MP=True, adjustFitWin=False, sigmaLimit=3, allowSearch=False, sigmaClipRounds=1,nPixContFit=50,nSearchRounds=1,plot=False):
     """
     Computes dispersion solution for each set of pixels along the dispersion axis in the provided image slices.
     Usage: output = getWaveSol(dataSlices, template, mxorder, prevSolution, winRng, mxCcor, weights, buildSol, ncpus, allowLower, sigmaClip, lngthConstraint)
@@ -600,11 +661,11 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
                         tmpSol = prevSol[i][j]
                         tmpTemp = tmpLst[i][j,:]
 
-                lst.append([dataLst[i][j,:],tmpTemp, bestLines, mxorder,tmpSol,winRng, mxCcor,weights, False, buildSol,allowLower,sigmaClip,lngthConstraint, adjustFitWin, sigmaLimit, allowSearch, sigmaClipRounds,nPixContFit,nSearchRounds])
+                lst.append([dataLst[i][j,:],tmpTemp, bestLines, mxorder,tmpSol,winRng, mxCcor,weights, plot, buildSol,allowLower,sigmaClip,lngthConstraint, adjustFitWin, sigmaLimit, allowSearch, sigmaClipRounds,nPixContFit,nSearchRounds])
                         
         else:
             for j in range(dataLst[i].shape[0]):
-                    lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, False, buildSol, allowLower, sigmaClip,lngthConstraint, adjustFitWin,sigmaLimit, allowSearch,sigmaClipRounds,nPixContFit,nSearchRounds])
+                    lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, plot, buildSol, allowLower, sigmaClip,lngthConstraint, adjustFitWin,sigmaLimit, allowSearch,sigmaClipRounds,nPixContFit,nSearchRounds])
 
     if (MP):
         #setup multiprocessing routines
