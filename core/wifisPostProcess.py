@@ -10,6 +10,12 @@ from scipy.optimize import curve_fit
 import warnings
 from astropy.convolution import convolve_fft
 from astropy.convolution import Gaussian2DKernel
+import time
+import pyopencl as cl
+import os
+import wifisCreateCube as createCube
+import wifisHeaders as headers
+import copy
 
 def splineContFit(x,y,regions, lineRegions=None,order=3,winRng=10.):
     """
@@ -173,9 +179,9 @@ def crossCorPixMP(input):
         y2tmp = 1. - y2tmp
 
     if mxShift is not None:
-        rng = np.arange(-mxShift*oversample, mxShift*oversample)
+        rng = np.arange(-mxShift*oversample, mxShift*oversample+1)
     else:
-        rng = np.arange(-xInt.shape[0]-2, xInt.shape[0]-2)
+        rng = np.arange(-xInt.shape[0]-2, xInt.shape[0]-1)
 
     yCC = crossCorIDL([y1Int, y2Int, rng])
     shiftOut = rng[np.argmax(yCC)]/np.float(oversample)
@@ -201,7 +207,7 @@ def crossCorSpec(wave, spec1, spec2, regions=None, oversample=20, absorption=Fal
     if velocity:
         rvOut = crossCorVelMP([vconst, v, spec1, spec2, oversample, absorption, mode,contFit1,contFit2,nContFit,contFitOrder,mxVel, plot, reject,regions,wave])
     else:
-        rvOut = crossCorPixMP([spec1, spec2, oversample, absorption, mode,contFit,nContFit1,contFit2,contFitOrder,mxVel, plot, reject,regions,wave])
+        rvOut = crossCorPixMP([spec1, spec2, oversample, absorption, mode,nContFit1,contFit2,contFitOrder,mxVel, plot, reject,regions,wave])
 
     return rvOut
     
@@ -302,18 +308,18 @@ def crossCorIDL(input):
     rng = input[2]
 
     p = np.zeros(rng.shape[0])
-    y1sub = y1 - np.nanmean(y1)
-    y2sub = y2 - np.nanmean(y2)
-    n = y1sub.shape[0]
+    y1sub = y1 - np.mean(y1)
+    y2sub = y2 - np.mean(y2)
+    n = y1.shape[0]
     
     for i in range(len(rng)):
         lag = int(rng[i])
         if lag >= 0:
-            p[i] = np.nansum(y1sub[:n-lag]*y2sub[lag:])
+            p[i] = np.sum(y1sub[:n-lag]*y2sub[lag:])
         else:
-            p[i] = np.nansum(y2sub[:n+lag]*y1sub[-lag:])
+            p[i] = np.sum(y2sub[:n+lag]*y1sub[-lag:])
             
-        p[i] /= np.sqrt(np.nansum(y1sub**2)*np.nansum(y2sub**2))
+        #p[i] /= np.sqrt(np.sum(y1sub**2)*np.sum(y2sub**2))
 
     return p
         
@@ -357,10 +363,9 @@ def crossCorVelMP(input):
         y2tmp = np.empty(y2.shape,dtype=y2.dtype)
         np.copyto(y2tmp,y2)
         
-    if mode != 'idl':    
-        #now get rid of NaNs
-        y1tmp[~np.isfinite(y1)] = 0.
-        y2tmp[~np.isfinite(y2)] = 0.
+    #now get rid of NaNs
+    y1tmp[~np.isfinite(y1)] = 0.
+    y2tmp[~np.isfinite(y2)] = 0.
 
     y1Tmp = np.zeros(y1tmp.shape)
     y2Tmp = np.zeros(y2tmp.shape)
@@ -412,9 +417,9 @@ def crossCorVelMP(input):
             plt.show()
     elif (mode == 'idl') :
         if mxVel is not None:
-            rng = np.arange(-np.ceil(mxVel/dv), np.ceil(mxVel/dv))
+            rng = np.arange(-np.ceil(mxVel/dv), np.ceil(mxVel/dv)+1)
         else:
-            rng = np.arange(-vconst.shape[0]-2, vconst.shape[0]-2)
+            rng = np.arange(-vconst.shape[0]-2, vconst.shape[0]-1)
 
         yCC = crossCorIDL([y1Const, y2Const, rng])
         rvOut = rng[np.argmax(yCC)]*dv
@@ -494,7 +499,11 @@ def subScaledSkyPix(input):
     
     #construct the sky spectrum outside of the scaled region
     for reg in regions:
-        whr = np.where(np.logical_and(wave>=reg[0],wave<=reg[1]))[0]
+        if len(reg) ==2:
+            whr = np.where(np.logical_and(wave>=reg[0],wave<=reg[1]))[0]
+        elif len(reg)==4:
+            whr = np.where(np.logical_or(np.logical_and(wave>=reg[0],wave<=reg[1]),np.logical_and(wave>=reg[2],wave<=reg[3])))[0]
+
         outside[whr] = False
     skyScaled[outside] = sky[outside]
     
@@ -856,4 +865,531 @@ def crossCorImage(img1, img2, regions=None, oversample=20, absorption=False, ncp
             shiftOut[i] = shiftLst[i]
     
     return shiftOut
+    
+def crossCorImageCL(img1, img2, regions=None, oversample=20, absorption=False, ncpus=None, contFit1=True, contFit2=True,nContFit=50, contFitOrder=1, mxShift=4,reject=0, dispAxis=0., maxFluxLevel=0, position=None):
+    """
+    Determine the pixel shift (if velocity=False) between input images img1 and img2, expected to be on the same wavelength grid/coordinate system x. Determines velocity difference, if velocity=True. mxShift is in pixels or km/s.
+    Usage: 
+    """
+
+    if dispAxis != 0:
+        img1tmp = np.empty(img1.T.shape, dtype=img1.dtype)
+        img2tmp = np.empty(img2.T.shape, dtype=img2.dtype)
+        np.copyto(img1tmp, img1.T)
+        np.copyto(img2tmp, img2.T)
+    else:
+        img1tmp = img1
+        img2tmp = img2
+
+
+    #now only use regions of interest
+    #by building a new spectrum with only the good regions, padded by a 0 in between
+    
+    if regions is not None:
+        for reg in regions:
+            if 'img1Tmp' in locals():
+                img1Tmp= np.append(img1Tmp,img1tmp[reg[0]:reg[1],:],axis=0)
+            else:
+                img1Tmp = img1tmp[reg[0]:reg[1],:]
+            img1Tmp = np.append(img1Tmp,np.zeros((mxShift,img1tmp.shape[1])),axis=0)
+
+            if 'img2Tmp' in locals():
+                img2Tmp=np.append(img2Tmp,img2tmp[reg[0]:reg[1],:],axis=0)
+            else:
+                img2Tmp = img2tmp[reg[0]:reg[1],:]
+
+            img2Tmp=np.append(img2Tmp,np.zeros((mxShift, img2tmp.shape[1])),axis=0)
+           
+    else:
+        img1Tmp = img1tmp
+        img2Tmp = img2tmp
+                
+    t1 = time.time()
+    #first subtract continuum
+    #build input list
+    inpLst = []
+
+    for i in range(img1Tmp.shape[1]):
+        inpLst.append([img1Tmp[:,i],1,50,1])
+        
+    if ncpus is None:
+        ncpus = mp.cpu_count()
+    pool = mp.Pool(ncpus)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        contLst = pool.map(splineContFitMP,inpLst)
+        pool.close()
+    
+        for i in range(img1Tmp.shape[1]):
+            img1Tmp[:,i] = img1Tmp[:,i] - contLst[i]
+
+        for i in range(img1Tmp.shape[1]):
+            inpLst.append([img2Tmp[:,i],1,50,1])
+        
+        pool = mp.Pool(ncpus)
+        contLst = pool.map(splineContFitMP,inpLst)
+        pool.close()
+    
+        for i in range(img1Tmp.shape[1]):
+            img2Tmp[:,i] = img2Tmp[:,i] - contLst[i]
+
+    
+    img1Tmp[~np.isfinite(img1Tmp)]=0
+    img2Tmp[~np.isfinite(img2Tmp)]=0
+
+    xOld = np.arange(img1Tmp.shape[0])
+    xNew = np.linspace(0,xOld[-1],num=img1Tmp.shape[0]*oversample)
+
+    fInterp = interp1d(xOld,img1Tmp, kind='linear',bounds_error=False,fill_value=0,axis=0)
+    img1Int = fInterp(xNew)
+    fInterp = interp1d(xOld,img2Tmp, kind='linear',bounds_error=False,fill_value=0,axis=0)
+    img2Int = fInterp(xNew)
+    
+    img1Int -= np.mean(img1Int)
+    img2Int -= np.mean(img2Int)
+    
+    nx = img1Int.shape[0]
+    ny = img2Int.shape[1]
+        
+    lag = np.arange(-mxShift*oversample, mxShift*oversample+1).astype(np.int32)
+    path = os.path.dirname(__file__)
+    clCodePath = path+'/opencl_code'
+
+    ctx = cl.create_some_context(interactive=True)
+    queue = cl.CommandQueue(ctx)
+    
+    filename = clCodePath+'/crosscor.cl'
+    f = open(filename, 'r')
+    fstr = "".join(f.readlines())
+    program = cl.Program(ctx, fstr).build()
+    mf = cl.mem_flags
+
+    program.xcorPosLag.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None,None,None])
+    img1_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=img1Int.astype('float32'))
+    img2_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=img2Int.astype('float32'))
+    p_pos = np.zeros(lag.shape[0]/2+1, dtype='float32')
+    p_pos_buf = cl.Buffer(ctx, mf.WRITE_ONLY, p_pos.nbytes)
+    lag_pos = lag[lag.shape[0]/2:]
+    lag_pos_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf = lag_pos)
+    program.xcorPosLag(queue,(p_pos.shape),None,np.uint32(nx), np.uint32(ny),img1_buf, img2_buf,lag_pos_buf, p_pos_buf)
+    cl.enqueue_read_buffer(queue, p_pos_buf, p_pos).wait()
+
+    #now negative lags
+    p_neg = np.zeros(lag.shape[0]/2, dtype='float32')
+    p_neg_buf = cl.Buffer(ctx, mf.WRITE_ONLY, p_neg.nbytes)
+    lag_neg = lag[:lag.shape[0]/2]
+    lag_neg_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf = lag_neg)
+    program.xcorNegLag(queue,(p_neg.shape),None,np.uint32(nx), np.uint32(ny),img1_buf, img2_buf,lag_neg_buf, p_neg_buf)
+    cl.enqueue_read_buffer(queue, p_neg_buf, p_neg).wait()
+
+    p = np.append(p_neg,p_pos)
+    shiftOut = lag[np.nanargmax(p)]/np.float(oversample)
+
+    return shiftOut
+
+def subScaledSkyPix(input):
+    """
+    """
+    wave = input[0]
+    obs = input[1]
+    sky = input[2]
+    regions = input[3]
+    bounds = input[4]
+    sigmaClip = input[5]
+    sigmaClipRounds = input[6]
+    useMaxOnly = input[7]
+    nContFit = input[8]
+    
+    obsCont = splineContFitMP([obs, 1, nContFit, 1])
+    skyCont = splineContFitMP([sky, 1, nContFit, 1])
+    skyScaled = np.zeros(sky.shape,dtype=sky.dtype)
+
+    if regions is None:
+        regions = [[wave.min(), wave.max()]]
+        
+    if np.all(~np.isfinite(obs)) or np.all(~np.isfinite(sky)):
+        fOut = []
+        for reg in regions:
+            fOut.append(np.nan)
+        return obs, fOut
+    
+    outside = np.ones(sky.shape).astype(bool)
+
+    #list to hold all scalings
+    fOut = []
+    
+    #construct the sky spectrum outside of the scaled region
+    for reg in regions:
+        if len(reg) ==2:
+            whr = np.where(np.logical_and(wave>=reg[0],wave<=reg[1]))[0]
+        elif len(reg)==4:
+            whr = np.where(np.logical_or(np.logical_and(wave>=reg[0],wave<=reg[1]),np.logical_and(wave>=reg[2],wave<=reg[3])))[0]
+
+        outside[whr] = False
+    skyScaled[outside] = sky[outside]
+    
+    for reg in regions:
+        whr = np.where(np.logical_and(wave>=reg[0],wave<=reg[1]))[0]
+        #outside.append([whr[0],whr[-1]])
+        
+        otmp = (obs-obsCont)[whr]
+        stmp = (sky-skyCont)[whr]
+
+        otmp[~np.isfinite(otmp)] = 0.
+        stmp[~np.isfinite(stmp)] = 0.
+
+        f = fitSky(otmp, stmp)
+        if (f < bounds[0]):
+            f = bounds[0]
+        elif (f > bounds[1]):
+            f = bounds[1]
+
+        skyCor = stmp*f
+        
+        if sigmaClipRounds>0:
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore',RuntimeWarning)
+                for i in range(sigmaClipRounds):
+                    y = otmp-stmp*f
+                    med = np.nanmedian(y)
+                    std = np.nanstd(y)
+                    goodPix = np.where(np.abs(y-med)<=sigmaClip*std)[0]
+                    #badPix = np.where(np.abs(y-med)>sigmaClip*std)[0]
+                    badPix = np.ones(stmp.shape[0])
+                    #use only pixels with value useMax of maximum flux for fitting and subtracting
+                    if useMaxOnly > 0:
+                        #badPix2 = np.where(stmp < useMaxOnly*stmp[goodPix].max())[0]
+                        goodPix = np.where(stmp >= useMaxOnly*stmp[goodPix].max())[0]
+                        badPix[goodPix] = 0
+                        #badPixAll = np.concatenate((badPix,badPix2))
+                        #goodPixAll = np.concatenate((goodPix,goodPix2))
+                        #badPixAll = np.unique(badPixAll)
+                        #goodPixAll = np.unique(goodPixAll)
+
+                    badPix[goodPix]=0
+                        
+                    f = fitSky(otmp[goodPix], stmp[goodPix])
+
+                    if (f < bounds[0]):
+                        f = bounds[0]
+                    elif (f > bounds[1]):
+                        f = bounds[1]
+
+            skyCor[goodPix] = stmp[goodPix]*f
+            skyCor[badPix.astype(bool)] = stmp[badPix.astype(bool)]
+            
+        skyScaled[whr] = skyCont[whr] + skyCor
+        fOut.append(f)
+    return obs - skyScaled, fOut
+    
+def subScaledSkyCube(wave, obs, sky, mxScale=0.5, regions=None, MP=True, ncpus=None,sigmaClip=3, sigmaClipRounds=1, useMaxOnly=0., nContFit=50):
+    """
+    mxScale is maximum allowable scaled difference between sky/obs spectrum (e.g. 0.2 -> sky can be scaled in range of 0.8-1.2).
+    """
+
+    #get bounds based on input
+    if mxScale is not None:
+        bounds = [1.-mxScale, 1.+mxScale]
+    else:
+        bounds = [-np.inf, np.inf]
+
+    #build input list
+    inpLst = []
+    for i in range(sky.shape[0]):
+        for j in range(sky.shape[1]):
+            inpLst.append([wave,obs[i,j,:],sky[i,j,:],regions, bounds,sigmaClip,sigmaClipRounds,useMaxOnly,nContFit])
+    
+    if MP:
+    #setup multithreading
+
+        if ncpus is None:
+            ncpus = mp.cpu_count()
+        pool = mp.Pool(ncpus)
+        subLst = pool.map(subScaledSkyPix,inpLst)
+        pool.close()
+        
+        k=0
+        subCube = np.empty(obs.shape, dtype=obs.dtype)
+        fImg = np.empty((obs.shape[0], obs.shape[1], len(regions)), dtype=obs.dtype)
+        
+        for i in range(sky.shape[0]):
+            for j in range(sky.shape[1]):
+                subCube[i,j,:] = subLst[k][0]
+                for l in range(fImg.shape[2]):
+                    fImg[i,j,l] = subLst[k][1][l]
+                k+=1
+    else:
+        k=0
+        subCube = np.empty(obs.shape, dtype=obs.dtype)
+        fImg = np.empty((obs.shape[0], obs.shape[1], len(regions)), dtype=obs.dtype)
+
+        for i in range(sky.shape[0]):
+            for j in range(sky.shape[1]):
+                subLst = subScaledSkyPix(inpLst[k])
+                subCube[i,j,:] = subLst[0]
+                for l in range(fImg.shape[2]):
+                    fImg[i,j,l] = subLst[1][l]
+                k+=1
+
+    return subCube, fImg
+
+def subScaledSkySlices2(waveMap, obsSlices, skySlices, waveGridProps,hdr,mxScale=0.5, regions=None, MP=True, ncpus=None,nContFit=50, fluxThresh=0.1,fitInd=False, saveFile='', logfile=None):
+    """
+    mxScale is maximum allowable scaled difference between sky/obs spectrum (e.g. 0.2 or 20%, implies that the sky emission strength can be scaled in range of +/-20% or 0.8-1.2).
+    regions is a list of lines, split into different bands (to be fit together).
+    """
+
+    #create fully gridded slices from input slices
+    print('Placing sky and science slices on uniform wavelength grid for sky subtraction')
+    if logfile is not None:
+        logfile.write('Placing sky and science slices on uniform wavelength grid for sky subtractiton\n')
+    dataTmpGrid = createCube.waveCorAll(obsSlices, waveMap, waveGridProps=waveGridProps)
+    skyTmpGrid = createCube.waveCorAll(skySlices, waveMap, waveGridProps=waveGridProps)
+
+    #get temporary cubes
+    dataTmpCube = createCube.mkCube(dataTmpGrid, ndiv=0).astype('float32')
+    skyTmpCube = createCube.mkCube(skyTmpGrid, ndiv=0).astype('float32')
+    hdrTmp = copy.copy(hdr[:])
+    headers.getWCSCube(dataTmpCube, hdrTmp, 1, 1, waveGridProps)
+            
+    print('Getting median spectra for skyline scaling')
+    if logfile is not None:
+        logfile.write('Getting median spectra for skyline scaling\n')
+    obsSpec = np.nanmedian(dataTmpCube, axis=[0,1])
+    skySpec = np.nanmedian(skyTmpCube,axis=[0,1])
+    wave = 1e9*(np.arange(skyTmpCube.shape[2])*hdrTmp['CDELT3'] +hdrTmp['CRVAL3'])
+    del dataTmpGrid
+    del dataTmpCube
+    del skyTmpGrid
+    del skyTmpCube
+    del hdrTmp
+    
+    #find continuum levels
+    obs = obsSpec - splineContFitMP([obsSpec, 1, nContFit, 1])
+    sky = skySpec - splineContFitMP([skySpec, 1, nContFit, 1])
+
+    obs[~np.isfinite(obs)]=0
+    sky[~np.isfinite(sky)]=0
+    
+    if regions is None:
+        regions = [[wave.min(), wave.max()]]
+        
+    if np.all(~np.isfinite(obs)) or np.all(~np.isfinite(sky)):
+        return obsSlices
+
+    #get bounds based on input
+    if mxScale is not None:
+        bounds = [1.-mxScale, 1.+mxScale]
+    else:
+        bounds = [-np.inf, np.inf]
+
+    #plot continuum subtracted sky spectrum for QC purposes
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    plt.plot(wave,sky)
+    plt.xlabel('Wavelength')
+    plt.ylabel('Continuum subtracted flux')
+    plt.plot([wave.min(), wave.max()],[fluxThresh,fluxThresh],'--')
+
+    #plot region windows
+    ylim = ax.get_ylim()
+    for reg in regions:
+        plt.plot([reg[0],reg[0]],[ylim[0],ylim[1]],'k--')
+        plt.plot([reg[1],reg[1]],[ylim[0],ylim[1]],'k--')
+
+    plt.tight_layout()
+    plt.savefig(saveFile+'_skyThresh.pdf',dpi=600)
+    plt.close()
+
+    fig = plt.figure() # plot QC scalings
+    ax = fig.add_subplot(111)
+    
+    print('Finding scaling factors')
+    if logfile is not None:
+        logfile.write('Finding scaling factors\n')
+
+
+    #list to hold all scalings
+    fOut = []
+    rngOut = []
+
+    #notes
+    #need to improve line identification/ranges
+
+    #now find scaling factors for each line/blend/region
+    for reg in regions:
+
+        rngOut.append([])
+        fOut.append([])
+        
+        #concatenated line arrays
+        otmp = np.asarray([])
+        stmp = np.asarray([])
+        wtmp = np.asarray([])
+        
+        #go through region and find every line with strength >=fluxThresh
+        whrReg = np.where(np.logical_and(wave >= reg[0], wave<=reg[1]))[0]
+        wReg = wave[whrReg]
+        sReg = sky[whrReg]
+        oReg = obs[whrReg]
+        
+        strt = 0
+        end=0
+        while strt < sReg.shape[0]:
+            if not sReg[strt] >= fluxThresh:
+                strt+=1
+                end=strt+1
+            else:
+                #count how many pixels > threshold
+                cnt = 1
+                end = strt+1
+
+                if end < sReg.shape[0]:
+                    val = sReg[end]
+                    
+                    while val >= fluxThresh:
+                        cnt +=1
+                        end+=1
+
+                        if end >= sReg.shape[0]:
+                            break
+                        else:
+                            val = sReg[end]
+                                    
+                #only consider a true line if >2 pixels
+                if cnt <3:
+                    strt=end
+                else:
+                    #add line to concatenated spectrum for fitting and add wavelength range to list
+                    #include one extra pixel on either side
+                    if strt >0:
+                        st =strt - 1
+                    else:
+                        st = strt
+                        
+                    if end <sReg.shape[0]:
+                        nd= end + 1
+                    else:
+                        nd = end
+                    
+                    rngOut[-1].append([wReg[st],wReg[nd-1]])
+                    otmp = np.append(otmp,oReg[st:nd])
+                    wtmp = np.append(wtmp,wReg[st:nd])
+                                            
+                    #fit this line region on its own, if desired
+                    if fitInd:
+                        f = fitSky(oReg[st:nd],sReg[st:nd])
+                        if (f < bounds[0]):
+                            f = bounds[0]
+                        elif (f > bounds[1]):
+                            f = bounds[1]
+                        fOut[-1].append(f)
+                        stmp = np.append(stmp,sReg[st:nd]*f)
+                        plt.plot(wtmp.mean(),f,'bo')
+
+                    else:
+                        stmp = np.append(stmp,sReg[st:nd])
+                                            
+  
+                strt = end 
+                cnt = 0
+
+        if not fitInd:
+            f = fitSky(otmp, stmp)[0]
+            if (f < bounds[0]):
+                f = bounds[0]
+            elif (f > bounds[1]):
+                f = bounds[1] 
+            fOut[-1].append(f)
+            plt.plot((reg[0]+reg[1])/2.,f, 'bo')
+
+    #plot region windows
+
+    ylim=ax.get_ylim()
+    for reg in regions:
+        plt.plot([reg[0],reg[0]],[ylim[0],ylim[1]],'k--')
+        plt.plot([reg[1],reg[1]],[ylim[0],ylim[1]],'k--')
+
+    plt.tight_layout()
+    plt.savefig(saveFile+'_sky_scalings.pdf')
+    plt.close()
+
+    print('Subtracting scaled sky slices from science slices')
+    #now set up list to run sky subtraction on individual spectra
+    inpLst = []
+    for wave,oSlice,sSlice in zip(waveMap,obsSlices,skySlices):
+        for i in range(len(oSlice)):
+            inpLst.append([wave[i],oSlice[i,:],sSlice[i,:],rngOut,nContFit,fOut])
+
+    if MP:
+        if ncpus is None:
+            ncpus = mp.cpu_count()
+        pool = mp.Pool(ncpus)
+        subLst = pool.map(subScaledSkySpec,inpLst)
+        pool.close()
+    else:
+        subLst = []
+        for i in range(inpLst):
+            subLst.append(subScaledSkySpec(inpLst[i]))
+
+    #reconstruct output as slices
+    outSlices = []
+    k=0
+    for i in range(len(obsSlices)):
+        slcTmp = np.empty(obsSlices[i].shape,dtype=obsSlices[i].dtype)
+        for j in range(slcTmp.shape[0]):
+            slcTmp[j,:] = subLst[k]
+            k+=1
+        outSlices.append(slcTmp)
+    return outSlices
+        
+def subScaledSkySpec(input):
+    """
+    """
+    wave = input[0]
+    obs = input[1]
+    sky = input[2]
+    regions = input[3]
+    nContFit = input[4]
+    factors = input[5]
+    
+    skyCont = splineContFitMP([sky, 1, nContFit, 1])
+    skyScaled = np.zeros(sky.shape,dtype=sky.dtype)
+
+    if regions is None:
+        regions = [[wave.min(), wave.max()]]
+        
+    if np.all(~np.isfinite(obs)) or np.all(~np.isfinite(sky)):
+        return obs
+    
+    outside = np.ones(sky.shape).astype(bool)
+
+    #construct the sky spectrum outside of the scaled region
+    for reg in regions:
+        if len(reg)>1:
+            for rng in reg:
+                rng = np.asarray(rng)
+                whr = np.where(np.logical_and(wave>=rng.min(),wave<=rng.max()))[0]
+                outside[whr] = False
+        else:
+            whr = np.where(np.logical_and(wave>=reg[0],wave<=reg[1]))[0]
+            outside[whr] = False
+
+    skyScaled[outside] = sky[outside]
+    
+    for reg,f in zip(regions,factors):
+        for i in range(len(reg)):
+            reg = np.asarray(reg)
+            whr = np.where(np.logical_and(wave>=reg[i].min(),wave<=reg[i].max()))[0]
+            stmp = (sky-skyCont)[whr]
+            #plt.plot(obs[whr])
+            #plt.plot(sky[whr])
+            if len(f)>1:
+                skyScaled[whr]=f[i]*stmp+skyCont[whr]
+            else:
+                skyScaled[whr]=f*stmp+skyCont[whr]
+            #plt.plot(skyScaled[whr])
+            #plt.show()
+    return obs - skyScaled
     
