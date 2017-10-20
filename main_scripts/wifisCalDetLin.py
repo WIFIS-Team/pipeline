@@ -35,19 +35,6 @@ t0 = time.time()
 #INPUT VARIABLE FILE NAME
 varFile = 'wifisConfig.inp'
 
-#set file list
-detLstFile = 'det.lst'
-rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
-nChannel = 32
-nRowsAvg = 4
-nRowSplit = 1
-nSatSplit = 1
-nReadSkip = 2
-satLimit=0.97
-satThresh=0.97
-bpmCutoff = 1e-5
-gain = 1.
-ron = 1.
 #*****************************************************************************
 
 #open log file to record all processing steps
@@ -76,7 +63,6 @@ lst= wifisIO.readAsciiList(detLstFile)
 
 if lst.ndim == 0:
     lst = np.asarray([lst])
-
 
 #create processed directory
 wifisIO.createDir('processed')
