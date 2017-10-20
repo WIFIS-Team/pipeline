@@ -58,64 +58,6 @@ colorama.init()
 #INPUT VARIABLE FILE NAME
 varFile = 'wifisConfig.inp'
 
-#*****************************************************************************
-#************************** user input ***********************************
-#initialize all variables.
-#DO NOT CHANGE VALUES HERE, EDIT THE 'variables.inp' FILE, WHICH OVERWRITES VALUES HERE
-
-ronchiFile = 'ronchi.lst' #expected to be a single entry
-ronchiFlatFile = 'ronchiFlat.lst' #expected to be a single entry
-zpntFlatFile = 'zpntFlat.lst' #expected to be a single entry
-zpntLstFile = 'zpntObs.lst'
-zpntSkyFile = 'zpntSky.lst'
-darkFile = ''
-rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
-satFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_satCounts.fits'
-nlFile = '/home/jason/wifis/data/non-linearity/may/processed/master_detLin_NLCoeff.fits' 
-bpmFile = '/data/pipeline/external_data/bpm.fits'
-hband = False
-
-#flat field specific options
-flatWinRng = 51
-flatImgSmth = 5
-flatPolyFitDegree=2
-flatbpmCorRng=20 
-flatCorFile = 'processed/flat_correction_slices.fits'
-flatCor = True
-zpntNbin=1
-zpntBright=True
-zpntSmooth=10
-zpntWinRng=61
-zpntMxChange=5
-obsBpmCorRng = 1
-zpntFlatCutOff = 0.2
-
-#ronchi tracing parameters
-ronchiNbin=1
-ronchiWinRng=7
-ronchiMxWidth=3
-ronchiSmth=20
-ronchiBright=False
-ronchiPolyOrder=2
-ronchiSigmaClipRounds=2
-
-#spatial grid parameters
-spatTrim = 0.5
-
-#parameters used for processing of ramps
-nChannel=32 
-nRowsAvg=4 
-nRowSplit=1 
-nlSplit=32 
-nSatSplit=32 
-nCombSplit=32 
-gain =1.
-ron = 1.
-dispAxis=0
-
-obsCoords = [-111.600444444,31.9629166667,2071]
-#*****************************************************************************
-#*****************************************************************************
 
 logfile = open('wifis_reduction_log.txt','a')
 logfile.write('********************\n')
@@ -133,11 +75,6 @@ os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut
 os.environ['PYOPENCL_CTX'] = pyCLCTX
 
 logfile.write('Root folder containing raw data: ' + str(rootFolder)+'\n')
-
-#first calibrate ronchi flat
-#second calibrate zpnt flat, if exists
-#then calibrate zero-point, if exists
-#lastly, calibrate ronchi
 
 #create processed directory, in case it doesn't exist
 wifisIO.createDir('processed')
@@ -237,7 +174,7 @@ else:
 
 if not os.path.exists('processed/'+ronchiFlatFolder+'_flat_limits.fits') or not os.path.exists('processed/'+ronchiFlatFolder+'_flat_slices_norm.fits'):
     print('Processed flat field data does not exist for folder ' +ronchiFlatFolder +', processing flat folder')
-    calFlat.runCalFlat(np.asarray([ronchiFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplit,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile,satSplit=nSatSplit)
+    calFlat.runCalFlat(np.asarray([ronchiFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile,satSplit=nSatSplit)
 
 #******************************************************************************************************
 #******************************************************************************************************
@@ -247,7 +184,7 @@ if zpntFlatFolder is not None:
     if not os.path.exists('processed/'+zpntFlatFolder+'_flat_limits.fits') and not os.path.exists('processed/'+zpntFlatFolder+'_flat_slices_norm.fits'):
         print('Flat limits do not exist for folder ' +zpntFlatFolder +', processing flat folder')
 
-        calFlat.runCalFlat(np.asarray([zpntFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplit,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile, flatCutOff=zpntFlatCutOff,distMapLimitsFile='processed/'+ronchiFlatFolder+'_flat_limits.fits')
+        calFlat.runCalFlat(np.asarray([zpntFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile, flatCutOff=zpntFlatCutOff,distMapLimitsFile='processed/'+ronchiFlatFolder+'_flat_limits.fits')
 
 #******************************************************************************************************
 #******************************************************************************************************
@@ -455,7 +392,7 @@ else:
 if ronchiFolder is not None:
     if not os.path.exists('processed/'+ronchiFolder+'_ronchi.fits'):
 
-        ronchi, sigmaImg, satFrame, ronchiHdr = processRamp.auto(ronchiFolder, rootFolder,'processed/'+ronchiFolder+'_ronchi.fits', satCounts, nlCoeff, BPM,nChannel=nChannel, rowSplit=nRowSplit, satSplit=nSatSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=flatbpmCorRng, saveAll=True)
+        ronchi, sigmaImg, satFrame, ronchiHdr = processRamp.auto(ronchiFolder, rootFolder,'processed/'+ronchiFolder+'_ronchi.fits', satCounts, nlCoeff, BPM,nChannel=nChannel, rowSplit=nRowSplitFlat, satSplit=nSatSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=flatbpmCorRng, saveAll=True)
     else:
         ronchiLst, ronchiHdr = wifisIO.readImgsFromFile('processed/'+ronchiFolder+'_ronchi.fits')
         ronchi = ronchiLst[0]
@@ -813,3 +750,4 @@ if cont.lower()=='y':
 
                 pdf.savefig(dpi=300)
                 plt.close()
+logfile.close()
