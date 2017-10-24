@@ -4,33 +4,37 @@
 import numpy as np
 import warnings
 
-def compFowler(inttime, fluxImg, satFrame, gain = 1., ron=1.):
+def compFowler(inttime, fluxImg, satFrame, ron, gain=1.):
     """
     inttime is array of integration times
     fluxImg is processed flux image. ***UNITS UNKNOWN AT THIS POINT***
     satFrame is array indicating the frame number of first saturated frame
-    gain in units of e-/Count
-    ron = read out noise, in units of electrons
+    gain in units of e-/Count - only necessary if ron is given in e- (not ADU, counts or DN)
+    ron = read out noise array
     """
 
     nFrames = len(inttime)
     deltaT = inttime[-1] - inttime[int(inttime.shape[0]/2)-1] #integration time
     dT = inttime[1]-inttime[0] # readout time per frame
     nReads = satFrame - int(nFrames/2)
+
+    #convert ron to units of counts (if gain != 1)
+    ron /= gain 
+    
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', RuntimeWarning)
-        eff_ron = np.sqrt(2)*ron/np.sqrt(nReads) #effect read noise, assuming no co-additions
+        eff_ron = np.sqrt(2)*ron/np.sqrt(nReads) #effective read noise, assuming no co-additions
 
-        #compute variance, assuming no co-adds
+        #compute variance, without co-adds
         var = fluxImg/(gain*deltaT) * (1.-(1./3.)*(dT/deltaT)*(nReads**2-1.)/nReads) + eff_ron**2/(gain**2*deltaT**2)
 
-        #compute uncertainty from variance as a 32-bit float
+        #compute uncertainty from variance, return as a 32-bit float
         sigma = np.sqrt(var).astype('float32')
 
     return sigma
 
 
-def compUTR(inttime, fluxImg, satFrame, gain = 1., ron=1.):
+def compUTR(inttime, fluxImg, satFrame, ron, gain = 1.):
     """
     inttime is array of integration times
     fluxImg is processed flux image. ***UNITS UNKNOWN AT THIS POINT***
@@ -43,6 +47,9 @@ def compUTR(inttime, fluxImg, satFrame, gain = 1., ron=1.):
     deltaT = (satFrame - 1)*dT 
     nReads = satFrame
 
+    #convert RON into units of counts, in case gain != 1
+    ron /= gain
+    
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', RuntimeWarning)
         eff_ron = np.sqrt(2)*ron/np.sqrt(nReads) #effect read noise, assuming no co-additions
@@ -50,7 +57,7 @@ def compUTR(inttime, fluxImg, satFrame, gain = 1., ron=1.):
         #compute variance, assuming no co-adds
         var = 6./5. * fluxImg/(gain *nReads *deltaT)* (nReads**2 + 1.)/(nReads + 1) + 6.*eff_ron**2/(gain**2*deltaT**2)*(nReads - 1.)/(nReads + 1.)
 
-        #compute uncertainty from variance as a 32-bit float
+        #compute uncertainty from variance, return as a 32-bit float
         sigma = np.sqrt(var).astype('float32')
 
     return sigma
