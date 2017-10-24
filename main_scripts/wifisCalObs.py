@@ -165,20 +165,37 @@ if len(waveLst) != len(obsLst):
     logfile.write('FAILURE: Wave/arc list file ' + waveLstFile + ' is not the same size as observation list ' + obsLstFile + ' \n')
     raise Warning('*** Wave/arc list file is not the same size as observation list ***')
 
+
+#deal with darks
+if (darkFile is not None) and os.path.exists(darkFile):
+    darkLst = wifisIO.readImgsFromFile(darkFile)[0]
+
+    #if len returns more than 3, assume it is a single image
+    if len(darkLst) > 3:
+        darkLst = [darkLst]
+else:
+    darkLst = None
+    logfile.write('*** WARNING: No dark provided or dark file ' + str(darkFile) +' does not exist ***\n')
+
+#prioritize RON file over RON from associated dark?
+if os.path.exists(ronFile):
+    RON = wifisIO.readImgsFromFile(ronFile)[0]
+    logfile.write('Using RON file:\n')
+    logfile.write(ronFile+'\n')
+elif darkFile is not None and os.path.exists(darkFile):
+    RON = wifisIO.readImgsFromFile(darkFile.strip('.fits')+'_RON.fits')[0]
+    logfile.write('Using RON file:\n')
+    logfile.write(darkFile.strip('.fits')+'_RON.fits\n')
+
+else:
+    RON = None
+    logfile.write('*** WARNING: No RON file provided, or ' + str(ronFile) +' does not exist ***\n')
+    
+logfile.write('\n')
+
 #here begins the meat of the script
 #**************************************************************************************************
-#deal with darks
-if darkFile is not None and os.path.exists(darkFile):
-    dark, darkSig, darkSat = wifisIO.readImgsFromFile(darkFile)[0]
-    darkLst = [dark, darkSig]
-else:
-    print(colorama.Fore.RED+'*** WARNING: No dark image provided, or file does not exist ***'+colorama.Style.RESET_ALL)
-    
-    if logfile is not None:
-        logfile.write('*** WARNING: No dark image provide, or file ' + str(darkFile)+' does not exist ***\n')
-    darkLst = [None,None]
 
-logfile.write('\n')
 #check to make sure that 
 for i in range(len(obsLst)):
 
@@ -193,7 +210,7 @@ for i in range(len(obsLst)):
         print('\n*** Processed flat field files do not exist for folder ' +flatFolder +', processing flat folder ***')
         logfile.write('Processed flat field files do not exist for folder ' +flatFolder +', processing flat folder\n')
         
-        calFlat.runCalFlat(np.asarray([flatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, distMapLimitsFile = distMapLimitsFile, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile,darkFile=darkFile, logfile=logfile, ask=False, obsCoords=obsCoords, limSmth=flatLimSmth, flatCutOff=flatCutOff)
+        calFlat.runCalFlat(np.asarray([flatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, distMapLimitsFile = distMapLimitsFile, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile,darkFile=darkFile, logfile=logfile, ask=False, obsCoords=obsCoords, limSmth=flatLimSmth, flatCutOff=flatCutOff, gain=gain, ron=RON, polyFitDegree=limitsPolyFitDegree)
         
     print('Reading slice limits')
     logfile.write('Reading slice limits from file:\n')
@@ -235,7 +252,7 @@ for i in range(len(obsLst)):
         print('\n*** Processed arc files do not exist for folder ' +waveFolder +', processing wave folder ***')
         logfile.write('\nProcessed arc files do not exist for folder ' +waveFolder +', processing wave folder\n')
         
-        calWave.runCalWave(waveLst, flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=True, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=nRowSplitWave, nlSplit=nlSplit, combSplit=nCombSplit, bpmCorRng=flatbpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, flatWinRng=flatWinRng,flatImgSmth=flatImgSmth, flatPolyFitDegree=mxOrder, distMapFile=distMapFile, spatGridPropsFile=spatGridPropsFile, atlasFile=atlasFile, templateFile=waveTempFile, prevResultsFile=waveTempResultsFile,  sigmaClip=sigmaClip, sigmaClipRounds=sigmaClipRounds, sigmaLimit=sigmaLimit, cleanDispSol=cleanDispSol,cleanDispThresh = cleanDispThresh, waveTrimThresh=waveTrimThresh,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile,darkFile=darkFile,logfile=logfile,ask=False, obsCoords=obsCoords, waveSmooth=waveSmooth,winRng=waveWinRng,waveSolMP=waveSolMP)
+        calWave.runCalWave(waveLst, flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=True, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=nRowSplitWave, nlSplit=nlSplit, combSplit=nCombSplit, bpmCorRng=flatbpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, flatWinRng=flatWinRng,flatImgSmth=flatImgSmth, limitsPolyFitDegree=limitsPolyFitDegree, distMapFile=distMapFile, spatGridPropsFile=spatGridPropsFile, atlasFile=atlasFile, templateFile=waveTempFile, prevResultsFile=waveTempResultsFile,  sigmaClip=sigmaClip, sigmaClipRounds=sigmaClipRounds, sigmaLimit=sigmaLimit, cleanDispSol=cleanDispSol,cleanDispThresh = cleanDispThresh, waveTrimThresh=waveTrimThresh,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile,darkFile=darkFile,logfile=logfile,ask=False, obsCoords=obsCoords, waveSmooth=waveSmooth,winRng=waveWinRng,waveSolMP=waveSolMP, gain=gain, ron=RON)
 
     print('Reading in wavelength mapping files')
     logfile.write('Using wavelength map from file:\n')
@@ -269,7 +286,7 @@ for i in range(len(obsLst)):
         contProc = True
     
     if (contProc):
-        obs, sigmaImg, satFrame, hdr = processRamp.auto(obsFolder, rootFolder,'processed/'+obsFolder+'_obs.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=crReject, bpmCorRng=bpmCorRng, nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=ron,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True, satSplit=nSatSplit)
+        obs, sigmaImg, satFrame, hdr = processRamp.auto(obsFolder, rootFolder,'processed/'+obsFolder+'_obs.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=crReject, bpmCorRng=bpmCorRng, nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=RON,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True, satSplit=nSatSplit)
             
     else:
         print('Reading science image')
@@ -291,7 +308,7 @@ for i in range(len(obsLst)):
         if not os.path.exists('processed/'+skyFolder+'_sky.fits'):
             print('Processing sky folder '+skyFolder)
             logfile.write('\nProcessing sky folder ' + skyFolder+'\n')
-            sky, skySigmaImg, skySatFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=crReject, bpmCorRng=bpmCorRng,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=ron,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True,satSplit=nSatSplit)
+            sky, skySigmaImg, skySatFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=crReject, bpmCorRng=bpmCorRng,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=RON,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True,satSplit=nSatSplit)
                 
         #subtract sky from data at this stage
         print('Reading sky data from ' + skyFolder)

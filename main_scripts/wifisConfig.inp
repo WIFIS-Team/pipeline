@@ -15,7 +15,7 @@ detLstFile = 'det.lst'
 pyCLCompOut = '0'
 
 #select OpenCL device. If empty, program will prompt EACH TIME
-pyCLCTX = '2'
+pyCLCTX = '1'
 
 ######################################################
 #optional parameters
@@ -154,7 +154,7 @@ nlFile = '/home/jason/wifis/data/june_cals/processed/master_detLin_NLCoeff.fits'
 satFile = '/home/jason/wifis/data/june_cals/processed/master_detLin_satCounts.fits'
 bpmFile = '/home/jason/wifis/data/june_cals/processed/master_dark_BPM.fits'
 atlasFile = '/data/pipeline/external_data/best_lines2.dat'
-
+ronFile = '/home/jason/wifis/data/june_cals/processed/master_dark_RON.fits'
 
 ######################################################
 #bad pixel correction options
@@ -227,7 +227,7 @@ flatWinRng = 51
 flatImgSmth = 5
 
 #optional polynomial degree to use to fit to slice limits (0 skips this step)
-flatPolyFitDegree=2
+limitsPolyFitDegree=2
 
 #Gaussian width used to smooth slice limits
 flatLimSmth = 20
@@ -301,6 +301,9 @@ nRowsAvg=4
 #specifies how many processing steps to use during reference row correction. Must be integer multiple of number of frames. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
 nRowSplit=1
 
+#specifies how many processing steps to use during reference row correction of flat/similar files. Must be integer multiple of number of frames. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
+nRowSplitFlat=1
+
 #specifies how many processing steps to use during non-linearity correction. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
 nlSplit=32
 
@@ -313,11 +316,8 @@ nCombSplit=32
 #specifies the number of initial frames to skip during reading of ramp (NOT USED FOR ANYTHING BUT NON-LINEARITY AT THE MOMENT)
 nReadSkip = 0
 
-#specifies the gain (e-/cnt[ADU]0
+#specifies the gain (e-/cnt[ADU]), if and only if the RON file is not in units of counts (i.e RON is given in units of e-)
 gain = 1.
-
-#specifies the read-out-noise (MIGHT NOT BE NEEDED)
-ron = 1.
 
 ######################################################
 #coordinates options

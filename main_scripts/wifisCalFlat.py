@@ -80,15 +80,28 @@ else:
     
 
 if (darkFile is not None) and os.path.exists(darkFile):
-    darkLst = wifisIO.readAsciiList(darkFile)
-    
-    if darkLst.ndim == 0:
+    darkLst = wifisIO.readImgsFromFile(darkFile)[0]
+
+    #if len returns more than 3, assume it is a single image
+    if len(darkLst) > 3:
         darkLst = [darkLst]
-    else:
-        darkLst = None
 else:
     darkLst = None
-    logfile.write('*** WARNING: No darks provided or dark list ' + str(darkFile) +' does not exist ***\n')
+    logfile.write('*** WARNING: No dark provided or dark file ' + str(darkFile) +' does not exist ***\n')
+
+#prioritize RON file over RON from associated dark?
+if os.path.exists(ronFile):
+    RON = wifisIO.readImgsFromFile(ronFile)[0]
+    logfile.write('Using RON file:\n')
+    logfile.write(ronFile+'\n')
+elif darkFile is not None and os.path.exists(darkFile):
+    RON = wifisIO.readImgsFromFile(darkFile.strip('.fits')+'_RON.fits')[0]
+    logfile.write('Using RON file:\n')
+    logfile.write(darkFile.strip('.fits')+'_RON.fits\n')
+
+else:
+    RON = None
+    logfile.write('*** WARNING: No RON file provided, or ' + str(ronFile) +' does not exist ***\n')
 
 #read file list
 if os.path.exists(flatLstFile):
@@ -101,7 +114,7 @@ if flatLst.ndim == 0:
     flatLst = np.asarray([flatLst])
 
 logfile.write('\n')
-calFlat.runCalFlat(flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=True, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=nRowSplitFlat, nlSplit=nlSplit, combSplit=nCombSplit, bpmCorRng=flatbpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, imgSmth=flatImgSmth, polyFitDegree=flatPolyFitDegree,nlFile=nlFile, satFile=satFile, bpmFile=bpmFile, flatCutOff=flatCutOff, logfile=logfile, winRng=flatWinRng, dispAxis=dispAxis, limSmth=flatLimSmth, obsCoords=obsCoords, darkFile=darkFile)
+calFlat.runCalFlat(flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=True, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=nRowSplitFlat, nlSplit=nlSplit, combSplit=nCombSplit, bpmCorRng=flatbpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, imgSmth=flatImgSmth, polyFitDegree=limitsPolyFitDegree,nlFile=nlFile, satFile=satFile, bpmFile=bpmFile, flatCutOff=flatCutOff, logfile=logfile, winRng=flatWinRng, dispAxis=dispAxis, limSmth=flatLimSmth, obsCoords=obsCoords, darkFile=darkFile, ron=RON)
 
 logfile.write('********************\n')
 logfile.write('\n')

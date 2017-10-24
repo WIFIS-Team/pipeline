@@ -32,7 +32,6 @@ import wifisUncertainties
 import astropy.io.fits as fits
 import wifisBadPixels as badPixels
 from astropy.visualization import ZScaleInterval
-import copy
 
 import colorama
     
@@ -195,12 +194,6 @@ if (contProc):
                 #reset cube to reduce memory impact 
                 data = 0
  
-                #get uncertainties for each pixel
-                if UTR:
-                    sigma = wifisUncertainties.compUTR(inttime, fluxImg, satFrame)
-                else:
-                    sigma = wifisUncertainties.compFowler(inttime, fluxImg, satFrame)
-
                 #plot and determine quality control stuff here
                 medDark = np.nanmedian(fluxImg)
                 stdDark = np.nanstd(fluxImg)
@@ -258,6 +251,14 @@ if (contProc):
                 hdr.set('QC_DARK',medDark,'Median dark current of entire array, in counts')
                 hdr.set('QC_STDDK',stdDark, 'Standard deviation of dark current, in counts')
                 hdr.add_comment('File contains the dark, uncertainty, and saturation frames as multi-extensions')
+
+                #now compute uncertainties
+                #get uncertainties for each pixel
+                if UTR:
+                    sigma = wifisUncertainties.compUTR(inttime, fluxImg, satFrame, ron)
+                else:
+                    sigma = wifisUncertainties.compFowler(inttime, fluxImg, satFrame,ron)
+
                 wifisIO.writeFits([fluxImg,sigma, satFrame],savename+'_dark.fits',hdr=hdr)
 
             procDark.append(fluxImg)
@@ -387,6 +388,6 @@ else:
 
 print ("Total time to run entire script: ",time.time()-t0)
 
-logfile.write('********************\n')
-logfile.write('\n')
-logfile.close()
+#logfile.write('********************\n')
+#logfile.write('\n')
+#logfile.close()

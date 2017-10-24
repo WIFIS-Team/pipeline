@@ -119,6 +119,20 @@ else:
     if logfile is not None:
         logfile.write('*** WARNING: No dark image provide, or file ' + str(darkFile)+' does not exist ***\n')
     darkLst = [None,None]
+
+#prioritize RON file over RON from associated dark?
+if os.path.exists(ronFile):
+    RON = wifisIO.readImgsFromFile(ronFile)[0]
+    logfile.write('Using RON file:\n')
+    logfile.write(ronFile+'\n')
+elif darkFile is not None and os.path.exists(darkFile):
+    RON = wifisIO.readImgsFromFile(darkFile.strip('.fits')+'_RON.fits')[0]
+    logfile.write('Using RON file:\n')
+    logfile.write(darkFile.strip('.fits')+'_RON.fits\n')
+else:
+    RON = None
+    logfile.write('*** WARNING: No RON file provided, or ' + str(ronFile) +' does not exist ***\n')
+
     
 #first check if BPM is provided
 if os.path.exists(bpmFile):
@@ -212,7 +226,7 @@ if zpntLst is not None:
                 print('Processing ' + zpntFolder)
                 logfile.write('Processing '+ zpntFolder+'\n')
 
-                zpntObs, zpntSigma, zptnSatFrame, zpntHdr = processRamp.auto(zpntFolder, rootFolder,'processed/'+zpntFolder+'_zpnt_obs.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=obsBpmCorRng,nlFile=nlFile,satFile=satFile,bpmFile='', gain=gain, ron=ron,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,saveAll=True, rampNum=None, avgAll=True)
+                zpntObs, zpntSigma, zptnSatFrame, zpntHdr = processRamp.auto(zpntFolder, rootFolder,'processed/'+zpntFolder+'_zpnt_obs.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=obsBpmCorRng,nlFile=nlFile,satFile=satFile,bpmFile='', gain=gain, ron=RON,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,saveAll=True, rampNum=None, avgAll=True)
                 
             else:
                 print('Processed data already exists for ' + zpntFolder + '. Reading data instead')
@@ -230,7 +244,7 @@ if zpntLst is not None:
                     print('Processing sky folder '+skyFolder)
                     logfile.write('\nProcessing sky folder ' + skyFolder+'\n')
 
-                    sky, skySigmaImg, skySatFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=obsBpmCorRng, rampNum=None,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=ron,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True)
+                    sky, skySigmaImg, skySatFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=obsBpmCorRng, rampNum=None,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=RON,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True)
                 else:
                     print('Reading sky data from ' + skyFolder)
                     logfile.write('Reading processed sky image from:\n')
@@ -392,7 +406,7 @@ else:
 if ronchiFolder is not None:
     if not os.path.exists('processed/'+ronchiFolder+'_ronchi.fits'):
 
-        ronchi, sigmaImg, satFrame, ronchiHdr = processRamp.auto(ronchiFolder, rootFolder,'processed/'+ronchiFolder+'_ronchi.fits', satCounts, nlCoeff, BPM,nChannel=nChannel, rowSplit=nRowSplitFlat, satSplit=nSatSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=flatbpmCorRng, saveAll=True)
+        ronchi, sigmaImg, satFrame, ronchiHdr = processRamp.auto(ronchiFolder, rootFolder,'processed/'+ronchiFolder+'_ronchi.fits', satCounts, nlCoeff, BPM,nChannel=nChannel, rowSplit=nRowSplitFlat, satSplit=nSatSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=flatbpmCorRng, saveAll=True, ron=RON, gain=gain)
     else:
         ronchiLst, ronchiHdr = wifisIO.readImgsFromFile('processed/'+ronchiFolder+'_ronchi.fits')
         ronchi = ronchiLst[0]

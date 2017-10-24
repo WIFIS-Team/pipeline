@@ -105,10 +105,26 @@ else:
     BPM = None
 
 if (darkFile is not None) and os.path.exists(darkFile):
-    darkLst = wifisIO.readAsciiList(darkListFile)[0]
-    darkLst = darkLst[:2]
+    darkLst = wifisIO.readImgsFromFile(darkFile)[0]
+    if len(darkLst) >3:
+        darkLst = [darkLst]
 else:
     darkLst = None
+    logfile.write('*** WARNING: No dark provided or dark file ' + str(darkFile) +' does not exist ***\n')
+
+#prioritize RON file over RON from associated dark?
+if os.path.exists(ronFile):
+    RON = wifisIO.readImgsFromFile(ronFile)[0]
+    logfile.write('Using RON file:\n')
+    logfile.write(ronFile+'\n')
+elif darkFile is not None and os.path.exists(darkFile):
+    RON = wifisIO.readImgsFromFile(darkFile.strip('.fits')+'_RON.fits')[0]
+    logfile.write('Using RON file:\n')
+    logfile.write(darkFile.strip('.fits')+'_RON.fits\n')
+
+else:
+    RON = None
+    logfile.write('*** WARNING: No RON file provided, or ' + str(ronFile) +' does not exist ***\n')
 
 if not (os.path.exists(atlasFile)):
     raise Warning('*** Cannot continue, line atlas file ' + atlasFile + ' does not exist. Please provide the necessary atlas file***')
@@ -123,7 +139,7 @@ if not (os.path.exists(spatGridPropsFile)):
 wifisIO.createDir('processed')
 wifisIO.createDir('quality_control')
 
-calWave.runCalWave(waveLst, flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=waveSolPlot, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=nRowSplitWave, nlSplit=nlSplit, combSplit=nCombSplit, bpmCorRng=flatbpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, flatWinRng=flatWinRng,flatImgSmth=flatImgSmth, flatPolyFitDegree=3, distMapFile=distMapFile, spatGridPropsFile=spatGridPropsFile, atlasFile=atlasFile, templateFile=waveTempFile, prevResultsFile=waveTempResultsFile,  sigmaClip=sigmaClip, sigmaClipRounds=sigmaClipRounds, sigmaLimit=sigmaLimit, cleanDispSol=cleanDispSol,cleanDispThresh = cleanDispThresh, waveTrimThresh=waveTrimThresh,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, obsCoords=obsCoords, dispAxis=dispAxis, darkFile=darkFile, logfile=logfile, mxOrder=mxOrder, waveSmooth=waveSmooth, waveSolMP=waveSolMP,waveSolPlot=waveSolPlot, winRng=waveWinRng, nRowSplitFlat=nRowSplitFlat)
+calWave.runCalWave(waveLst, flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=waveSolPlot, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=nRowSplitFlat, nlSplit=nlSplit, combSplit=nCombSplit, bpmCorRng=bpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, flatWinRng=flatWinRng,flatImgSmth=flatImgSmth, limitsPolyFitDegree=limitsPolyFitDegree, distMapFile=distMapFile, spatGridPropsFile=spatGridPropsFile, atlasFile=atlasFile, templateFile=waveTempFile, prevResultsFile=waveTempResultsFile,  sigmaClip=sigmaClip, sigmaClipRounds=sigmaClipRounds, sigmaLimit=sigmaLimit, cleanDispSol=cleanDispSol,cleanDispThresh = cleanDispThresh, waveTrimThresh=waveTrimThresh,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, obsCoords=obsCoords, dispAxis=dispAxis, darkFile=darkFile, logfile=logfile, mxOrder=mxOrder, waveSmooth=waveSmooth, waveSolMP=waveSolMP,waveSolPlot=waveSolPlot, winRng=waveWinRng, nRowSplitFlat=nRowSplitFlat, gain=gain, ron=RON,flatbpmCorRng=flatbpmCorRng)
 
 logfile.write('********************\n')
 logfile.write('\n')
