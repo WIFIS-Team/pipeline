@@ -12,7 +12,7 @@ import time
 import glob
 import warnings
 
-def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=1, saveAll=True, ignoreBPM=False,skipObsinfo=False, rampNum=None, satFile='', nlFile='', bpmFile='',logfile=None, fowler=False, gain=1., ron=1., obsCoords=None, avgAll=False):
+def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=1, saveAll=True, ignoreBPM=False,skipObsinfo=False, rampNum=None, satFile='', nlFile='', bpmFile='',logfile=None, fowler=False, gain=1., ron=None, obsCoords=None, avgAll=False):
     """
     """
 
@@ -106,11 +106,14 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
             del data
 
             #get uncertainties for each pixel
-            sigmaImg = wifisUncertainties.compFowler(inttime, fluxImg, satFrame)
-
+            if ron is not None:
+                sigmaImg = wifisUncertainties.compFowler(inttime, fluxImg, satFrame, ron, gain=gain)
+            else:
+                sigmaImg = None
         else:
             if (crReject):
                 fluxImg = combData.upTheRampCRRejectCL(inttime, data, satFrame, combSplit)[0]
+                sigmaImg = None
                 hdr.add_history('Flux determined from median gradient')
                 if logfile is not None:
                     logfile.write('Determined flux using median gradient of the ramp\n')
@@ -124,9 +127,11 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
             #free up some memory
             del data
             #get uncertainties for each pixel
-            sigmaImg = wifisUncertainties.compUTR(inttime, fluxImg, satFrame, ron=ron, gain=gain)
-               
-        #****************************************************************************
+            if ron is not None:
+                sigmaImg = wifisUncertainties.compUTR(inttime, fluxImg, satFrame, ron=ron, gain=gain)
+            else:
+                sigmaImg = None
+            #****************************************************************************
         #add additional header information here
         if not skipObsinfo:
             headers.addTelInfo(hdr, folder+'/obsinfo.dat',logfile=logfile, obsCoords=obsCoords)
@@ -138,7 +143,8 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
             warnings.simplefilter('ignore',RuntimeWarning)
             fluxImg[satFrame < 2] = np.nan
             #fluxImg[fluxImg < 0] = np.nan
-            sigmaImg[~np.isfinite(fluxImg)] = np.nan
+            if sigmaImg is not None:
+                sigmaImg[~np.isfinite(fluxImg)] = np.nan
 
             #mark pixels with flux > than maximum achievable flux as bad pixels
             dT = np.median(np.gradient(inttime))
@@ -163,11 +169,13 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
                         
             #try and correct all pixels, but not the reference pixels
             imgCor = np.empty(fluxImg.shape, dtype = fluxImg.dtype)
-            sigmaCor = np.empty(sigmaImg.shape, dtype= sigmaImg.dtype)
-
-            imgCor[4:-4,4:-4] = badPixels.corBadPixelsAll(fluxImg[4:-4,4:-4], dispAxis=0, mxRng=bpmCorRng, MP=True) 
-            sigmaCor[4:-4, 4:-4]  = badPixels.corBadPixelsAll(sigmaImg[4:-4,4:-4], dispAxis=0, mxRng=bpmCorRng, MP=True, sigma=True)
-
+            imgCor[4:-4,4:-4] = badPixels.corBadPixelsAll(fluxImg[4:-4,4:-4], dispAxis=0, mxRng=bpmCorRng, MP=True)
+            if sigmaImg is not None:
+                sigmaCor = np.empty(sigmaImg.shape, dtype= sigmaImg.dtype)
+                sigmaCor[4:-4, 4:-4]  = badPixels.corBadPixelsAll(sigmaImg[4:-4,4:-4], dispAxis=0, mxRng=bpmCorRng, MP=True, sigma=True)
+            else:
+                sigmaCor = sigmaImg
+                
             hdr.add_history('Bad pixel mask used:')
             hdr.add_history(bpmFile)
             hdr.add_history('Bad pixels corrected using nearest pixels within ' + str(bpmCorRng) + ' pixel range')
@@ -199,13 +207,15 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
         satComb = satAll[0]
         
     if saveAll:
+        if sigComb is None:
+            sigComb = np.zeros(imgComb.shape, dtype=imgComb.dtype)
         wifisIO.writeFits([imgComb, sigComb, satComb], saveName, hdr=hdr, ask=False)
     else:
         wifisIO.writeFits(imgComb, saveName, hdr=hdr, ask=False)
  
     return imgComb, sigComb, satComb, hdr
 
-def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=1, saveAll=True, ignoreBPM=False, skipObsinfo=False, rampNum=None, bpmFile='', satFile='', nlFile='', gain=1., ron=1., logfile=None,obsCoords=None, avgAll=False):
+def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=1, saveAll=True, ignoreBPM=False, skipObsinfo=False, rampNum=None, bpmFile='', satFile='', nlFile='', gain=1., ron=None, logfile=None,obsCoords=None, avgAll=False):
     """
     """
 
