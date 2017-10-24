@@ -29,7 +29,7 @@ from astropy import time as astrotime, coordinates as coord, units
 import colorama
 from astropy.visualization import ZScaleInterval
 
-def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowsAvg=0,rowSplit=1,nlSplit=1, combSplit=1,bpmCorRng=2, crReject=False, skipObsinfo=False, darkLst=None, flatWinRng=51, flatImgSmth=5, flatPolyFitDegree=3, rootFolder='', distMapFile='', spatGridPropsFile='', atlasFile='', templateFile='', prevResultsFile='', sigmaClip=2, sigmaClipRounds=2, sigmaLimit=3,cleanDispSol=False,cleanDispThresh = 0, waveTrimThresh=0, waveSmooth=1, nlFile='', bpmFile='', satFile='',darkFile='',logfile=None, ask=True, obsCoords=None, dispAxis=0, mxOrder=3,winRng=9,waveSolMP=True,waveSolPlot=False, nRowSplitFlat=1):
+def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowsAvg=0,rowSplit=1,nlSplit=1, combSplit=1,bpmCorRng=2, crReject=False, skipObsinfo=False, darkLst=None, flatWinRng=51, flatImgSmth=5, limitsPolyFitDegree=3, rootFolder='', distMapFile='', spatGridPropsFile='', atlasFile='', templateFile='', prevResultsFile='', sigmaClip=2, sigmaClipRounds=2, sigmaLimit=3,cleanDispSol=False,cleanDispThresh = 0, waveTrimThresh=0, waveSmooth=1, nlFile='', bpmFile='', satFile='',darkFile='',logfile=None, ask=True, obsCoords=None, dispAxis=0, mxOrder=3,winRng=9,waveSolMP=True,waveSolPlot=False, nRowSplitFlat=1,ron=None, gain=1.,flatbpmCorRng=20.):
     """
     """
 
@@ -77,14 +77,19 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                 contProc2 = True
         
             if (contProc2):
-                wave, sigmaImg, satFrame,hdr = processRamp.auto(waveFolder, rootFolder, savename+'_wave.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, rampNum=None, nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, obsCoords=obsCoords, avgAll=True, logfile=logfile)
+                wave, sigmaImg, satFrame,hdr = processRamp.auto(waveFolder, rootFolder, savename+'_wave.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=rowSplit, nlSplit=nlSplit, combSplit=combSplit, crReject=crReject, bpmCorRng=bpmCorRng, rampNum=None, nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, obsCoords=obsCoords, avgAll=True, logfile=logfile, ron=ron, gain=gain)
 
                 #carry out dark subtraction
                 if darkLst is not None and darkLst[0] is not None:
                     print('Subtracting dark ramp')
-                    dark, darkSig = darkLst
+                    if len(darkLst)>1:
+                        dark, darkSig = darkLst[:2]
+                        sigmaImg = np.sqrt(sigmaImg**2 + darkSig**2)
+                    else:
+                        dark = darkLst[0]
+                        logfile.write('*** Warning: No uncertainty associated with dark image ***\n')
+                        print(colorama.Fore.RED+'*** WARNING: No uncertainty associated with dark image ***'+colorama.Style.RESET_ALL)
                     wave -= dark
-                    sigmaImg = np.sqrt(sigmaImg**2 + darkSig**2)
                     hdr.add_history('Dark image subtracted using file:')
                     hdr.add_history(darkFile)
                     if logfile is not None:
@@ -123,7 +128,7 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                     distMap = wifisIO.readImgsFromFile(distMapFile)[0]
                     print('Flat limits do not exist for folder ' +flatFolder +', processing flat folder')
 
-                    calFlat.runCalFlat(np.asarray([flatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, distMapLimitsFile = distMapLimitsFile, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=combSplit,bpmCorRng=20, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile, logfile=logfile)
+                    calFlat.runCalFlat(np.asarray([flatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, distMapLimitsFile = distMapLimitsFile, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=combSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile, logfile=logfile, polyFitDegree=limitsPolyFitDegree,gain=gain,ron=ron)
 
                 print('Reading slice limits file')
                 limits, limHdr = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_limits.fits')
@@ -304,7 +309,7 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
            
                     wifisIO.writeTable(waveGridProps, savename+'_wave_waveGridProps.dat')
 
-                    print('placing arc image on grid')
+                    print('Placing arc image on grid')
                     waveGrid = createCube.waveCorAll(waveCor, waveMap, waveGridProps=waveGridProps)
 
                     hdr.add_comment('File contains the uniformly gridded spatial and wavelength mapped fluxes for each slice as multi-extensions')
@@ -394,6 +399,6 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                     hdr.add_comment('File contains the wavelength mapping slices as multi-extensions')
                     #save wavemap solution
                     wifisIO.writeFits(waveMap, savename+'_wave_waveMap.fits',hdr=hdr, ask=False)
+            print('*** Finished processing ' + waveFolder + ' in ' + str(time.time()-t0) + ' seconds ***')
 
-                   
     return
