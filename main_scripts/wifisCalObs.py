@@ -304,7 +304,7 @@ for i in range(len(obsLst)):
         del skyDataLst
         
         if skyShiftCor:
-            pixDiff = postProcess.crossCorImage(obs[4:-4,4:-4],sky[4:-4,4:-4],maxFluxLevel = skyShitMaxLevel, oversample=20, regions=skyShiftRegions,position=np.arange(obs[4:-4,4:-4].shape[1]))
+            pixDiff = postProcess.crossCorImage(obs[4:-4,4:-4],sky[4:-4,4:-4],maxFluxLevel = skyShitMaxLevel, oversample=skyShiftOverSample, regions=skyShiftRegions,position=np.arange(obs[4:-4,4:-4].shape[1]),contFit1=skyShiftContFit1, contFit2=skyShiftContFit2)
 
             #remove bad outliers, then compute the mean average
             pixShift = np.nanmedian(pixDiff)
