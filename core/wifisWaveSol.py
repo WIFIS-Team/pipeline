@@ -125,7 +125,6 @@ def getSolQuick(input):
     """
     
     yRow = input[0]
-    ySigma = np.sqrt(yRow)
     template = input[1]
     atlas = input[2]
     mxorder = input[3]
@@ -147,6 +146,10 @@ def getSolQuick(input):
     nSearchRounds = input[18]
     totPix = len(yRow)
 
+    #ySigma = input[19]
+    #if ySigma is None:
+    ySigma = np.sqrt(yRow)
+    
     useQCWeights = False
     
     #first make sure that the yRow isn't all NaNs
@@ -587,9 +590,11 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
 
     dataLst = []
     tmpLst = []
+    
     for i in range(len(dataSlices)):
         dTmp = np.zeros(dataSlices[i].shape, dtype=dataSlices[i].dtype)
         tempTemp = np.zeros(templateSlices[i].shape, dtype=templateSlices[i].dtype)
+            
         np.copyto(dTmp, dataSlices[i])
         np.copyto(tempTemp, templateSlices[i])
     #    
@@ -599,7 +604,7 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
     #    tempTemp[whr] = 0.
         dataLst.append(dTmp)
         tmpLst.append(tempTemp)
-
+        
     #set up input data for running with multiprocessing
     #by extracting all vectors along the dispersion axis
     lst = []
@@ -662,10 +667,11 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
                         tmpTemp = tmpLst[i][j,:]
 
                 lst.append([dataLst[i][j,:],tmpTemp, bestLines, mxorder,tmpSol,winRng, mxCcor,weights, plot, buildSol,allowLower,sigmaClip,lngthConstraint, adjustFitWin, sigmaLimit, allowSearch, sigmaClipRounds,nPixContFit,nSearchRounds])
-                        
+                    
         else:
             for j in range(dataLst[i].shape[0]):
-                    lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, plot, buildSol, allowLower, sigmaClip,lngthConstraint, adjustFitWin,sigmaLimit, allowSearch,sigmaClipRounds,nPixContFit,nSearchRounds])
+                lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, plot, buildSol, allowLower, sigmaClip,lngthConstraint, adjustFitWin,sigmaLimit, allowSearch,sigmaClipRounds,nPixContFit,nSearchRounds])
+                
 
     if (MP):
         #setup multiprocessing routines
