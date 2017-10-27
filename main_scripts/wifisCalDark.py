@@ -368,10 +368,10 @@ if (contProc):
                         bpm, bpmHdr = wifisIO.readImgsFromFile(bpmFile)
                         with warnings.catch_warnings():
                                 warnings.simplefilter('ignore', RuntimeWarning)
-                                bpm, bpmHdr = badPixels.getBadPixelsFromDark(masterDark,bpmHdr, saveFile='quality_control/master_dark',darkFile=masterSave+'.fits',BPM=bpm)
+                                bpm, bpmHdr = badPixels.getBadPixelsFromDark(masterDark,bpmHdr, saveFile='quality_control/master_dark',darkFile=masterSave+'.fits',BPM=bpm, cutoff=darkBpmCutoff)
 
                                 if getBadPixRON:
-                                    bpm, bpmHdr = badPixels.getBadPixelsFromRON(ron, bpmHdr, saveFile='quality_control/master_ron',ronFile=masterSave+'_ron.fits',BPM=bpm)
+                                    bpm, bpmHdr = badPixels.getBadPixelsFromRON(ron, bpmHdr, saveFile='quality_control/master_ron',ronFile=masterSave+'_ron.fits',BPM=bpm, cutoff=ronBpmCutoff)
                                 
                         wifisIO.writeFits(bpm,masterSave+'_BPM.fits',hdr=bpmHdr,ask=False)
         else:
