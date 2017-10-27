@@ -299,10 +299,10 @@ if (contProc):
     print('Determining bad pixels from master NL coefficients')
     hdr.add_comment('File contains the master bad pixel mask')
 
-    bpm,hdr =  badPixels.getBadPixelsFromNLCoeff(masterNLCoeff,hdr,saveFile='quality_control/master_detLin_NLCoeff',cutoff=bpmCutoff)
+    bpm,hdr =  badPixels.getBadPixelsFromNLCoeff(masterNLCoeff,hdr,saveFile='quality_control/master_detLin_NLCoeff',cutoff=nlBpmCutoff)
 
     logfile.write('Determined bad pixel mask based on the master non-linearity coefficients,\n')
-    logfile.write('excluding all pixels with non-linearity corrections with a probability density of less than ' + str(bpmCutoff) + ', or greater than ' + str(1.-bpmCutoff)+'\n')
+    logfile.write('excluding all pixels with non-linearity corrections with a probability density of less than ' + str(nlBpmCutoff) + ', or greater than ' + str(1.-nlBpmCutoff)+'\n')
     
     wifisIO.writeFits(bpm, 'processed/master_detLin_BPM.fits',hdr=hdr)
     logfile.write('\n')
