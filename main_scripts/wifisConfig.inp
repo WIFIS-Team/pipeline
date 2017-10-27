@@ -188,7 +188,10 @@ ndiv = 1
 waveSolMP = True
 
 #relative noise limit (x * noise level) used to find quality lines for dispersion solution
-sigmaLimit= 3 
+sigmaLimit= 3
+
+#maximum allowable pixel offset from intial cross-correlation input spectrum with template spectrum
+waveMxCcor=150
 
 #window range for fitting individual lines
 waveWinRng=9
@@ -201,6 +204,9 @@ sigmaClipRounds=2
 
 #sigma-clip cutoff when sigma-clipping dispersion solution
 sigmaClip = 2
+
+#allow the line fitting routine to automatically adjust the fitting window
+waveAdjustFitWin = True
 
 #remove rows with bad solution?
 cleanDispSol = True
@@ -247,6 +253,12 @@ getBadPixDark = True
 #determine bad pixels from read out noise, as measured from dark?
 getBadPixRON = True
 
+#normalized PDF cutoff used for determining bad pixels based on dark current
+darkBpmCutoff = 1e-5
+
+#normalized PDF cutoff used for determining bad pixels based on read-out-noise
+ronBpmCutff = 1e-5
+
 ######################################################
 #parameters for processing the detector linearity data
 
@@ -257,7 +269,7 @@ satLimit=0.97
 satThresh=0.97
 
 #normalized PDF cutoff used for determining bad pixels, based on first and second coefficients of non-linearity corrections
-bpmCutoff=1e-5
+nlBpmCutoff=1e-5
 
 ######################################################
 #parameters for processing spatial calibrations
