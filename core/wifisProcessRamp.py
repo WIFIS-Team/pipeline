@@ -60,14 +60,15 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
 
         #******************************************************************************
         #Correct data for reference pixels
-        print("Subtracting reference pixel channel bias")
-        refCor.channelCL(data, nChannel)
-        hdr.add_history('Channel reference pixel corrections applied using '+ str(nChannel) +' channels')
-        if logfile is not None:
-            logfile.write('Subtracted reference pixel channel bias using ' + str(nChannel) + ' channels\n')
+        if nChannel >0:
+            print("Subtracting reference pixel channel bias")
+            refCor.channelCL(data, nChannel)
+            hdr.add_history('Channel reference pixel corrections applied using '+ str(nChannel) +' channels')
+            if logfile is not None:
+                logfile.write('Subtracted reference pixel channel bias using ' + str(nChannel) + ' channels\n')
 
-        print("Subtracting reference pixel row bias")
         if nRows > 0:
+            print("Subtracting reference pixel row bias")
             refCor.rowCL(data, nRows,rowSplit)
             hdr.add_history('Row reference pixel corrections applied using '+ str(int(nRows+1))+ ' pixels')
             if logfile is not None:
@@ -86,10 +87,10 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
 
         #******************************************************************************
         #apply non-linearity correction
-        print("Correcting for non-linearity")
     
         #find NL coefficient file
         if nlCoeff is not None:
+            print("Correcting for non-linearity")
             NLCor.applyNLCorCL(data, nlCoeff, nlSplit)
             hdr.add_history('Non-linearity corrections applied using file:')
             hdr.add_history(nlFile)
@@ -166,13 +167,12 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
         # CORRECT BAD PIXELS
         if bpmCorRng > 0:
             print('Correcting for bad pixels')
-                        
             #try and correct all pixels, but not the reference pixels
             imgCor = np.empty(fluxImg.shape, dtype = fluxImg.dtype)
-            imgCor[4:-4,4:-4] = badPixels.corBadPixelsAll(fluxImg[4:-4,4:-4], dispAxis=0, mxRng=bpmCorRng, MP=True)
+            imgCor[4:-4,4:-4] = badPixels.corBadPixelsAll(fluxImg[4:-4,4:-4], dispAxis=0, mxRng=int(bpmCorRng), MP=True)
             if sigmaImg is not None:
                 sigmaCor = np.empty(sigmaImg.shape, dtype= sigmaImg.dtype)
-                sigmaCor[4:-4, 4:-4]  = badPixels.corBadPixelsAll(sigmaImg[4:-4,4:-4], dispAxis=0, mxRng=bpmCorRng, MP=True, sigma=True)
+                sigmaCor[4:-4, 4:-4]  = badPixels.corBadPixelsAll(sigmaImg[4:-4,4:-4], dispAxis=0, mxRng=int(bpmCorRng), MP=True, sigma=True)
             else:
                 sigmaCor = sigmaImg
                 
