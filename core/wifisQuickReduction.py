@@ -105,39 +105,43 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
     os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut 
     os.environ['PYOPENCL_CTX'] = pyCLCTX 
 
-    satCounts = wifisIO.readImgsFromFile(satFile)[0]
+    if os.path.exists(satFile):
+        satCounts = wifisIO.readImgsFromFile(satFile)[0]
+    else:
+        satCounts = None
 
+    if os.path.exists(bpmFile):
+        bpm = wifisIO.readImgsFromFile(bpmFile)[0]
+    else:
+        bpm = None
+        
     wifisIO.createDir('quick_reduction')
 
     #read in data
-    print('Processing object ramp')
 
-    #check file type
-    #CDS
-    if os.path.exists(rootFolder+'/CDSReference/'+rampFolder):
-        folderType = '/CDSReference/'
-        fluxImg, hdr = wifisIO.readImgsFromFile(rootFolder + folderType + rampFolder+'/Result/CDSResult.fits')
-        UTR = False
-    #Fowler
-    elif os.path.exists(rootFolder+'/FSRamp/'+rampFolder):
-        folderType = '/FSRamp/'
-        UTR =  False
-        if os.path.exists(rootFolder + folderType + rampFolder+'/Result/CDSResult.fits'):
+    if noProc:
+        print('Attempting to extracting ramp image without processing')
+        #check file type
+        #CDS
+        if os.path.exists(rootFolder+'/CDSReference/'+rampFolder):
+            folderType = '/CDSReference/'
             fluxImg, hdr = wifisIO.readImgsFromFile(rootFolder + folderType + rampFolder+'/Result/CDSResult.fits')
-        else:
-            data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + rampFolder)
+            UTR = False
+            noProcObs = True
+        #Fowler
+        elif os.path.exists(rootFolder+'/FSRamp/'+rampFolder):
+            folderType = '/FSRamp/'
+            UTR =  False
+            if os.path.exists(rootFolder + folderType + rampFolder+'/Result/CDSResult.fits'):
+                fluxImg, hdr = wifisIO.readImgsFromFile(rootFolder + folderType + rampFolder+'/Result/CDSResult.fits')
+                noProcObs = True
+            else:
+                noProcObs = False
 
-            #find if any pixels are saturated and avoid usage
-            satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit)
+        elif os.path.exists(rootFolder + '/UpTheRamp/'+rampFolder):
+            UTR = True
+            folderType = '/UpTheRamp/'
 
-            #get processed ramp
-            fluxImg = combData.FowlerSamplingCL(inttime, data, satFrame, nCombSplit)[0]
-            data = 0
-    elif os.path.exists(rootFolder + '/UpTheRamp/'+rampFolder):
-        UTR = True
-        folderType = '/UpTheRamp/'
-
-        if noProc:
             lst = glob.glob(rootFolder+folderType+rampFolder + '/H2*fits')
             lst = sorted_nicely(lst)
 
@@ -148,53 +152,47 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
         
             fluxImg = ((img1-img0)/(t1-t0)).astype('float32')
             hdr = hdr1
-   
+            noProcObs=True
         else:
-            data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + rampFolder)
-
-            #find if any pixels are saturated and avoid usage
-            satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit)
-
-            #get processed ramp
-            fluxImg = combData.upTheRampCL(inttime, data, satFrame, nCombSplit)[0]
-            data = 0
+            raise Warning('*** Ramp folder ' + rampFolder + ' does not exist ***')
     else:
-        raise SystemExit('*** Ramp folder ' + rampFolder + ' does not exist ***')
+        noProcObs =False
 
-    obsinfoFile = rootFolder + folderType + rampFolder+'/obsinfo.dat'
+    if not noProcObs:
+        print('Processing ramp')
+
+        fluxImg,sigImg,satFrame, hdr =processRamp.auto(rampFolder, rootFolder, 'quick_reduction/'+rampFolder+'_obs.fits', satCounts, None, bpm, nRows=0, rowSplit=nRowSplit, satSplit=nSatSplit,nlSplit=nlSplit, combSplit=nCombSplit, bpmCorRng=bpmCorRng,saveAll=False,ignoreBPM=True,avgAll=True, bpmFile=bpmFile, satFile=satFile,nChannel=0)
+
+    if noProcObs:
+        #get obsinfo file to fill in hdr info
+        obsinfoFile = rootFolder + folderType + rampFolder+'/obsinfo.dat'
 
     #now process sky, if it exists
-
-    #read in data
+       
     if (skyFolder is not None):
-        print('Processing and subtracting sky ramp')
-
-        #check file type
-        #CDS
-        if os.path.exists(rootFolder+'/CDSReference/'+skyFolder):
-            folderType = '/CDSReference/'
-            skyImg, hdr = wifisIO.readImgsFromFile(rootFolder + folderType + skyFolder+'/Result/CDSResult.fits')
-            UTR = False
-        #Fowler
-        elif os.path.exists(rootFolder+'/FSRamp/'+skyFolder):
-            folderType = '/FSRamp/'
-            UTR =  False
-            if os.path.exists(rootFolder + folderType + skyFolder+'/Result/CDSResult.fits'):
+        if noProc:
+            print('Attempting to extract sky image without processing')
+            
+            #check file type
+            #CDS
+            if os.path.exists(rootFolder+'/CDSReference/'+skyFolder):
+                folderType = '/CDSReference/'
                 skyImg, hdr = wifisIO.readImgsFromFile(rootFolder + folderType + skyFolder+'/Result/CDSResult.fits')
-            else:
-                data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + skyFolder)
+                UTR = False
+                noProcSky = True
+                #Fowler
+            elif os.path.exists(rootFolder+'/FSRamp/'+skyFolder):
+                folderType = '/FSRamp/'
+                UTR =  False
+                if os.path.exists(rootFolder + folderType + skyFolder+'/Result/CDSResult.fits'):
+                    skyImg, hdr = wifisIO.readImgsFromFile(rootFolder + folderType + skyFolder+'/Result/CDSResult.fits')
+                    noProcSky=True
+                else:
+                    noProcSky = False
+            elif os.path.exists(rootFolder + '/UpTheRamp/'+skyFolder):
+                UTR = True
+                folderType = '/UpTheRamp/'
 
-                #find if any pixels are saturated and avoid usage
-                satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit)
-
-                #get processed ramp
-                skyImg = combData.FowlerSamplingCL(inttime, data, satFrame,nCombSplit)[0]
-                data = 0
-        elif os.path.exists(rootFolder + '/UpTheRamp/'+skyFolder):
-            UTR = True
-            folderType = '/UpTheRamp/'
-
-            if noProc:
                 lst = glob.glob(rootFolder+folderType+skyFolder + '/H2*fits')
                 lst = sorted_nicely(lst)
             
@@ -204,35 +202,21 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
                 t1 = hdr1['INTTIME']
         
                 skyImg = ((img1-img0)/(t1-t0)).astype('float32')
+                noProcSky = True
             else:
-                data, inttime, hdrSky = wifisIO.readRampFromFolder(rootFolder + folderType + skyFolder)
-            
-                #find if any pixels are saturated and avoid usage
-                satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit)
-                
-                #get processed ramp
-                skyImg = combData.upTheRampCL(inttime, data, satFrame, nCombSplit)[0]
-                data = 0
+                raise Warning('*** sky Ramp folder ' + skyFolder + ' does not exist ***')
         else:
-            raise SystemExit('*** sky Ramp folder ' + skyFolder + ' does not exist ***')
+            noProcSky = False
+
+        if not noProcSky:
+            'Processing sky ramp'
+            skyImg, skySig, skySat, hdrSky =processRamp.auto(skyFolder, rootFolder, 'quick_reduction/'+skyFolder+'_sky.fits', satCounts, None, bpm, nRows=nRowsAvg, rowSplit=nRowSplit, satSplit=nSatSplit,nlSplit=nlSplit, combSplit=nCombSplit, bpmCorRng=bpmCorRng,saveAll=False,ignoreBPM=True,avgAll=True, bpmFile=bpmFile,satFile=satFile)
 
         #subtract
         with warnings.catch_warnings():
             warnings.simplefilter('ignore',RuntimeWarning)
             fluxImg -= skyImg
 
-    #remove bad pixels
-    if os.path.exists(bpmFile):
-        print('Removing bad pixels')
-        bpm = wifisIO.readImgsFromFile(bpmFile)[0]
-
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore', RuntimeWarning)
-            fluxImg[bpm.astype(bool)] = np.nan
-            if UTR and not noProc:
-                fluxImg[fluxImg < 0] = np.nan
-                fluxImg[satFrame < 2] = np.nan
-                
     fluxImg = fluxImg[4:-4, 4:-4]
 
     #first check if limits already exists
@@ -240,35 +224,27 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
         limitsFile = 'quick_reduction/'+flatFolder+'_limits.fits'
         limits = wifisIO.readImgsFromFile(limitsFile)[0]
     else:
-        print('Processing flat')
+        if noProc:
+            print('Attempting to extract flatfield image without processing')
+            #check file type
+            #CDS
+            if os.path.exists(rootFolder+'/CDSReference/'+flatFolder):
+                folderType = '/CDSReference/'
+                flat = wifisIO.readImgsFromFile(rootFolder + folderType + flatFolder+'/Result/CDSResult.fits')[0]
+                UTR = False
+                noProcFlat = True
+            #Fowler
+            elif os.path.exists(rootFolder+'/FSRamp/'+ flatFolder):
+                folderType = '/FSRamp/'
+                UTR =  False
+                if os.path.exists(rootFolder + folderType + flatFolder+'/Result/CDSResult.fits'):
+                    flat, hdr = wifisIO.readImgsFromFile(rootFolder + folderType + flatFolder+'/Result/CDSResult.fits')
+                else:
+                    noProcFlat = False
+            elif os.path.exists(rootFolder + '/UpTheRamp/'+flatFolder):
+                folderType = '/UpTheRamp/'
+                UTR = True
 
-        #check file type
-        #CDS
-        if os.path.exists(rootFolder+'/CDSReference/'+flatFolder):
-            folderType = '/CDSReference/'
-            flat = wifisIO.readImgsFromFile(rootFolder + folderType + flatFolder+'/Result/CDSResult.fits')[0]
-            UTR = False
-    
-        #Fowler
-        elif os.path.exists(rootFolder+'/FSRamp/'+ flatFolder):
-            folderType = '/FSRamp/'
-            UTR =  False
-            if os.path.exists(rootFolder + folderType + flatFolder+'/Result/CDSResult.fits'):
-                flat, hdr = wifisIO.readImgsFromFile(rootFolder + folderType + flatFolder+'/Result/CDSResult.fits')
-            else:
-                data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + flatFolder)
-
-                #find if any pixels are saturated and avoid usage
-                satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit)
-                
-                #get processed ramp
-                flat = combData.FowlerSamplingCL(inttime, data, satFrame, nCombSplit)[0]  
-                data = 0
-        elif os.path.exists(rootFolder + '/UpTheRamp/'+flatFolder):
-            folderType = '/UpTheRamp/'
-            UTR = True
-
-            if noProc:
                 lst = glob.glob(rootFolder+folderType+flatFolder + '/H2*fits')
                 lst = sorted_nicely(lst)
             
@@ -278,28 +254,16 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
                 t1 = hdr1['INTTIME']
         
                 flat = ((img1-img0)/(t1-t0)).astype('float32')
+                noProcFlat = True
             else:
-                data, inttime, hdrFlat = wifisIO.readRampFromFolder(rootFolder + folderType + flatFolder)
-            
-                #find if any pixels are saturated and avoid usage
-                satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit)
-                
-                #get processed ramp
-                flat = combData.upTheRampCL(inttime, data, satFrame, nCombSplit)[0]
-                data = 0 
+                raise Warning('*** flat folder ' + flatFolder + ' does not exist ***')
         else:
-            raise SystemExit('*** flat folder ' + flatFolder + ' does not exist ***')
-    
-    
-        if os.path.exists(bpmFile):
-            print('removing bad pixels')
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore', RuntimeWarning)
-                flat[bpm.astype(bool)] = np.nan
-                if UTR and not noProc:
-                    flat[satFrame < 2] = np.nan
-                    flat[flat<0] = np.nan
+            noProcFlat = False
 
+        if not noProcFlat:
+            'Processing flatfield ramp'
+            flat, flatSig, flatSat, hdrFlat =processRamp.auto(flatFolder, rootFolder, 'quick_reduction/'+flatFolder+'_flat.fits', satCounts, None, bpm, nRows=0, rowSplit=nRowSplit, satSplit=nSatSplit,nlSplit=nlSplit, combSplit=nCombSplit, bpmCorRng=flatbpmCorRng,saveAll=False,ignoreBPM=True,avgAll=True, bpmFile=bpmFile,satFile=satFile,nChannel=0)
+            
 
         print('Getting slice limits')
         limits = slices.findLimits(flat, dispAxis=0, rmRef=True)
@@ -337,9 +301,10 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
     gInit = models.Gaussian2D(np.nanmax(dataImg), cent[1],cent[0])
     fitG = fitting.LevMarLSQFitter()
     gFit = fitG(gInit, x,y,dataImg)
-    
-    #fill in header info
-    headers.addTelInfo(hdr, obsinfoFile, obsCoords=obsCoords)
+
+    if noProcObs:
+        #fill in header info
+        headers.addTelInfo(hdr, obsinfoFile, obsCoords=obsCoords)
 
     #save distortion corrected slices
     wifisIO.writeFits(dataGrid, 'quick_reduction/'+rampFolder+'_quickRed_slices_grid.fits', hdr=hdr, ask=False)
@@ -408,47 +373,42 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
     prevSol = prevResults[5]
     distMap = wifisIO.readImgsFromFile(distMapFile)[0]
     spatGridProps = wifisIO.readTable(spatGridPropsFile)
-    
-    satCounts = wifisIO.readImgsFromFile(satFile)[0]
-
+    if os.path.exists(satFile):
+        satCounts = wifisIO.readImgsFromFile(satFile)[0]
+    else:
+        satCounts = None
+    if os.path.exists(bpmFile):
+        bpm = wifisIO.readImgsFromFile(bpmFile)[0]
+    else:
+        bpm = None
+        
     if (os.path.exists('quick_reduction/'+waveFolder+'_wave_fwhm_map.png') and os.path.exists('quick_reduction/'+waveFolder+'_wave_fwhm_map.fits') and os.path.exists('quick_reduction/'+waveFolder+'_wave_wavelength_map.fits')):
         print('*** ' + waveFolder + ' arc/wave data already processed, skipping ***')
     else:
         print('Processing arc file '+ waveFolder)
-        #check the type of raw data, only assumes CDS or up-the-ramp
+        #check the type of ramp
         if (os.path.exists(rootFolder + '/CDSReference/'+waveFolder+'/Result/CDSResult.fits')):
             #CDS image
             wave = wifisIO.readImgsFromFile(rootFolder + '/CDSReference/'+waveFolder+'/Result/CDSResult.fits')[0]
-            wave = wave[4:-4, 4:-4] #trim off reference pixels
+            wave = wave #trim off reference pixels
         elif os.path.exists(rootFolder+'/FSRamp/'+waveFolder):
             folderType = '/FSRamp/'
             UTR =  False
             if os.path.exists(rootFolder + folderType + waveFolder+'/Result/CDSResult.fits'):
                 wave, hdr = wifisIO.readImgsFromFile(rootFolder + folderType + waveFolder+'/Result/CDSResult.fits')
             else:
-                data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + waveFolder)
+                wave, waveSig, waveSat,hdr = processRamp.auto(waveFolder, rootFolder, 'quick_reduction/'+waveFolder+'_wave.fits', satCounts, None, bpm, nRows=0, rowSplit=nRowSplit, satSplit=nSatSplit,nlSplit=nlSplit, combSplit=nCombSplit, bpmCorRng=bpmCorRng,saveAll=False,ignoreBPM=True,avgAll=True, bpmFile=bpmFile,satFile=satFile,nChannel=0)
 
-                #find if any pixels are saturated and avoid usage
-                satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit)
-
-                #get processed ramp
-                wave = combData.FowlerSamplingCL(inttime, data, satFrame, nCombSplit)[0]
-                data = 0
         elif os.path.exists(rootFolder+'/UpTheRamp/'+waveFolder):
-            #assume up-the-ramp
-            data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + '/UpTheRamp/'+waveFolder)
-            satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit)
-            
-            #get processed ramp
-            wave = combData.upTheRampCL(inttime, data, satFrame, nCombSplit)[0]
-            wave = wave[4:-4,4:-4]
-            data = 0
+            wave, waveSig, waveSat,hdr = processRamp.auto(waveFolder, rootFolder, 'quick_reduction/'+waveFolder+'_wave.fits', satCounts, None, bpm, nRows=0, rowSplit=nRowSplit, satSplit=nSatSplit,nlSplit=nlSplit, combSplit=nCombSplit, bpmCorRng=bpmCorRng,saveAll=False,ignoreBPM=True,avgAll=True, bpmFile=bpmFile,satFile=satFile,nChannel=0)
         else:
-            raise SystemExit('*** Wave folder ' + waveFolder + ' does not exist ***')
+            raise Warning('*** Wave folder ' + waveFolder + ' does not exist ***')
 
+    
         if (os.path.exists('quick_reduction/'+flatFolder+'_flat_limits.fits') and os.path.exists('quick_reduction/'+flatFolder+'_flat_slices.fits')):
             limits, limitsHdr = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_limits.fits')
-            flatSlices = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_slices.fits')[0]
+            flatSlices,flatHdr = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_slices.fits')
+            flatSlices=flatSlices[:18]
             shft = limitsHdr['LIMSHIFT']
         else:
             print('Processing flat file')
@@ -460,25 +420,14 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
                 folderType = '/FSRamp/'
                 UTR =  False
                 if os.path.exists(rootFolder + folderType + flatFolder+'/Result/CDSResult.fits'):
-                    flat, hdr = wifisIO.readImgsFromFile(rootFolder + folderType + flatFolder+'/Result/CDSResult.fits')
+                    flat, flatHdr = wifisIO.readImgsFromFile(rootFolder + folderType + flatFolder+'/Result/CDSResult.fits')
                 else:
-                    data, inttime, hdr = wifisIO.readRampFromFolder(rootFolder + folderType + flatFolder)
-                    
-                    #find if any pixels are saturated and avoid usage
-                    satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit)
+                    flat, flatSig, flatSat,flatHdr = processRamp.auto(flatFolder, rootFolder, 'quick_reduction/'+flatFolder+'_flat.fits', satCounts, None, bpm, nRows=0, rowSplit=nRowSplit, satSplit=nSatSplit,nlSplit=nlSplit, combSplit=nCombSplit, bpmCorRng=bpmCorRng,saveAll=False,ignoreBPM=True,avgAll=True, bpmFile=bpmFile,satFile=satFile,nChannel=0)
 
-                    #get processed ramp
-                    flat = combData.FowlerSamplingCL(inttime, data, satFrame, nCombSplit)[0]  
-                    data = 0
             elif os.path.exists(rootFolder + '/UpTheRamp/'+flatFolder):
-                data, inttime, flatHdr = wifisIO.readRampFromFolder(rootFolder + '/UpTheRamp/'+flatFolder)
-                satCounts = wifisIO.readImgsFromFile(satFile)[0]
-                satFrame = satInfo.getSatFrameCL(data, satCounts,nSatSplit)
-                #get processed ramp
-                flat = combData.upTheRampCL(inttime, data, satFrame, nCombSplit)[0]
-                data = 0
+                flat, flatSig, flatSat,flatHdr = processRamp.auto(flatFolder, rootFolder, 'quick_reduction/'+flatFolder+'_flat.fits', satCounts, None, bpm, nRows=0, rowSplit=nRowSplit, satSplit=nSatSplit,nlSplit=nlSplit, combSplit=nCombSplit, bpmCorRng=bpmCorRng,saveAll=False,ignoreBPM=True,avgAll=True, bpmFile=bpmFile,satFile=satFile,nChannel=0)
             else:
-                raise SystemExit('*** Flat folder ' + flatFolder + ' does not exist ***')
+                raise Warning('*** Flat folder ' + flatFolder + ' does not exist ***')
 
             print('Finding flat limits')
             limits = slices.findLimits(flat, dispAxis=0, winRng=51, imgSmth=5, limSmth=20,rmRef=True)
@@ -494,7 +443,7 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
         print('extracting wave slices')
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", "RuntimeWarning")
-            waveSlices = slices.extSlices(wave, limits, dispAxis=0, shft=shft)
+            waveSlices = slices.extSlices(wave[4:-4,4:-4], limits, dispAxis=0, shft=shft)
 
         print('getting normalized wave slices')
         if hband:
@@ -511,7 +460,10 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
         wifisIO.writeFits(waveCor, 'quick_reduction/'+waveFolder+'_wave_slices_distCor.fits', ask=False)
         print('Getting dispersion solution')
 
-        result = waveSol.getWaveSol(waveCor, template, atlasFile, 3, prevSol, winRng=9, mxCcor=150, weights=False, buildSol=False, sigmaClip=sigmaClip, allowLower=False, lngthConstraint=True, MP=True, adjustFitWin=True, sigmaLimit=sigmaLimit, allowSearch=False, sigmaClipRounds=sigmaClipRounds)        
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore',RuntimeWarning)
+            
+            result = waveSol.getWaveSol(waveCor, template, atlasFile,mxOrder, prevSol, winRng=waveWinRng, mxCcor=waveMxCcor, weights=False, buildSol=False, sigmaClip=sigmaClip, allowLower=False, lngthConstraint=True, MP=True, adjustFitWin=True, sigmaLimit=sigmaLimit, allowSearch=False, sigmaClipRounds=sigmaClipRounds)        
        
         print('Extracting solution results')
         dispSolLst = result[0]
@@ -617,10 +569,17 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxW
     os.environ['PYOPENCL_CTX'] = pyCLCTX 
     
     #read in calibration data
-    satCounts = wifisIO.readImgsFromFile(satFile)[0]
-    nlCoeff = wifisIO.readImgsFromFile(nlFile)[0]
-    BPM = wifisIO.readImgsFromFile(bpmFile)[0]
-
+    if os.path.exists(satFile):
+        satCounts = wifisIO.readImgsFromFile(satFile)[0]
+    else:
+        satCounts = None
+        
+    #nlCoeff = wifisIO.readImgsFromFile(nlFile)[0]
+    if os.path.exists(bpmFile):
+        BPM = wifisIO.readImgsFromFile(bpmFile)[0]
+    else:
+        BPM = None
+        
     #create processed directory, in case it doesn't exist
     wifisIO.createDir('quick_reduction')
 
@@ -628,18 +587,20 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxW
     
     if (os.path.exists('quick_reduction/'+flatFolder+'_flat.fits') and os.path.exists('quick_reduction/'+flatFolder+'_flat_limits.fits') and os.path.exists('quick_reduction/'+flatFolder+'_flat_slices.fits') and os.path.exists('quick_reduction/'+flatFolder+'_flat_slices_norm.fits')):
         limits = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_limits.fits')[0]
-        flatSlices = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_slices.fits')[0][0:18]
-        flatNorm = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_slices_norm.fits')[0][0:18]
+        flatSlices = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_slices.fits')[0][:18]
+        flatLst = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_slices_norm.fits')
+        flatNorm = flatLst[0][:18]
+        flatHdr = flatLst[1]
     else:
         print('processing flat ' + flatFolder)
 
-        flat, sigmaImg, satFrame, hdr = processRamp.auto(flatFolder, rootFolder,'quick_reduction/'+flatFolder+'_flat.fits', satCounts, nlCoeff, BPM,nChannel=nChannel, rowSplit=nRowSplit, satSplit=nSatSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=flatbpmCorRng, saveAll=False)
+        flat, sigmaImg, satFrame, flatHdr = processRamp.auto(flatFolder, rootFolder,'quick_reduction/'+flatFolder+'_flat.fits', satCounts, None, BPM,nChannel=0, rowSplit=nRowSplit, satSplit=nSatSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=flatbpmCorRng, saveAll=False,nRows=0)
     
         #find limits
         print('finding limits and extracting flat slices')
         limits = slices.findLimits(flat, dispAxis=dispAxis, limSmth=flatLimSmth, rmRef=True)
 
-        polyLims = slices.polyFitLimits(limits, degree=flatPolyFitDegree, sigmaClipRounds=1)
+        polyLims = slices.polyFitLimits(limits, degree=limitsPolyFitDegree, sigmaClipRounds=1)
 
         interval = ZScaleInterval()
         
@@ -673,7 +634,7 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxW
         
         #now process the Ronchi ramp
         #check the type of raw data, only assumes CDS or up-the-ramp
-        ronchi, sigmaImg, satFrame, hdr = processRamp.auto(ronchiFolder, rootFolder,'quick_reduction/'+ronchiFolder+'_ronchi.fits', satCounts, nlCoeff, BPM,nChannel=nChannel, rowSplit=nRowSplit, satSplit=nSatSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=20, saveAll=False)
+        ronchi, sigmaImg, satFrame, hdr = processRamp.auto(ronchiFolder, rootFolder,'quick_reduction/'+ronchiFolder+'_ronchi.fits', satCounts, None, BPM,nChannel=0, rowSplit=nRowSplit, satSplit=nSatSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=20, saveAll=False,nRows=0)
 
         print('extracting ronchi slices')
         ronchi=ronchi[4:-4, 4:-4]
