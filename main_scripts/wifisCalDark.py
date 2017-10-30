@@ -50,8 +50,9 @@ for var in varInp:
 #*****************************************************************************
 
 #execute pyOpenCL section here
-os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut 
-os.environ['PYOPENCL_CTX'] = pyCLCTX 
+os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut
+if len(pyCLCTX) >0:
+    os.environ['PYOPENCL_CTX'] = pyCLCTX 
 
 interval=ZScaleInterval()
 

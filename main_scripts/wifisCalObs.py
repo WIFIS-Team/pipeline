@@ -44,8 +44,10 @@ for var in varInp:
     
 
 #execute pyOpenCL section here
-os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut 
-os.environ['PYOPENCL_CTX'] = pyCLCTX 
+os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut
+
+if len(pyCLCTX)>0:
+    os.environ['PYOPENCL_CTX'] = pyCLCTX 
 
 logfile.write('Root folder containing raw data: ' + str(rootFolder)+'\n')
 
@@ -330,7 +332,7 @@ for i in range(len(obsLst)):
                 warnings.simplefilter('ignore',RuntimeWarning)
                 pixDiff[pixDiff < pixShift-1] = np.nan
             
-            pixShift = np.nanmean(pixDiff)
+            pixShift = np.float32(np.round(np.nanmean(pixDiff),decimals=4))
                 
             print('Found mean pixel shift of ' + str(pixShift))
             logfile.write('Found mean pixel shift of '+str(pixShift)+'\n')
@@ -368,10 +370,10 @@ for i in range(len(obsLst)):
         if os.path.exists('processed/'+skyFolder+'_sky_slices.fits'):
             skyTmpHdr = fits.open('processed/'+skyFolder+'_sky_slices.fits')[0].header
             if 'FLEXSHFT' in skyTmpHdr:
-                pixShiftOld = skyTmpHdr['FLEXSHFT']
+                pixShiftOld = np.float32(np.round(skyTmpHdr['FLEXSHFT'],decimals=4))
             else:
                 pixShiftOld = 0
-                
+
             if pixShift != pixShiftOld:
                 print('Previous processed sky files had a different pixel shift correction, reprocessing necessary')
                 logfile.write('Previous processed sky files had a different pixel shift correction, reprocessing necessary\n')
@@ -407,7 +409,7 @@ for i in range(len(obsLst)):
 
             if skyShiftCor:
                 #skyHdr.add_history('Determined sky image was off by ' + str(pixShift) + ' pixels along the dispersion direction')
-                skyHdr.set('FLEXSHFT',pixShift,'Measured flexure shift in pixels')
+                skyHdr.set('FLEXSHFT',np.float32(np.round(pixShift,decimals=4)),'Measured flexure shift in pixels')
             else:
                 if 'FLEXSHFT' in skyHdr:
                     skyHdr.remove('FLEXSHFT')

@@ -51,8 +51,9 @@ for var in varInp:
     locals()[var[0]]=var[1]
     
 #execute pyOpenCL section here
-os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut 
-os.environ['PYOPENCL_CTX'] = pyCLCTX    
+os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut
+if len(pyCLCTX) >0:
+    os.environ['PYOPENCL_CTX'] = pyCLCTX    
 
 logfile.write('Root folder containing raw data: ' + str(rootFolder)+'\n')
 logfile.write('Detector gain of' + str(gain)+ ' in electrons/counts\n')
