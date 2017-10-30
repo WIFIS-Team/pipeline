@@ -1,0 +1,323 @@
+######################################################
+#input list names
+flatLstFile = 'flat.lst'
+waveLstFile = 'wave.lst'
+obsLstFile = 'obs.lst'
+skyLstFile = 'sky.lst'
+darkLstFile = 'dark.lst'
+darkFile = ''
+detLstFile = 'det.lst'
+
+######################################################
+#OpenCL options
+
+#print OpenCL compiler output (0 = no, 1 = yes)
+pyCLCompOut = '0'
+
+#select OpenCL device. If empty, program will prompt EACH TIME
+pyCLCTX = ''
+
+######################################################
+#optional parameters
+
+#skip prompts about reprocessing ramps - take answer to be NO
+skipReprocPrompt = True
+
+#skip flat fielding of data
+noFlat = False
+
+#specifies whether data is hband or not
+hband = False
+
+crReject = False
+
+#skip warnings of missing obsinfo.dat file?
+skipObsinfo = False
+
+#look up coordinates of object based on object name instead of relying on telescope coordinates?
+useSesameCoords=True
+
+#set number of processes to use for multiprocessing-capable functions (None -> automatically set, >0 specific number)
+
+######################################################
+#sky region selection options
+#define pixel range to be used to determine flexure between sky and science target ramp images
+skyShiftRegions = [[0,650]]
+
+#define wavelength range corresponding to different skyline emission bands
+skyLineRegions = [[1025,1055],[1080,1105],[1140,1175],[1195,1245],[1265,1330]]
+
+######################################################
+#options for flexure/pixel shift determination/correction
+
+#run correction routine?
+skyShiftCor = True
+
+#pixel oversampling (higher is more accurate, but longer execution times)
+skyShiftOverSample = 20
+
+#continuum fit the science target?
+skyShiftContFit1 = True
+
+#continuum fit the sky?
+skyShiftContFit2 = True
+
+#number of pixels to use for determining continuum level
+skyShiftnPix = 50
+
+#spline fitting order for continuum fitting
+skyShiftContFitOrd = 1
+
+#maximum allowed shift in pixels (+/- this value)
+skyShiftMxShift = 4
+
+#number of iterations to run pixel rejection for determining continuum level
+skyShiftReject = 1
+
+#only use regions of the detector with flux above this fraction
+skyShitMaxLevel = 0.
+
+######################################################
+#options to determine line strength scaling difference between sky and science target
+
+#run sky emission line scaling routine?
+skyScaleCor = True
+
+#maximum allowable relative change between sky and target (+/- this value)
+skyMxScale = 0.5
+
+#fit sky lines individually (True => yes, False => fit to whole region instead)
+skyFitIndLines = True
+
+#flux threshold to identify lines
+skyFluxThresh = 0.1
+
+######################################################
+#additional RV corrections relative to sky emission template
+
+#run routine with associated sky image?
+getSkyCorRV = True
+
+#define location of template file here
+skyEmTempFile = '/data/pipeline/external_data/sky_emission_template.dat'
+
+######################################################
+#telluric correction options
+
+#run telluric correction routine?
+tellCor = False
+
+######################################################
+#optional flat field correction to better match cal flats to dome flats
+#Apply flat field correction?
+flatCor = False
+
+#location of correction file
+flatCorFile = 'processed/flat_correction_slices.fits'
+
+######################################################
+#specify location to calibration and raw files
+
+#root location of raw files
+rootFolder = 'raw_files'
+
+#location of arc lamp template file
+waveTempFile = '/data/pipeline/external_data/waveTemplate.fits'
+
+#location of fitting results associated with arc lamp template file
+waveTempResultsFile = '/data/pipeline/external_data/waveTemplateFittingResults.pkl'
+
+#distortion map file, associated limits, and spatial grid properties files
+
+distMapFile = 'cal_files/20170831211259_ronchi_distMap.fits'
+distMapLimitsFile = 'cal_files/20170831210255_flat_limits.fits'
+spatGridPropsFile = 'cal_files/20170831211259_ronchi_spatGridProps.dat'
+
+# calibration files
+nlFile = 'cal_files/master_detLin_NLCoeff.fits'        
+satFile = 'cal_files/master_detLin_satCounts.fits'
+bpmFile = 'cal_files/master_dark_BPM.fits'
+atlasFile = '../external_data/best_lines2.dat'
+ronFile = 'cal_files/master_dark_RON.fits'
+
+######################################################
+#bad pixel correction options
+
+#bad pixel mask correction range in pixels (use pixels closest pixels within given range to correct bad pixels)
+bpmCorRng = 1
+
+######################################################
+#pixel scale
+#may old
+xScale = 0.532021532706
+yScale = -0.545667026386
+
+#may new
+#xScale = 0.529835976681
+#yScale = 0.576507533367
+
+#june
+#xScale = 0.549419840181
+#yScale = -0.581389824133
+
+#final cube pixel scales parameters
+ndiv = 1
+#if ndiv == 0:
+#    yScale = yScale*35/18.
+
+######################################################
+#wavelength fitting options
+
+#use multiprocessing for wavelength fitting?
+waveSolMP = True
+
+#relative noise limit (x * noise level) used to find quality lines for dispersion solution
+sigmaLimit= 3
+
+#maximum allowable pixel offset from intial cross-correlation input spectrum with template spectrum
+waveMxCcor=150
+
+#window range for fitting individual lines
+waveWinRng=9
+
+#polynomial order used for dispersion solution
+mxOrder = 3
+
+#number of iterations when sigma-clipping of dispersion solution
+sigmaClipRounds=2
+
+#sigma-clip cutoff when sigma-clipping dispersion solution
+sigmaClip = 2
+
+#allow the line fitting routine to automatically adjust the fitting window
+waveAdjustFitWin = True
+
+#remove rows with bad solution?
+cleanDispSol = True
+
+#threshold for removing bad solutions based on RMS of dispersion solution
+cleanDispThresh = 1.5
+
+#apply Gaussian smoothing to final wavemap, to reduce unwanted pixel-to-pixel variations?
+waveSmooth = 2
+
+#plot process of wavelength fitting - should only be used for debugging pursposes
+waveSolPlot=False
+
+#threshold for determining min/max wavelength - useful for H-band where region << detector width
+waveTrimThresh = 0
+
+######################################################
+#flat field specific options
+
+#window range for finding slice limits
+flatWinRng = 51
+
+#width of Gaussian used to smooth flat-field image for slice limit identification
+flatImgSmth = 5
+
+#optional polynomial degree to use to fit to slice limits (0 skips this step)
+limitsPolyFitDegree=2
+
+#Gaussian width used to smooth slice limits
+flatLimSmth = 20
+
+#threshold fraction relative to maximum intensity to use for determining where to cutoff flatfield range (all pixels with values < this fraction will be set to NaNs) 
+flatCutOff = 0.1
+
+#specifies the maximum separation of pixel search to use during bad pixel correction
+flatbpmCorRng=20 
+
+######################################################
+#parameters for processing darks
+
+#determine bad pixels from dark?
+getBadPixDark = True
+
+#determine bad pixels from read out noise, as measured from dark?
+getBadPixRON = True
+
+#normalized PDF cutoff used for determining bad pixels based on dark current
+darkBpmCutoff = 1e-5
+
+#normalized PDF cutoff used for determining bad pixels based on read-out-noise
+ronBpmCutff = 1e-5
+
+######################################################
+#parameters for processing the detector linearity data
+
+#lower fractional limit to use for determining saturation level, relative to pixel value of last frame
+satLimit=0.97
+
+#set new saturation limit to this fraction times the determined sat level
+satThresh=0.97
+
+#normalized PDF cutoff used for determining bad pixels, based on first and second coefficients of non-linearity corrections
+nlBpmCutoff=1e-5
+
+######################################################
+#parameters for processing spatial calibrations
+ronchiFile = 'ronchi.lst' #expected to be a single entry
+ronchiFlatFile = 'ronchiFlat.lst' #expected to be a single entry
+zpntFlatFile = 'zpntFlat.lst' #expected to be a single entry
+zpntLstFile = 'zpntObs.lst'
+zpntSkyFile = 'zpntSky.lst'
+zpntNbin=1
+zpntBright=True
+zpntSmooth=10
+zpntWinRng=61
+zpntMxChange=5
+obsBpmCorRng = 1
+zpntFlatCutOff = 0.2
+
+#ronchi tracing parameters
+ronchiNbin=1
+ronchiWinRng=7
+ronchiMxWidth=3
+ronchiSmth=20
+ronchiBright=False
+ronchiPolyOrder=2
+ronchiSigmaClipRounds=2
+
+#spatial grid parameters
+spatTrim = 0.5
+
+######################################################
+#parameters used for processing of ramps
+
+#set dispersion axis direction (0 - vertical, 1 - horizontal)
+dispAxis=0
+
+#specifies the number of channels used during readout of detector
+nChannel=32
+
+#specifies the number of rows of reference pixels to use to correct for row bias (+/- nRowsAvg)
+nRowsAvg=4
+
+#specifies how many processing steps to use during reference row correction. Must be integer multiple of number of frames. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
+nRowSplit=1
+
+#specifies how many processing steps to use during reference row correction of flat/similar files. Must be integer multiple of number of frames. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
+nRowSplitFlat=1
+
+#specifies how many processing steps to use during non-linearity correction. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
+nlSplit=32
+
+ #specifies how many processing steps to use during identification of first saturated frame. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
+nSatSplit=32
+
+#specifies how many processing steps to use during creation of ramp image. Must be integer multiple of detector width. For very long ramps, use a higher number to avoid OpenCL issues and/or high memory consumption.
+nCombSplit=32 
+
+#specifies the number of initial frames to skip during reading of ramp (NOT USED FOR ANYTHING BUT NON-LINEARITY AT THE MOMENT)
+nReadSkip = 0
+
+#specifies the gain (e-/cnt[ADU]), if and only if the RON file is not in units of counts (i.e RON is given in units of e-)
+gain = 1.
+
+######################################################
+#coordinates options
+
+#observatory coordinates (longitude [deg], latitude [deg], altitude [m])
+obsCoords = [-111.600444444,31.9629166667,2071]
+
