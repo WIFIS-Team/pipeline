@@ -37,19 +37,20 @@ def findBestGaussFit(x,y, winRng, winRng2,orgMid, minWidth, bright, plot, mxIter
         if (xrng.shape[0] > 0):
             yrng = y[xrng]
 
-            if (bright):
-                mid = xrng[np.nanargmax(yrng)]
-            else:
-                mid = xrng[np.nanargmin(yrng)]
+            if not np.all(~np.isfinite(yrng)):
+                if (bright):
+                    mid = xrng[np.nanargmax(yrng)]
+                else:
+                    mid = xrng[np.nanargmin(yrng)]
 
-            #now fit Gaussian to feature to identify centre
-            xrng = np.arange(winRng) - winRng2 + mid
-            xrng = xrng[np.where(xrng>0)[0]]
-            xrng = xrng[np.where(xrng<len(y))[0]].astype('int')
+                #now fit Gaussian to feature to identify centre
+                xrng = np.arange(winRng) - winRng2 + mid
+                xrng = xrng[np.where(xrng>0)[0]]
+                xrng = xrng[np.where(xrng<len(y))[0]].astype('int')
 
-            #only continue if there is at least 1 point to fit
-            if (xrng.shape[0] > 0):
-                yrng = y[xrng]
+                #only continue if there is at least 3 points to fit
+                if (xrng.shape[0] > 2):
+                    yrng = y[xrng]
 
                 #remove NaNs
                 whrFinite = np.where(np.isfinite(yrng))[0]
@@ -75,7 +76,7 @@ def findBestGaussFit(x,y, winRng, winRng2,orgMid, minWidth, bright, plot, mxIter
                         else:
                             badFit = False
                             
-                    except(RuntimeError, ValueError):
+                    except:
                         badFit = False
                 else:
                     badFit=False
@@ -83,7 +84,7 @@ def findBestGaussFit(x,y, winRng, winRng2,orgMid, minWidth, bright, plot, mxIter
                 badFit=False
         else:
             badFit =False
-
+    
     return cent
 
 def gaussFit(x, y, plot=False):
@@ -157,7 +158,7 @@ def getFit2(x, y, mxWidth=1,plot=False):
                 plt.plot([c,c], [np.min(y),np.max(y)],'--')
                 plt.show()
             c = cc
-    except (RuntimeError, ValueError):
+    except:
         mid = len(y)/2
         mx = np.nanargmax(y[int(mid-1):int(mid+2)])+mid-1
         c = np.nansum(x[int(mx-1):int(mx+2)]*y[int(mx-1):int(mx+2)])/np.nansum(y[int(mx-1):int(mx+2)])
@@ -800,10 +801,10 @@ def traceWireFrameSlice(input):
     minWidth = input[8]
     mxIter = 10 # sets the maximum number of allowed iterations to find a good fit
     
-    if constRegion is not None:
-        tmp1 = img[:,constRegion[0]:constRegion[1]]
-    else:
-        tmp1 = img
+    #if constRegion is not None:
+    #    tmp1 = img[:,constRegion[0]:constRegion[1]]
+    #else:
+    tmp1 = img
         
     #first bin the image, if requested
     if (nbin > 1):
@@ -815,7 +816,7 @@ def traceWireFrameSlice(input):
     else:
         tmp = tmp1
 
-    #get the coord of the middle pixel
+    #get the coord of the middle pixel, along the spatial axis
     orgMid = int(tmp.shape[0]/2.)
 
     #find column with the maximum signal within the chosen search window for first zeropoint measurement
@@ -835,13 +836,20 @@ def traceWireFrameSlice(input):
     
     #now go through rest of pixels to find centre as well
 
+    if constRegion:
+        lim1 = constRegion[0]
+        lim2 = constRegion[1]
+    else:
+        lim1 = 0
+        lim2 = tmp.shape[1]
+        
     #first work backwards from starting position
-    for i in range(m2-1,0,-1):
+    for i in range(m2-1,lim1,-1):
         y = np.copy(tmp[:,i])
         cent[i] = findBestGaussFit(x,y, winRng, winRng2,orgMid, 0, bright, plot, mxIter)
 
     #now work forwards
-    for i in range(m2+1,tmp.shape[1]):
+    for i in range(m2+1,lim2):
         y = tmp[:,i]
         cent[i] = findBestGaussFit(x,y, winRng, winRng2,orgMid, 0, bright, plot, mxIter)
 
