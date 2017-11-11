@@ -159,6 +159,10 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                     logfile.write('limSmth: ' + str(limSmth)+'\n')
                     
                 if hband:
+                    print('Using suitable region of detector to determine flat limits')
+                    if logfile is not None:
+                        logfile.write('Using suitable region of detector to determine flat limits:\n')
+
                     #only use region with suitable flux
                     if dispAxis == 0:
                         flatImgMed = np.nanmedian(flatImg[4:-4,4:-4], axis=1)
@@ -169,7 +173,12 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                     medMax = np.nanargmax(flatImgMed)
                     lim1 = np.nanargmax(flatImgMedGrad[:medMax])
                     lim2 = np.nanargmin(flatImgMedGrad[medMax:])+medMax
-                    polyLimits = slices.polyFitLimits(limits, degree=polyFitDegree, sigmaClipRounds=2, constRegion=[lim1,lim2])
+
+                    if logfile is not None:
+                        logfile.write('Using following detector limits to set slice limits:\n')
+                        logfile.write(str(lim1)+ ' ' + str(lim2)+'\n')
+                        
+                    polyLimits = slices.polyFitLimits(limits, degree=2, sigmaClipRounds=2, constRegion=[lim1,lim2])
                 else:
                     #get smoother limits, if desired, using polynomial fitting
                     polyLimits = slices.polyFitLimits(limits, degree=polyFitDegree, sigmaClipRounds=2)
@@ -233,11 +242,25 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                         lims = interval.get_limits(flatImg[4:-4,4:-4])
                         #plt.imshow(flatImg[4:-4,4:-4], aspect='auto', cmap='jet', clim=[0,2.*med1], origin='lower')
                         plt.imshow(flatImg[4:-4,4:-4], aspect='auto', cmap='jet', clim=lims, origin='lower')
+                        
                         plt.xlim=(0,2040)
                         plt.colorbar()
                         for l in range(limits.shape[0]):
-                            plt.plot(limits[l], np.arange(limits.shape[1]),'k', linewidth=1) #drawn limits
-                            plt.plot(np.clip(finalLimits[l]+shft,0, flatImg[4:-4,4:-4].shape[0]-1), np.arange(limits.shape[1]),'r--', linewidth=1) #shifted ronchi limits, if provided, or polynomial fit
+                            if dispAxis==0:
+                                plt.plot(limits[l], np.arange(limits.shape[1]),'k', linewidth=1) #drawn limits
+                                plt.plot(np.clip(finalLimits[l]+shft,0, flatImg[4:-4,4:-4].shape[0]-1), np.arange(limits.shape[1]),'r--', linewidth=1) #shifted ronchi limits, if provided, or polynomial fit
+                            else:
+                                plt.plot(np.arange(limits.shape[1]),limits[l],'k', linewidth=1) #drawn limits
+                                plt.plot(np.arange(limits.shape[1]),np.clip(finalLimits[l]+shft,0, flatImg[4:-4,4:-4].shape[0]-1),'r--', linewidth=1) #shifted ronchi limits
+
+                        if hband:
+                            if dispAxis==0:
+                                plt.plot([0,flatImg[4:-4,4:-4].shape[1]-1],[lim1,lim1],'b:',linewidth=1)
+                                plt.plot([0,flatImg[4:-4,4:-4].shape[1]-1],[lim2,lim2],'b:',linewidth=1)
+                            else:
+                                plt.plot([lim1,lim1],[0,flatImg[4:-4,4:-4].shape[1]-1],'b:',linewidth=1)
+                                plt.plot([lim2,lim2],[0,flatImg[4:-4,4:-4].shape[1]-1],'b:',linewidth=1)
+
                         plt.tight_layout()
                         pdf.savefig()
                         plt.close(fig)
