@@ -92,7 +92,7 @@ def initPaths(hband=False):
 #*******************************************************************************
 
 
-def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRange=None, varFile=''):
+def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRange=None, varFile='',scaling='zscale'):
     """
     """
 
@@ -102,8 +102,10 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
         globals()[var[0]]=var[1]    
 
     #execute pyOpenCL section here
-    os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut 
-    os.environ['PYOPENCL_CTX'] = pyCLCTX 
+    os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut
+
+    if len(pyCLCTX)>0:
+        os.environ['PYOPENCL_CTX'] = pyCLCTX 
 
     if os.path.exists(satFile):
         satCounts = wifisIO.readImgsFromFile(satFile)[0]
@@ -320,8 +322,11 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
     print('Plotting data')
     fig = plt.figure()
     ax = fig.add_subplot(111, projection=WCS)
-    interval=ZScaleInterval()
-    lims=interval.get_limits(dataImg)
+    if scaling=='zscale':
+        interval=ZScaleInterval()
+        lims=interval.get_limits(dataImg)
+    else:
+        lims=[dataImg.min(),dataImg.max()]
     plt.imshow(dataImg, origin='lower', cmap='jet', clim=lims)
     r = np.arange(360)*np.pi/180.
     fwhmX = np.abs(2.3548*gFit.x_stddev*xScale)
@@ -362,8 +367,10 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
         globals()[var[0]]=var[1]    
 
     #execute pyOpenCL section here
-    os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut 
-    os.environ['PYOPENCL_CTX'] = pyCLCTX 
+    os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut
+
+    if len(pyCLCTX)>0:
+        os.environ['PYOPENCL_CTX'] = pyCLCTX 
 
     wifisIO.createDir('quick_reduction')
 
@@ -555,7 +562,7 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
 
     return
 
-def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxWidth=4, varFile=''):
+def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxWidth=4, varFile='',noPlot=False):
     """
     """
 
@@ -565,8 +572,10 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxW
         globals()[var[0]]=var[1]    
 
     #execute pyOpenCL section here
-    os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut 
-    os.environ['PYOPENCL_CTX'] = pyCLCTX 
+    os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut
+
+    if len(pyCLCTX)>0:
+        os.environ['PYOPENCL_CTX'] = pyCLCTX 
     
     #read in calibration data
     if os.path.exists(satFile):
@@ -705,8 +714,6 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxW
             ampMap[:,strt:strt+a.shape[0]] = a.T
             strt += a.shape[0]
 
-        fig = plt.figure()
-
         m = np.nanmedian(ampMap)
         with warnings.catch_warnings():
             warnings.simplefilter('ignore',RuntimeWarning)
@@ -718,14 +725,16 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxW
         else:
             clim=colorbarLims
 
+        fig = plt.figure()
         plt.imshow(ampMap, origin='lower', aspect='auto', clim=clim,cmap='jet')
         plt.title('Ronchi amplitude map - Med amp ' + '{:4.2f}'.format(ampMed))
         plt.colorbar()
         plt.tight_layout()
-        plt.show()
+
+        if not noPlot:
+            plt.show()
         plt.savefig('quick_reduction/'+ronchiFolder+'_ronchi_amp_map.png',dpi=300)
-        plt.close()
-        
+        plt.close()        
         
         print('saving results')
         #write results!
