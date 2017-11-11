@@ -863,13 +863,16 @@ def trimWaveSlice(input):
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', RuntimeWarning)
         flatMed = np.nanmedian(flatSlc, axis=0)
-        mx = np.nanmax(flatMed)
+
+        #rescale so that max is 1.0 and min is 0.0
+        flatMed = (flatMed-flatMed.min())/(flatMed.max()-flatMed.min())
+        #mx = np.nanmax(flatMed)
     
     #get rid of problematic values
     #flatSlc[~np.isfinite(flatSlc)] = 0.
     with warnings.catch_warnings():
         warnings.simplefilter('ignore',RuntimeWarning)
-        whr = np.where(flatMed < threshold*mx)[0]
+        whr = np.where(flatMed < threshold)[0]
         
     slc[:,whr] = np.nan
 
