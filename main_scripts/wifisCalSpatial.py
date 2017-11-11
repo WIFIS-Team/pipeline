@@ -189,7 +189,7 @@ else:
 
 if not os.path.exists('processed/'+ronchiFlatFolder+'_flat_limits.fits') or not os.path.exists('processed/'+ronchiFlatFolder+'_flat_slices_norm.fits'):
     print('Processed flat field data does not exist for folder ' +ronchiFlatFolder +', processing flat folder')
-    calFlat.runCalFlat(np.asarray([ronchiFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile,satSplit=nSatSplit)
+    calFlat.runCalFlat(np.asarray([ronchiFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile,satSplit=nSatSplit,logfile=logfile)
 
 #******************************************************************************************************
 #******************************************************************************************************
@@ -199,7 +199,7 @@ if zpntFlatFolder is not None:
     if not os.path.exists('processed/'+zpntFlatFolder+'_flat_limits.fits') and not os.path.exists('processed/'+zpntFlatFolder+'_flat_slices_norm.fits'):
         print('Flat limits do not exist for folder ' +zpntFlatFolder +', processing flat folder')
 
-        calFlat.runCalFlat(np.asarray([zpntFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile, flatCutOff=zpntFlatCutOff,distMapLimitsFile='processed/'+ronchiFlatFolder+'_flat_limits.fits')
+        calFlat.runCalFlat(np.asarray([zpntFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile, flatCutOff=zpntFlatCutOff,distMapLimitsFile='processed/'+ronchiFlatFolder+'_flat_limits.fits',logfile=logfile)
 
 #******************************************************************************************************
 #******************************************************************************************************
@@ -299,7 +299,11 @@ if zpntLst is not None:
         print('Reading flat field response function')
         logfile.write('Reading flat field response function from file:\n')
         logfile.write('processed/'+zpntFlatFolder+'_flat_slices_norm.fits\n')
-                
+
+        zpntFlatImg = wifisIO.readImgsFromFile('processed/'+zpntFlatFolder+'_flat.fits')[0]
+        if len(zpntFlatImg)<4:
+            zpntFlatImg = zpntFlatImg[0]
+            
         flatNormLst = wifisIO.readImgsFromFile('processed/'+zpntFlatFolder+'_flat_slices_norm.fits')[0]
         flatNorm = flatNormLst[:18]
         flatSigma = flatNormLst[18:36]
@@ -337,8 +341,32 @@ if zpntLst is not None:
         #now find traces
         print('Tracing zero-point offset slices')
         logfile.write('Tracing zero-point offset slices\n')
-        
-        zpntTraces = spatialCor.traceWireFrameAll(zpntFlat, nbin=zpntNbin, bright=zpntBright, MP=True, plot=False, smooth=zpntSmooth, winRng=zpntWinRng,mxChange=zpntMxChange)
+
+        if hband:
+            #read in flat field file and use it to determine limits
+            print('Using suitable region of detector to determine zero-point traces')
+            if logfile is not None:
+                logfile.write('Using suitable region of detector to determine zero-point traces:\n')
+                
+            #only use region with suitable flux
+            if dispAxis == 0:
+                flatImgMed = np.nanmedian(zpntFlatImg[4:-4,4:-4], axis=1)
+            else:
+                flatImgMed = np.nanmedian(zpntFlatImg[4:-4,4:-4], axis=0)
+                            
+            flatImgMedGrad = np.gradient(flatImgMed)
+            medMax = np.nanargmax(flatImgMed)
+            lim1 = np.nanargmax(flatImgMedGrad[:medMax])
+            lim2 = np.nanargmin(flatImgMedGrad[medMax:])+medMax
+                
+            if logfile is not None:
+                logfile.write('Using following detector limits for tracing:\n')
+                logfile.write(str(lim1)+ ' ' + str(lim2)+'\n')
+ 
+            zpntTraces = spatialCor.traceWireFrameAll(zpntFlat, nbin=zpntNbin, bright=zpntBright, MP=True, plot=False, smooth=zpntSmooth, winRng=zpntWinRng,mxChange=zpntMxChange,constRegion=[lim1,lim2])
+        else:
+            zpntTraces = spatialCor.traceWireFrameAll(zpntFlat, nbin=zpntNbin, bright=zpntBright, MP=True, plot=False, smooth=zpntSmooth, winRng=zpntWinRng,mxChange=zpntMxChange)
+ 
 
         #optional section to address problematic slices
         #print('Fixing problematic traces')
@@ -347,23 +375,25 @@ if zpntLst is not None:
         polyFitLst = []
 
         if hband:
-            #change the code here reflect limited range with hband data
-            pass
-        else:
-            xfit = np.arange(2040)
+            pord=2
+            #xfit = np.arange(lim1,lim2)
+            #x = np.arange(lim1,lim2)
 
+        else:
+            pord=3
+            #xfit = np.arange(2040)
         x = np.arange(zpntSlices[0].shape[1])
+
         print('plotting results')
         with PdfPages('quality_control/'+zpntLst[0]+'_zpnt_traces.pdf') as pdf:
             for i in range(len(zpntSlices)):
-                
-                #if i==17:
-                #    xfit = np.arange(1100)
-                #    pord=3
-                #else:
-                xfit = np.where(np.isfinite(zpntTraces[i]))[0]
-                pord=3
-                    
+
+                #for hband in june
+                if i==17:
+                    xfit = np.where(np.isfinite(zpntTraces[i][:1050]))[0]
+                else:
+                    xfit = np.where(np.isfinite(zpntTraces[i]))[0]
+
                 fig=plt.figure()
                 interval = ZScaleInterval()
                 lims=interval.get_limits(zpntFlat[i])
@@ -371,16 +401,20 @@ if zpntLst is not None:
                 plt.colorbar()
                 plt.plot(x,zpntTraces[i], 'k', linewidth=2)
 
-                #carry out a single iteration of sigma-clipping
+                #carry out 1 iterations of sigma-clipping
+                for j in range(2):
+                    pcof = np.polyfit(xfit, zpntTraces[i][xfit],pord)
+                    poly = np.poly1d(pcof)
+
+                    res = (zpntTraces[i][xfit]-poly(xfit))
+                    med = np.nanmedian(res)
+                    std = np.nanstd(res)
+                    with warnings.catch_warnings():
+                        warnings.simplefilter('ignore',RuntimeWarning)
+                        xfit = x[np.where(np.abs(res+med)<2.*std)[0]]
+                        xfit =xfit[np.where(np.isfinite(zpntTraces[i][xfit]))]
+                        
                 pcof = np.polyfit(xfit, zpntTraces[i][xfit],pord)
-                poly = np.poly1d(pcof)
-                res = (zpntTraces[i]-poly(x))
-                med = np.nanmedian(res)
-                std = np.nanstd(res)
-                with warnings.catch_warnings():
-                    warnings.simplefilter('ignore',RuntimeWarning)
-                    xfit = x[np.where(np.abs(res+med)<2.*std)]
-                pcof = np.polyfit(xfit, zpntTraces[i][xfit],3)
                 poly = np.poly1d(pcof)
          
                 plt.plot(x,poly(x), 'r--')
@@ -434,6 +468,10 @@ if ronchiFolder is not None:
         logfile.write('Reading flat field response function from file:\n')
         logfile.write('processed/'+ronchiFlatFolder+'_flat_slices_norm.fits\n')
 
+        ronchiFlatImg = wifisIO.readImgsFromFile('processed/'+ronchiFlatFolder+'_flat.fits')[0]
+        if len(ronchiFlatImg)<4:
+            ronchiFlatImg = ronchiFlatImg[0]
+            
         flatSlicesLst = wifisIO.readImgsFromFile('processed/'+ronchiFlatFolder+'_flat_slices.fits')[0]
         flatNormLst = wifisIO.readImgsFromFile('processed/'+ronchiFlatFolder+'_flat_slices_norm.fits')[0]
         flatSlices = flatSlicesLst[:18]
@@ -527,6 +565,30 @@ if ronchiFolder is not None:
 
     if cont.lower()=='y':
         print('Getting polynomial fits to traces')
+        if hband:
+            print('Using suitable region of detector to determine Ronchi traces')
+            if logfile is not None:
+                logfile.write('Ronchi suitable region of detector to determine Ronchi traces:\n')
+            if not 'ronchiFlatImg' in locals():
+                ronchiFlatImg = wifisIO.readImgsFromFile('processed/'+ronchiFlatFolder+'_flat.fits')[0]
+            if len(ronchiFlatImg)<4:
+                ronchiFlatImg = ronchiFlatImg[0]
+                                                                 
+            #only use region with suitable flux
+            if dispAxis == 0:
+                flatImgMed = np.nanmedian(ronchiFlatImg[4:-4,4:-4], axis=1)
+            else:
+                flatImgMed = np.nanmedian(ronchiFlatImg[4:-4,4:-4], axis=0)
+                            
+            flatImgMedGrad = np.gradient(flatImgMed)
+            medMax = np.nanargmax(flatImgMed)
+            lim1 = np.nanargmax(flatImgMedGrad[:medMax])
+            lim2 = np.nanargmin(flatImgMedGrad[medMax:])+medMax
+                
+            if logfile is not None:
+                logfile.write('Using following detector limits for tracing:\n')
+                logfile.write(str(lim1)+ ' ' + str(lim2)+'\n')
+                
         #get polynomial fits
         ronchiPolyTraces = []
         with PdfPages('quality_control/'+ronchiFolder+'_ronchi_traces.pdf') as pdf:
@@ -621,16 +683,25 @@ if ronchiFolder is not None:
                 #    goodReg = [[0,2040]]
 
                 #for october
-                if i==13:
-                    goodReg = [[0,2040],[0,2040],[800,2040]]
-                    for i in range(11):
-                        goodReg.append([0,2040])
+                #if i==13:
+                #    goodReg = [[0,2040],[0,2040],[800,2040]]
+                #    for i in range(11):
+                #        goodReg.append([0,2040])
                     
-                elif i==17:
-                    goodReg = [[0,2040],[0,2040],[0,2040],[0,1400],[0,2040],[0,2040],[0,2040],[0,2040],[0,2040],[0,1550],[0,1500],[0,1100]]
+                #elif i==17:
+                #    goodReg = [[0,2040],[0,2040],[0,2040],[0,1400],[0,2040],[0,2040],[0,2040],[0,2040],[0,2040],[0,1550],[0,1500],[0,1100]]
                   
+                # else:
+               
+                #for june hband
+
+                if i==15:
+                    goodReg = [[lim1,lim2],[lim1,900],[250,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[300,lim2],[lim1,lim2],[600,lim2],[300,1000]]
                 else:
-                    goodReg = [[0,2040]]
+                    if hband:
+                        goodReg = [[lim1,lim2]]
+                    else:
+                        goodReg = [[0,2040]]
                 
                 #for july
                 #if i==13:
@@ -699,9 +770,24 @@ if ronchiFolder is not None:
                 #polyTrace = polyTrace[1:11]
 
                 #for october
-                if i==17:
+                #if i==17:
+                #    polyTrace[np.logical_or(polyTrace<0, polyTrace>=ronchiSlices[17].shape[0])] = np.nan
+                #    polyTrace[3,1450:] = np.nan
+
+
+                #for june, hband
+                if i==15:
+                    polyTrace[3,:] = np.nan
+                    polyTrace[4,:] = np.nan
+                    polyTrace[6,:] = np.nan
+                    polyTrace = np.delete(polyTrace,4,axis=0)
+                    polyTrace = polyTrace[:-1,:]
+
+                elif i==16:
+                    polyTrace = polyTrace[:-1,:]
+                elif i==17:
                     polyTrace[np.logical_or(polyTrace<0, polyTrace>=ronchiSlices[17].shape[0])] = np.nan
-                    polyTrace[3,1450:] = np.nan
+                    polyTrace = polyTrace[:-1,:]
                     
                 ronchiPolyTraces.append(polyTrace)
                                     
