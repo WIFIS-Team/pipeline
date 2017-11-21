@@ -1,6 +1,6 @@
 """
 
-Tools to handle reading a writing from files and images
+Tools to handle various input and output tasks
 
 """
 
@@ -49,26 +49,33 @@ def readRampFromFile(filename):
 
 def readImgsFromFile(file):
     """
-    Reads a FITS image or cube from the specified file. File can contain multiple extensions as well.
+    Reads a FITS file or cube from the specified file. File can contain multiple extensions, image cubes, or other various formats. Each extension must contain a 2D image at minimum or a 3D image at maximum.
     Usage: out,hdr = readImgsFromFile(file)
     file is a string corresponding to the file name
-    out,hdr is the returned image array
+    out is the returned image (or list)
+    hdr is the return astropy image header (or list of headers, if multi-extensions)
     """
 
     #get FITS file information
     tmp = fits.open(file)
-    
+
+    #determine the number of extensions
     nexts = len(tmp)
-    
+
+    #if multiple extensions
     if (nexts > 1):
-        
+
+        #start by creating output image and header lists
         out = []
         hdr = []
 
+        #go through each extension
         for i in range(nexts):
+            #assume that each extension must contain at a minimum a 2D image
             ny = tmp[i].header['NAXIS2']
             nx = tmp[i].header['NAXIS1']
-              
+
+            #check if a third axis exists
             try:
                 nz = tmp[i].header['NAXIS3']
             except(KeyError):
@@ -109,12 +116,13 @@ def readImgsFromFile(file):
     del tmp
     return out, hdr
 
-def readImgExtFromFile(file): # **** redundant now ****
+def readImgExtFromFile(file):
     """
     Reads a FITS image with multiple extensions of possibly different dimensions from the specified file
-    Usage: outImg = readImgExtFromFile(file)
+    Usage: outImg, hdr = readImgExtFromFile(file)
     file is a text input corresponding to the file name
-    outImg is the returned image array
+    outImg is the returned image list
+    hdr is the returned astropy header object (of the last entry only)
     """
 
     #get FITS file information
@@ -142,7 +150,7 @@ def readRampFromList(list):
     list is an array or python list containing the names of each file from which to read
     outImg is the returned data cube
     outTime is the returned array containing the integration times for each image in the list
-    hdr is the header of the last FITS file
+    hdr is the header of the last FITS file returned as an astropy header object
     """
 
     #open first file to get image dimensions
@@ -174,7 +182,8 @@ def readRampFromAsciiList(filename, sort=True):
     filename is the name of the ascii file containing the names of each file from which to read
     outImg is the returned data cube
     outTime is the returned array containing the integration times for each image in the list
-    hdr is the header of the last FITS file
+    hdr is the header of the last FITS file, returned as an astropy header object
+    sort is an optional boolean keyword to specify is the input list should first be sorted alpha-numerically
     """
     
     list = np.loadtxt(filename, dtype=np.str_)
@@ -187,6 +196,7 @@ def readRampFromAsciiList(filename, sort=True):
 
 def writeFits_old(data, filename, hdr=None):
     """
+    *** THIS ROUTINE IS DEPRECATED AND REPLACED BY writeFits ***
     Write a data file to a FITS file. 
     Usage writeFits(data, filename)
     data is the input data (can be more than 2 dimensions). Assumes data is stored as follows: [y-coordinates,x-coordinates,lamba-coordinates]
@@ -221,10 +231,14 @@ def writeFits_old(data, filename, hdr=None):
         
 def readRampFromFolder(folderName, rampNum=None,nSkip=0):
     """
-    read all H2RG files from specified folder.
-    Usage: output = readRampFromFolder(folderName)
+    Routine to read all H2RG files from specified folder.
+    Usage: output, outtime, hdr = readRampFromFolder(folderName)
     folderName is the name of the folder from which to read files
+    rampNum is an integer keyword to specify which ramp to read, if multiple ramps are present in a given folder. If None is specified and multiple ramps exist, a warning is issued.
+    nSkip is an integer keyword to specify the number of reads to skip when reading the ramp data.
     output is the data cube generated from the files contained in the specified folder.    
+    outtime is the returned array containing the integration times for each image in the list
+    hdr is the returned astropy header object corresponding to the last image in the ramp
     """
 
     if rampNum is None:
@@ -250,11 +264,11 @@ def readRampFromFolder(folderName, rampNum=None,nSkip=0):
 
 def readTable (filename):
     """
-    Read a table from an ASCII file
+    Routine to read a table from an ASCII file
     Usage: out = readTable(filename)
     filename is the name of the file from which to read the table
-    out is the array created from the table
-    The table is expected to be space or tab separated
+    out is the numpy array created from the table
+    The table is expected to be space or tab separated and a # to denote comment lines (which are ignored)
     """
     
     out = np.loadtxt(filename, dtype='float32',comments='#')
@@ -266,7 +280,7 @@ def readAsciiList (filename):
     Read a list of strings from an ASCII file
     Usage: out = readAsciiList(filename)
     filename is the name of the file from which to read the list
-    out is the array created from the list
+    out is the numpy array created from the list
     The list is expected to be separated on different lines
     """
     out = np.loadtxt(filename, dtype=np.str_)
@@ -284,7 +298,7 @@ def sorted_nicely( l ):
 
 def createDir(name):
     """
-    Creates directory name, if directory does not exist
+    Creates directory name, if directory does not exist, otherwise does nothing
     Usage: createDir(name)
     name is the name of the folder/directory
     """
@@ -299,6 +313,9 @@ def createDir(name):
 def userInput(strng):
     """
     Handles user input requests
+    usage cont = userInput(strng)
+    strng is the prompt text to appear to the user
+    cont is the returned input of the user
     """
 
     #check python version first
@@ -311,10 +328,10 @@ def userInput(strng):
 
 def writeTable (data,filename):
     """
-    Write a data array into a tabular format to an ASCII file
-    Usage: writeTable(filename, data)
-    filename is the name of the file to write the table
+    Routine to write a data array into a tabular format to an ASCII file
+    Usage: writeTable(data, filename)
     data is the array to be written
+    filename is the name of the file to write the table
     """
 
     np.savetxt(filename, data)
@@ -355,9 +372,11 @@ def writeImgSlices(data, extSlices,filename, hdr=None):
 def writeFits(data, filename, hdr=None, ask=True):
     """
     Write a data file to a FITS file.
-    Usage writeFits(data, filename)
-    data is the input data (can be more than 2 dimensions). Assumes data is stored as follows: [y-coordinates,x-coordinates,lamba-coordinates]
+    Usage writeFits(data, filename, hdr=None, ask=True)
+    data is the input data. It can be a list of images or just a single image itself. If data is 3D, assumes data is stored as follows: [y-coordinates,x-coordinates,lamba-coordinates]
     filename is the name of the file to write the FITS file to.
+    hdr is the astropy header object to write
+    ask is a boolean keyword to specify if the user should be prompted to overwrite the filename, in the event the filename already exists
     """
 
     if (ask):
@@ -461,6 +480,11 @@ def readPickle(filename):
 
 def getNumRamps(folder, rootFolder=''):
     """
+    Routine to determine the number of ramps present in a given folder, relative to the root folder location.
+    Usage: nRamps = getNumRamps(folder, rootFolder='')
+    folder is the name of the input folder
+    rootFolder specifies the root folder location
+    nRamps is the returned value indicating the number of ramps present
     """
 
     #CDS
@@ -483,6 +507,11 @@ def getNumRamps(folder, rootFolder=''):
 
 def getPath(folder, rootFolder=''):
     """
+    Routine to determine the full path to a given folder name
+    Usage: path = getPath(folder, rootFolder='')
+    folder is the folder to search for
+    rootFolder is the location of the root folder
+    path is the full location to the folder
     """
     
     #CDS
@@ -499,6 +528,10 @@ def getPath(folder, rootFolder=''):
 
 def readInputVariables(fileName='wifisConfig.inp'):
     """
+    Routine to read all variables from an input file
+    Usage: inpVars = readInputVariables(fileName='wifisConfig.inp')
+    fileName is the name/path of the input file
+    inpVars is the returned list of all input variables and their values
     """
 
     #read all file contents into list
@@ -524,6 +557,11 @@ def readInputVariables(fileName='wifisConfig.inp'):
 
 def getRampType(folder, rootFolder=''):
     """
+    Routine to determine the type of observation (CDS, FS, UTR) for the given folder
+    Usage: rampType = getRampType(folder, rootFolder='')
+    folder is the folder name
+    rootFolder is the location of the root folder
+    rampType is the returned string which provides the path (relative to the root folder) to the provided folder
     """
     
     #CDS

@@ -1,5 +1,6 @@
 """
 
+A set of functions to determine and correct bad pixels
 
 """
 
@@ -11,19 +12,17 @@ from astropy.visualization import ZScaleInterval
 
 def corBadPixelsAll(data,dispAxis=0,mxRng=2,MP=True, ncpus=None, sigma=False):
     """
+    Used to corrected all bad pixels in a given 2D image, through linear interpolation of the nearest pixels in a given pixel range, along the dispersion axis
+    Usage: outData = corBadPixels(data, dispAxis=0, mxRng=2, MP=True, ncpus=None, sigma=False)
+    data is the input image (with bad pixels marked as NaNs in the image,
+    dispAxis lists the dispersion direction (0 -> along the Y-axis, 1 -> along the X-axis)
+    mxRng is the maximum search range to be used to identify good pixels
+    MP is a flag to enable multiprocessing
+    ncpus determines the number of processes to run, when in multiprocessing mode
+    sigma is a flag that specifis if the input image is an image of uncertainties, and if so treats them accordingly during the linear interpolation scheme.
     """
 
     #run through list of all bad pixels and correct them through linear interpolation along dispersion axis
-
-    #create copies of input data array
-    #tmpData = np.empty(data.shape, dtype=data.dtype)
-    #np.copyto(tmpData, data)
-    #tmpBPM = np.zeros(BPM.shape, dtype='int')
-    #np.copyto(tmpBPM, BPM.astype('int'))
-    
-    #if (dispAxis==0):
-    #    tmpBPM = tmpBPM.T
-    #    tmpData = tmpData.T
 
     if mxRng == 0:
         return data
@@ -78,15 +77,16 @@ def corBadPixelsAll(data,dispAxis=0,mxRng=2,MP=True, ncpus=None, sigma=False):
     for i in range(len(corrections)):
         outData[bad[0][i],bad[1][i]] = corrections[i]
 
-   # # reorient if necessary
-   # if (dispAxis==0):
-   #     tmpData = tmpData.T
-        
     return outData
 
 def corBadPixel(input):
     """
-    Interpolate only along dispersion axis and only if pixels available within specified range
+    Used to correct individual bad pixels by interpolating of the nearest good pixels in the search window, along dispersion axis.
+    Usage: corr = corBadPixel(input)
+    input is a list containing:
+    data - the image containing the bad pixels marked by NaNs
+    badPix - the location of the bad pixel
+    mxRng - the maximum separation (in pixels) allowed between the bad pixel and the nearest good pixel to be used for correction.
     """
 
     data = input[0]
@@ -133,7 +133,12 @@ def corBadPixel(input):
     
 def corBadPixelSigma(input):
     """
-    Interpolate only along dispersion axis and only if pixels available within specified, progagating uncertainties.
+    Used to correct individual bad pixels by interpolating of the nearest good pixels in the search window, along dispersion axis. This function is to be used on images containing uncertainties such that the uncertainties are properly propagated
+    Usage: corr = corBadPixelSigma(input)
+    input is a list containing:
+    data - the uncertainty image containing the bad pixels marked by NaNs
+    badPix - the location of the bad pixel
+    mxRng - the maximum separation (in pixels) allowed between the bad pixel and the nearest good pixel to be used for correction.
     """
     data = input[0]
     badPix = input[1]
@@ -176,6 +181,14 @@ def corBadPixelSigma(input):
 
 def getBadPixelsFromNLCoeff(nlCoeff,hdr,saveFile = '',cutoff=1e-5):
     """
+    Used to determine bad pixels from a the first two non-linearity correction coefficients.
+    Usage: bpm,hdr = getBadPixelsFromNLCoeff(nlCoeff, hdr, saveFile='',cutoff=1e-5)
+    bpm is the output bad pixel mask (zeros for good pixels, ones for bad pixels)
+    hdr is the updated output astropy hdr object
+    nlCoeff is the input array specifying the correction coefficient for each pixel (nY, nX, nCoeffs)
+    hdr is an astropy hdr object to be updated
+    saveFile is the name of the file name to save the corresponding summary images
+    cutoff is the cutoff limit in the normalized PDF to identify outliers. Outliers are identified if the coefficient has a probability of < cutoff or > 1-cutoff.
     """
 
     print('Determining bad pixels from NL Coeff term1')
@@ -252,6 +265,16 @@ def getBadPixelsFromNLCoeff(nlCoeff,hdr,saveFile = '',cutoff=1e-5):
 
 def getBadPixelsFromDark(dark,hdr,darkFile='',saveFile = '',cutoff=1e-5, BPM=None):
     """
+    Used to determine bad pixels from a dark image.
+    Usage: BPM,hdr = getBadPixelsFromDark(dark, hdr, darkFile='',saveFile='',cutoff=1e-5, BPM=None)
+    BPM is the output bad pixel mask (zeros for good pixels, ones for bad pixels)
+    hdr is the output updated astropy hdr object
+    dark is the input dark image used to determine the bad pixels
+    hdr is an astropy hdr object to be updated
+    darkFile is the name/path of the dark to be specified in the hdr object
+    saveFile is the name of the file name to save the corresponding summary images
+    cutoff is the the cutoff limit in the normalized PDF to identify outliers. Outliers are identified if the coefficient has a probability of < cutoff or > 1-cutoff.
+    BPM is an optional bad pixel mask image to be updated. I.e. if provided, the bad pixels are a combination of those in BPM and those found in this function.
     """
 
     print('Determining bad pixels from dark frame')
@@ -304,6 +327,16 @@ def getBadPixelsFromDark(dark,hdr,darkFile='',saveFile = '',cutoff=1e-5, BPM=Non
 
 def getBadPixelsFromRON(ron,hdr,ronFile='',saveFile = '',cutoff=1e-5, BPM=None):
     """
+    Used to determine bad pixels from an image containing the read-out noise for each pixel.
+    Usage: bpm, hdr = getBadPixelsFromRON(ron, hdr, ronFile='',saveFile='',cutoff=1e-5, BPM=None)
+    BPM is the output bad pixel mask (zeros for good pixels, ones for bad pixels)
+    hdr is the output updated astropy hdr object
+    ron is the input ron image used to determine the bad pixels
+    hdr is an astropy hdr object to be updated
+    ronFile is the name/path of the ron image to be specified in the hdr object
+    saveFile is the name of the file name to save the corresponding summary images
+    cutoff is the cutoff limit in the normalized PDF to identify outliers. Outliers are identified if the coefficient has a probability of < cutoff or > 1-cutoff.
+    BPM is an optional bad pixel mask image to be updated. I.e. if provided, the bad pixels are a combination of those in BPM and those found in this function.
     """
 
     print('Determining bad pixels from RON frame')

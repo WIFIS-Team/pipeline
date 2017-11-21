@@ -13,17 +13,19 @@ import numpy as np
 def getWCSCube(data, hdr, xScale, yScale, waveGridProps, useSesameCoords=False):
     """
     Returns the corresponding WCS header parameters based on given input parameters.
-    Usage: header = getWCSCube(data, telRA, telDEC, RAScale, DECScale, waveGridProps)
+    Usage: header = getWCSCube(data, hdr, xScale, yScale, waveGridProps, useSesameCoords=False)
     data is the input data cube
-    telRA is a string containing the telescope pointing RA coordinate as 'hhmmss.ss'
-    telDEC is a string containing the telescope pointing DEC coordinate as '+ddmmss.ss'
+    hdr is the input astropy header object for the data cube
     xScale is the pixel scale in arcsec along the slice direction.
     yScale is the pixel scale in arcsec perpendicular to the slice direction
-    rotAngle is the rotation angle ... in ...
     waveGridProps is a list containing the starting wavelength, ending wavelength and number of pixels along the dispersion direction.
+    useSesameCoords is a boolean flag to specify if the centre coordinat should be replaced by a lookup value corresponding to the object name's Sesame coordinates instead of the telescope pointing coordinates. If object name cannot be found, the fallback is to use the telescope pointing coordinates.
     """
 
+    #compute the properties of the wavelength grid based on the waveGridProps provided
     dWave = (waveGridProps[1]-waveGridProps[0])/(waveGridProps[2]-1)
+
+    #initiate WCS object
     w = wcs.WCS(naxis=3)
 
     if useSesameCoords:
@@ -41,7 +43,8 @@ def getWCSCube(data, hdr, xScale, yScale, waveGridProps, useSesameCoords=False):
         #convert input strings to degrees
         telRA = hdr['RA_DEG']
         telDEC = hdr['DEC_DEG']
-        
+
+    #get specific details to add to the header
     rotAngle = hdr['CRPA']
 
     #rotAngle of 90 corresponds to N-S alignment
@@ -72,16 +75,16 @@ def getWCSCube(data, hdr, xScale, yScale, waveGridProps, useSesameCoords=False):
 
 def getWCSImg(data, hdr, xScale, yScale, useSesameCoords=False):
     """
-    Returns the corresponding WCS header parameters based on given input parameters.
-    Usage: header = getWCSImg(data, telRA, telDEC, RAScale, DECScale)
+    Returns the corresponding WCS header parameters based on given input parameters for the given image
+    Usage: header = getWCSImg(data, hdr, xScale, yScale, useSesameCoords=False)
     data is the input data image
-    telRA is a string containing the telescope pointing RA coordinate as 'hhmmss.ss'
-    telDEC is a string containing the telescope pointing DEC coordinate as '+ddmmss.ss'
-    RAscale is the RA pixel scale in arcsec
-    DECscale is the DEC pixel scale in arcsec
-    rotAngle is the rotation angle ... in ...
-    """
+    hdr is the input astropy header object for the data cube
+    xScale is the pixel scale in arcsec along the slice direction.
+    yScale is the pixel scale in arcsec perpendicular to the slice direction
+    useSesameCoords is a boolean flag to specify if the centre coordinat should be replaced by a lookup value corresponding to the object name's Sesame coordinates instead of the telescope pointing coordinates. If object name cannot be found, the fallback is to use the telescope pointing coordinates.
+    """ 
 
+    #initiate WCS object
     w = wcs.WCS(naxis=2)
 
     if useSesameCoords:
@@ -124,6 +127,12 @@ def getWCSImg(data, hdr, xScale, yScale, useSesameCoords=False):
 
 def addTelInfo(hdr, obsinfoFile, logfile=None, obsCoords=None):
     """
+    Routine to add telescope info from obsinfo.dat file to astropy header object
+    Usage: addTelInfo(hdr, obsinfoFile, logfile=None, obsCoords=None)
+    hdr is an astropy header object
+    obsinfoFile is the location to the obsinfo.dat file to read
+    logfile is an optional file object for writing to a logfile
+    obsCoords is an optional list containing the observatory coordinates [longitude (deg), latitude (deg), altitude (m)]
     """
 
     colorama.init()
@@ -193,6 +202,7 @@ def addTelInfo(hdr, obsinfoFile, logfile=None, obsCoords=None):
     hdr.set('ELEVATIO', float(dct['EL']), 'Current Elevation')
     hdr.set('AZIMUTH', float(dct['AZ']), 'Current Azimuth')
 
+    #make sure that rotator angle uses reasonable values, if not assume the angle is 90 deg
     try:
         crpa = float(dct['IIS'])
     except ValueError:
@@ -218,8 +228,7 @@ def addTelInfo(hdr, obsinfoFile, logfile=None, obsCoords=None):
         sin_eta = (np.sin(haAng.rad)*np.cos(latAng.rad))/np.sqrt(1. - (np.sin(latAng.rad)*np.sin(decAng.rad) + np.cos(latAng.rad)*np.cos(decAng.rad)*np.cos(haAng.rad))**2)
         eta = coord.Angle(str(np.arcsin(sin_eta)) + ' rad')
         hdr.set('PA_ANG',eta.deg, 'Paralactic angle, in degrees')
- 
-    
+     
     #finally, add the obsinfo.dat file information directly
     for line in linesSplit:
         out = ''

@@ -66,6 +66,9 @@ def findSubPixelShift(img1, img2, oversample=100.):
     inp1[:dim1[0],:dim1[1]] = img1
     inp2[:dim2[0],:dim2[1]] = img2
 
+    inp1[~np.isfinite(inp1)]=0
+    inp2[~np.isfinite(inp2)]=0
+
     #now get FFT of images and accompanying translation function
     fft1 = np.fft.fft2(inp1)
     fft2 = np.fft.fft2(inp2)
@@ -77,10 +80,10 @@ def findSubPixelShift(img1, img2, oversample=100.):
 
     #now interpolate onto higher resolution grid and rearrange so that  centre corresponds to 0 frequency
     m2 = np.zeros((11,11))
-    m2[0:5,0:5]= m[m.shape[1]-5:,m.shape[0]-5:]
-    m2[0:5,5:] = m[m.shape[0]-5:,:6]
+    m2[:5,:5]= m[m.shape[0]-5:,m.shape[1]-5:]
+    m2[:5,5:] = m[m.shape[0]-5:,:6]
     m2[5:,5:] = m[:6,:6]
-    m2[5:,0:5] = m[:6,m.shape[0]-5:]
+    m2[5:,:5] = m[:6,m.shape[1]-5:]
 
     x=np.arange(m2.shape[0])
     y=np.arange(m2.shape[1])

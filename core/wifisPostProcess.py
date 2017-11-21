@@ -1,9 +1,12 @@
-import wifisIO
+"""
+
+Set of routines to help with post-processing of data cube
+
+"""
+
 import matplotlib.pyplot as plt
 import numpy as np
-import astropy.convolution as convolution
 from scipy.interpolate import spline
-import wifisWaveSol
 from scipy.interpolate import interp1d
 import multiprocessing as mp
 from scipy.optimize import curve_fit
@@ -20,10 +23,11 @@ import copy
 def splineContFit(x,y,regions, lineRegions=None,order=3,winRng=10.):
     """
     Use scipy spline fitting to determine continuum shape of input spectrum.
-    Usage: xfit, yfit, contFit = splineContFit(x,y,regions, order=3, winRng=10)
+    Usage: xfit, yfit, contFit = splineContFit(x,y,regions, lineRegions,order=3, winRng=10)
     x is the input wavelength array
     y is the input flux array
     regions is a list of starting/stopping wavelength coordinates, used to confine the continuum regions (e.g. regions = [[x1, x2], [x3, x4], [x5,x6]])
+    lineRegions is an optional array that specifies line regions to be ignored in the fitting process (NOT CURRENTLY IMPLEMENTED)
     order is a keyword used to specify the order of the spline fitting to use (1 = linear, 2 = quadratic, 3 = cubic, etc.)
     winRng is a keyword used to set the wavelength range from which to identify the pixel with the maximum flux, which will be used to determine the cubic spline fitting.
     xfit, yfit, and contFit are the output, where xfit and yfit are the x and y values of the points used for fitting and contFit is the continuum fit to the original x positions.
@@ -56,8 +60,24 @@ def splineContFit(x,y,regions, lineRegions=None,order=3,winRng=10.):
 
 def crossCorCube(wave, cube1, cube2, regions=None, oversample=20, absorption=False, ncpus=None, mode='idl', contFit1=True, contFit2=True,nContFit=50, contFitOrder=1, mxShift=4,reject=0, velocity=False):
     """
-    Determine the pixel shift (if velocity=False) between input cubes cube1 and cube2, expected to be on the same wavelength grid/coordinate system x. Determines velocity difference, if velocity=True. mxShift is in pixels or km/s.
-    Usage: 
+    Determine the pixel shift (if velocity=False) between input cubes cube1 and cube2, expected to be on the same wavelength grid/coordinate system x. Determines velocity difference, if velocity=True.
+    Usage: shiftOut = crossCorCube(wave, cube1, cube2, regions=None, oversample=20, absorption=False, ncpus=None, mode='idl', contFit1=True, contFit2=True,nContFit=50, contFitOrder=1, mxShift=4,reject=0, velocity=False)
+    wave is in a numpy array providing the wavelength coordinates
+    cube1 is the first input cube
+    cube2 is the second input cube
+    regions is an optional parameter that provides specific regions to confine the cross correlation process. It is a list of lists (i.e. [[x1, x2],[x3,x4],...]
+    oversample is the oversampling factor to use for determining subpixel shifts
+    absorption is a boolean keyword to specify if the input cubes contain absorption lines
+    ncpus sets the number of processes to use
+    mode is a string keyword to specify how the cross-correlation is carried out ('idl' or 'fft')
+    contFit1 is a boolean keyword to indicate if continuum fitting should be carried out on the first cube
+    contFit2 is a boolean keyword to indicate if continuum fitting should be carried out on the second cube
+    nContFit is an integer that specifies the number of pixels used to identify continuum points
+    contFitOrder is the spline order to use for continuum fitting (1 - linear splint, 2 - quadratic spline, 3 - cubic spline)
+    mxShift is the maximum allowed shift between cubes, in units of pixels or velocity (if velocity = True)
+    reject is sigma-threshold to use for carrying out sigma-clipping when doing the continuum fitting
+    velocity is a boolean keyword to specify if the measured shift is in pixels (False) or velocity units (True)
+    shiftOut is an image containing the measured shift at each spatial coordinate
     """
 
     cube1tmp = np.empty(cube1.shape, dtype=cube1.dtype)
@@ -107,7 +127,22 @@ def crossCorCube(wave, cube1, cube2, regions=None, oversample=20, absorption=Fal
 def crossCorPixMP(input):
     """
     Determine the pixel difference between input spectra y1 and y2 on the same wavelength grid/coordinate system x.
-    Usage: 
+    Usage: shiftOut = crossCorPixMP(inpu)
+    input is a list containing:
+    y1 - the first spectrum
+    y2 - the second spectrum
+    oversample - the oversampling rate
+    mode - the mode to use for determining the shift
+    contFit1 - boolean value indicating if the first spectrum is to be continuum rectified
+    contFit2 - boolean value indicating if the second spectrum is to be continuum rectified
+    nContFit - the number of pixels to use for determining continuum level/points
+    contFitOrder - the spline order of the continuum fit
+    mxShift - the maximum allowed pixel shift, which defines search range
+    plot - boolean value to specify if plotting should be carried out (for debugging purposes)
+    reject - sigma-threshold to use for clipping pixels during the continuum fitting stage
+    regions - a list of pixel ranges indicating the regions to use for cross-correlation
+    wave - a numpy array providing the wavelength coordinates at each pixel
+    shiftOut is the measured pixel shift
     """
 
     y1= input[0]
@@ -195,8 +230,22 @@ def crossCorPixMP(input):
 
 def crossCorSpec(wave, spec1, spec2, regions=None, oversample=20, absorption=False, mode='idl', contFit1=True, contFit2=True,nContFit=50,contFitOrder=1, mxVel=200, plot=False, reject=0, velocity=True):
     """
-    Determine the velocity difference between input spectra cube1 and cube2, expected to be on the same wavelength grid/coordinate system x.
-    Usage: 
+    Routine to determine the velocity difference between two spectra, expected to be on the same wavelength grid.
+    Usage: rvOut = crossCorSpec(wave, spec1, spec2, regions=None, oversample=20, absorption=False, mode='idl', contFit1=True, contFit2=True,nContFit=50,contFitOrder=1, mxVel=200, plot=False, reject=0, velocity=True)
+    wave is the numpy wavelength array specifying the wavelength coordinates at each pixel
+    spec1 is the first spectrum
+    spec2 is the second spectrum
+    regions is a list of wavelength coordinates specifying regions to use in the cross-correlation process
+    oversample is the oversampling rate used to determine sub-pixel shifts
+    absorption is a boolean keyword to specify if the input spectra contain absorption lines
+    mode is a keyword specifying the mode of cross-correlation ('idl', 'fft')
+    contFit1 is a boolean keyword indicating if the first spectrum should be continuum rectified
+    contFit2 is a boolean keyword indicating if the second spectrum should be continuum rectified
+    contFitOrder is the spline order to use for continuum fitting (1 - linear splint, 2 - quadratic spline, 3 - cubic spline)
+    mxVel is the maximum allowed velocity shift between spectra
+    reject is sigma-threshold to use for carrying out sigma-clipping when doing the continuum fitting
+    velocity is a boolean keyword to specify if the measured shift is in pixels (False) or velocity units (True)
+    shiftOut is an image containing the measured shift at each spatial coordinate
     """
 
       
@@ -214,13 +263,12 @@ def crossCorSpec(wave, spec1, spec2, regions=None, oversample=20, absorption=Fal
 def splineContFitMP(input):
     """
     Use scipy spline fitting to determine continuum shape of input spectrum.
-    Usage: xfit, yfit, contFit = splineContFit(x,y,regions, order=3, winRng=10)
-    x is the input wavelength array
-    y is the input flux array
-    regions is a list of starting/stopping wavelength coordinates, used to confine the continuum regions (e.g. regions = [[x1, x2], [x3, x4], [x5,x6]])
-    order is a keyword used to specify the order of the spline fitting to use (1 = linear, 2 = quadratic, 3 = cubic, etc.)
-    winRng is a keyword used to set the wavelength range from which to identify the pixel with the maximum flux, which will be used to determine the cubic spline fitting.
-    xfit, yfit, and contFit are the output, where xfit and yfit are the x and y values of the points used for fitting and contFit is the continuum fit to the original x positions.
+    Usage: contFit = splineContFitMP(input)
+    input is a list containing:
+    y - the input flux array
+    order - the order of the spline fitting to use (1 = linear, 2 = quadratic, 3 = cubic, etc.)
+    winRng - the number of pixels to use for the fitting
+    contFit is the output numpy array containing the continuum fit
     """
 
     y = input[0]
@@ -300,7 +348,13 @@ def splineContFitMP(input):
 
 def crossCorIDL(input):
     """
-    lags in range must integer values
+    Routine to compute the cross-correlation between two spectra using the IDL method
+    Usage: p = crossCorIDL(input)
+    input is a list containing:
+    y1 - spectrum 1
+    y2 - spectrum 2
+    rng - a numpy array specifying the pixel shifts at which to compute the cross-correlation
+    p is the p unnormalized p value corresponding to the cross-correlation
     """
 
     y1 = input[0]
@@ -325,8 +379,24 @@ def crossCorIDL(input):
         
 def crossCorVelMP(input):
     """
-    Determine the velocity difference between input spectra y1 and y2 on the same wavelength grid/coordinate system x.
-    Usage: 
+    Determine the velocity difference between input spectra y1 and y2 on the same wavelength grid.
+    Usage: rvOut = crossCorVelMP(input)
+    input is a list containing:
+    vconst - the linearized velocity grid
+    y1 - the first input spectrum
+    y2 - the second input spectrum
+    oversample - the oversampling rate to measure sub-pixel corrections
+    mode - the mode to use to carry out the cross-correlation measurement ('idl', 'fft')
+    contFit1 - a boolean value indicating whether the first spectrum should be continuum rectified
+    contFit2 - a boolean value indicating whether the second spectrum should be continuum rectified
+    nContFit - the number of pixels to use for determining continuum points
+    contFitOrder - the spline fitting order to use for continuum fitting
+    mxVel - the maximum velocity used to specify search range
+    plot - a boolean value indicating whether plotting shoud be carried out (for debugging purposes)
+    reject - the sigma-clipping threshold to use for rejecting pixels in the continuum fitting routine
+    regions - a list of wavelength coordinates specifying the regions to use for cross-correlation
+    wave - the input wavlength array giving the wavelength coordinates for the input spectra
+    rvOut is the measured radial velocity shift between the two spectra
     """
 
     vconst = input[0]
@@ -460,6 +530,12 @@ def scaleSky(y,f):
 
 def fitSky(y1, y2, bounds=[-np.inf, np.inf]):
     """
+    Routine used to determine optimal line scaling between given inputs
+    Usage: popt = fitSky(y1,y2, bounds=[-np.inf,np.inf])
+    y1 is the first spectrum to be matched
+    y2 is the second spectrum 
+    bounds specify the relative scaling factor bounds
+    popt is the returned value of the optimization fit
     """
 
     popt, pcov = curve_fit(scaleSky,y2, y1, p0=[1.], bounds=bounds)
@@ -468,6 +544,19 @@ def fitSky(y1, y2, bounds=[-np.inf, np.inf]):
 
 def subScaledSkyPix(input):
     """
+    Routine to scale and subtract the sky spectrum from an observed spectrum.
+    Usage: specOut, fOut = subScaledskyPix(input)
+    input is a list containing the following:
+    wave - a numpy array containing the wavelength coordinates of the input spectra
+    obs - a numpy array containing the observed spectrum
+    sky - a numpy array containing the sky spectrum
+    regions - a list of wavelength coordinates providing the limits of the regions to use for sky subtraction
+    sigmaClip - the sigma-clipping threshold at which to reject pixels in the sky scaling process
+    sigmaClipRounds - defines the number of sigma-clipping iterations to carry out
+    useMaxOnly - a relative fraction of the maximum flux to specify if only pixels with relative flux greater than this value should be used for sky scaling and subtracting. A value of zero uses all pixels.
+    nContFit - the number of pixels to use for identifying continuum points for continuum subtraction
+    specOut is the sky-scaled subtracted spectrum
+    fOut provides a list of the scaling used for each region
     """
     wave = input[0]
     obs = input[1]
@@ -563,7 +652,21 @@ def subScaledSkyPix(input):
     
 def subScaledSkyCube(wave, obs, sky, mxScale=0.5, regions=None, MP=True, ncpus=None,sigmaClip=3, sigmaClipRounds=1, useMaxOnly=0., nContFit=50):
     """
-    mxScale is maximum allowable scaled difference between sky/obs spectrum (e.g. 0.2 -> sky can be scaled in range of 0.8-1.2).
+    Routine used to scale sky lines and subtract from an entire cube.
+    Usage: subCube, fImg = subScaledSkyCube(wave, obs, sky, mxScale=0.5,  regions=None, MP=True, ncpus=None,sigmaClip=3, sigmaClipRounds=1, useMaxOnly=0., nContFit=50)
+    wave is a numpy array specifying the wavelength coordinates of both cubes
+    obs is the observation cube
+    sky is the sky cube
+    mxScale is the maximum allowable scaled difference between sky/obs spectrum (e.g. 0.2 -> sky can be scaled in range of 0.8-1.2)
+    regions is a list of wavelength coordinates specifying the different sky regions/bands
+    MP is a boolean keyword specifying if multiprocessing should be used
+    ncpus is an integer variable specfying the number of processes to use in MP mode
+    sigmaClip is the sigma-clipping threshold to use for determining the sky scaling fraction
+    sigmaClipRounds is the number of sigma-clipping iterations to run
+    useMaxOnly - a relative fraction of the maximum flux to specify if only pixels with relative flux greater than this value should be used for sky scaling and subtracting. A value of zero uses all pixels.
+    nContFit is the number of pixels to use during continuum fitting
+    subCube is the output scaled-sky subtracted cube
+    fImg is an image providing the scaling factor at each pixel
     """
 
     #get bounds based on input
@@ -614,6 +717,21 @@ def subScaledSkyCube(wave, obs, sky, mxScale=0.5, regions=None, MP=True, ncpus=N
 
 def subScaledSkySlices(waveMap, obsSlices, skySlices, mxScale=0.5, regions=None, MP=True, ncpus=None,sigmaClip=3, sigmaClipRounds=1, useMaxOnly=0., nContFit=50):
     """
+    Routine used to scale sky lines and subtract from image slices.
+    Usage: subSlices, fSlices = subScaledSkySlices(waveMap, obsSlices, skySlices, mxScale=0.5,  regions=None, MP=True, ncpus=None,sigmaClip=3, sigmaClipRounds=1, useMaxOnly=0., nContFit=50)
+    waveMap is a list of wavelength mapping images for each slice
+    obsSlices is the observation slices
+    skySlices is the sky slices
+    mxScale is the maximum allowable scaled difference between sky/obs spectrum (e.g. 0.2 -> sky can be scaled in range of 0.8-1.2)
+    regions is a list of wavelength coordinates specifying the different sky regions/bands
+    MP is a boolean keyword specifying if multiprocessing should be used
+    ncpus is an integer variable specfying the number of processes to use in MP mode
+    sigmaClip is the sigma-clipping threshold to use for determining the sky scaling fraction
+    sigmaClipRounds is the number of sigma-clipping iterations to run
+    useMaxOnly - a relative fraction of the maximum flux to specify if only pixels with relative flux greater than this value should be used for sky scaling and subtracting. A value of zero uses all pixels.
+    nContFit is the number of pixels to use during continuum fitting
+    subCube is the output scaled-sky subtracted cube
+    fImg is an image providing the scaling factor at each pixel
     mxScale is maximum allowable scaled difference between sky/obs spectrum (e.g. 0.2 or 20%, implies that the sky emission strength can be scaled in range of +/-20% or 0.8-1.2).
     """
 
@@ -670,7 +788,23 @@ def subScaledSkySlices(waveMap, obsSlices, skySlices, mxScale=0.5, regions=None,
 def crossCorSlices(waveMap, slices1, slices2, regions=None, oversample=20, absorption=False, ncpus=None, mode='idl', contFit1=True, contFit2=True,nContFit=50, contFitOrder=1, mxShift=4,reject=0, velocity=False):
     """
     Determine the pixel shift (if velocity=False) between input cubes cube1 and cube2, expected to be on the same wavelength grid/coordinate system x. Determines velocity difference, if velocity=True. mxShift is in pixels or km/s.
-    Usage: 
+    Usage: shiftOut = crossCorSlices(waveMap, slices1, slices2, regions=None, oversample=20, absorption=False, ncpus=None, mode='idl', contFit1=True, contFit2=True,nContFit=50, contFitOrder=1, mxShift=4,reject=0, velocity=False)
+    waveMap is a list of wavelength maps for each slice
+    slices1 is the slices of the first image
+    slices2 is the slices of the second image
+    regions is a list of wavelength coordinates specifying the regions to use for cross-correlation
+    oversample is the oversampling rate to measure sub-pixel corrections
+    absorption is a boolean keyword to specify if the input images contain absorption lines
+    ncpus specifies the number of processes to run in parallel
+    mode is the mode to use to carry out the cross-correlation measurement ('idl', 'fft')
+    contFit1 is a boolean keyword indicating whether the first spectrum should be continuum rectified
+    contFit2 is a boolean keyword indicating whether the second spectrum should be continuum rectified
+    nContFit is the number of pixels to use for determining continuum points
+    contFitOrder is the spline fitting order to use for continuum fitting
+    mxShift is the maximum shift used to specify search range (in pixels, if velocity = False; in velocity if velocity=True)
+    reject is the sigma-clipping threshold to use for rejecting pixels in the continuum fitting routine
+    velocity is a boolean keyword indicating if the measured shift is done in pixels (False) or velocity (True)
+    shiftOut is a list of the measured shift between the each slice
     """
 
     #build input list
@@ -713,6 +847,10 @@ def crossCorSlices(waveMap, slices1, slices2, regions=None, oversample=20, absor
     
 def buildfSlicesMap(fSlices):
     """
+    Routine to build a map of the scaling factors from all the slices.
+    Usage: outMap = buildfSlicesMap(fSlices)
+    fSlices contains the list of scaling factors
+    outMap if the derived map
     """
 
     outMap =[]
@@ -738,6 +876,13 @@ def buildfSlicesMap(fSlices):
 
 def shiftSlicesAll(inpSlices, pixShift, MP=False, ncpus=None):
     """
+    Routine to shift all slices by the indicated pixel shift.
+    Usage outSlices = shiftSlicesAll(inpSlices, pixShift, MP=False, ncpus=None)
+    inpSlices is the input slices to shift
+    pixShift is the shift in pixels to apply
+    MP is a boolean keyword that specifies if the routine should be split into multiple processes
+    ncpus specifies the number of processes
+    outSlices is a list of the shifted image slices, on the same coordinate system as the input slices
     """
 
     #create input list
@@ -760,6 +905,12 @@ def shiftSlicesAll(inpSlices, pixShift, MP=False, ncpus=None):
     
 def shiftSlice(input):
     """
+    Routine to apply a pixel shift to an image slice
+    Usage: slcNew = shiftSlice(input)
+    input is a list containing:
+    slc - the input image slice
+    pixShift - the shift to apply
+    slcNew is the shifted image on the same coordinate system as the input
     """
 
     slc = input[0]
@@ -777,6 +928,12 @@ def shiftSlice(input):
 
 def shiftImage(img, pixShift,dispAxis=0):
     """
+    Routine to shift an image along the dispersion axis
+    Usage outImg = shiftImage(img, pixShift, dispAxis=0)
+    img is the input image
+    pixShift is the shift to apply
+    dispAxis specifies the dispersion direction
+    outImg is the shifted image on the same coordinate system as the input image
     """
 
     #img = input[0]
@@ -804,6 +961,11 @@ def shiftImage(img, pixShift,dispAxis=0):
 
 def getSmoothedImage(img,kernSize=4):
     """
+    Routine to apply a Gaussian smoothing to an input image
+    Usage: imgSmth = getSmoothedImage(img, kernSize=4)
+    img is the input image
+    kernSize is the width of the Gaussian kernel used for smoothing
+    imgSmth is the resulting smoothed image
     """
 
     kernel = Gaussian2DKernel(kernSize)
@@ -814,8 +976,24 @@ def getSmoothedImage(img,kernSize=4):
     
 def crossCorImage(img1, img2, regions=None, oversample=20, absorption=False, ncpus=None, mode='idl', contFit1=True, contFit2=True,nContFit=50, contFitOrder=1, mxShift=4,reject=0, dispAxis=0., maxFluxLevel=0, position=None):
     """
-    Determine the pixel shift (if velocity=False) between input images img1 and img2, expected to be on the same wavelength grid/coordinate system x. Determines velocity difference, if velocity=True. mxShift is in pixels or km/s.
-    Usage: 
+    Determine the pixel shift between input images img1 and img2, expected to be have the same dimensions.
+    Usage: shiftOut = crossCorImage(img1,img2 regions=None, oversample=20, absorption=False, ncpus=None, mode='idl', contFit1=True, contFit2=True,nContFit=50, contFitOrder=1, mxShift=4,reject=0, dispAxis=0,maxFluxLevel=0, position=None)
+    img1 is the first image
+    img2 is the second image
+    regions is a list of pixel coordinates specifying the regions to use for cross-correlation (along the dispersion axis)
+    oversample is the oversampling rate to measure sub-pixel corrections
+    absorption is a boolean keyword to specify if the input images contain absorption lines
+    ncpus specifies the number of processes to run in parallel
+    mode is the mode to use to carry out the cross-correlation measurement ('idl', 'fft')
+    contFit1 is a boolean keyword indicating whether the first spectrum should be continuum rectified
+    contFit2 is a boolean keyword indicating whether the second spectrum should be continuum rectified
+    nContFit is the number of pixels to use for determining continuum points
+    contFitOrder is the spline fitting order to use for continuum fitting
+    mxShift is the maximum shift used to specify search range (in pixels, if velocity = False; in velocity if velocity=True)
+    reject is the sigma-clipping threshold to use for rejecting pixels in the continuum fitting routine
+    dispAxis specifies the dispersion direction (0 - along the y-axis, 1 - along the x-axis)
+    maxFluxLevel specifies the relative flux threshold (1 being the max, 0 being the min) to specify which regions of the detector are used during the cross-correlation routine
+    shiftOut is a list of the measured shift between the each slice
     """
 
     #build input list
@@ -868,8 +1046,24 @@ def crossCorImage(img1, img2, regions=None, oversample=20, absorption=False, ncp
     
 def crossCorImageCL(img1, img2, regions=None, oversample=20, absorption=False, ncpus=None, contFit1=True, contFit2=True,nContFit=50, contFitOrder=1, mxShift=4,reject=0, dispAxis=0., maxFluxLevel=0, position=None):
     """
-    Determine the pixel shift (if velocity=False) between input images img1 and img2, expected to be on the same wavelength grid/coordinate system x. Determines velocity difference, if velocity=True. mxShift is in pixels or km/s.
-    Usage: 
+    Determine the pixel shift between input images img1 and img2, expected to be have the same dimensions.
+    Usage: shiftOut = crossCorImage(img1,img2 regions=None, oversample=20, absorption=False, ncpus=None, mode='idl', contFit1=True, contFit2=True,nContFit=50, contFitOrder=1, mxShift=4,reject=0, dispAxis=0,maxFluxLevel=0, position=None)
+    img1 is the first image
+    img2 is the second image
+    regions is a list of pixel coordinates specifying the regions to use for cross-correlation (along the dispersion axis)
+    oversample is the oversampling rate to measure sub-pixel corrections
+    absorption is a boolean keyword to specify if the input images contain absorption lines
+    ncpus specifies the number of processes to run in parallel
+    mode is the mode to use to carry out the cross-correlation measurement ('idl', 'fft')
+    contFit1 is a boolean keyword indicating whether the first spectrum should be continuum rectified
+    contFit2 is a boolean keyword indicating whether the second spectrum should be continuum rectified
+    nContFit is the number of pixels to use for determining continuum points
+    contFitOrder is the spline fitting order to use for continuum fitting
+    mxShift is the maximum shift used to specify search range (in pixels, if velocity = False; in velocity if velocity=True)
+    reject is the sigma-clipping threshold to use for rejecting pixels in the continuum fitting routine
+    dispAxis specifies the dispersion direction (0 - along the y-axis, 1 - along the x-axis)
+    maxFluxLevel specifies the relative flux threshold (1 being the max, 0 being the min) to specify which regions of the detector are used during the cross-correlation routine
+    shiftOut is a list of the measured shift between the each slice
     """
 
     if dispAxis != 0:
@@ -988,156 +1182,24 @@ def crossCorImageCL(img1, img2, regions=None, oversample=20, absorption=False, n
 
     return shiftOut
 
-def subScaledSkyPix(input):
-    """
-    """
-    wave = input[0]
-    obs = input[1]
-    sky = input[2]
-    regions = input[3]
-    bounds = input[4]
-    sigmaClip = input[5]
-    sigmaClipRounds = input[6]
-    useMaxOnly = input[7]
-    nContFit = input[8]
-    
-    obsCont = splineContFitMP([obs, 1, nContFit, 1])
-    skyCont = splineContFitMP([sky, 1, nContFit, 1])
-    skyScaled = np.zeros(sky.shape,dtype=sky.dtype)
-
-    if regions is None:
-        regions = [[wave.min(), wave.max()]]
-        
-    if np.all(~np.isfinite(obs)) or np.all(~np.isfinite(sky)):
-        fOut = []
-        for reg in regions:
-            fOut.append(np.nan)
-        return obs, fOut
-    
-    outside = np.ones(sky.shape).astype(bool)
-
-    #list to hold all scalings
-    fOut = []
-    
-    #construct the sky spectrum outside of the scaled region
-    for reg in regions:
-        if len(reg) ==2:
-            whr = np.where(np.logical_and(wave>=reg[0],wave<=reg[1]))[0]
-        elif len(reg)==4:
-            whr = np.where(np.logical_or(np.logical_and(wave>=reg[0],wave<=reg[1]),np.logical_and(wave>=reg[2],wave<=reg[3])))[0]
-
-        outside[whr] = False
-    skyScaled[outside] = sky[outside]
-    
-    for reg in regions:
-        whr = np.where(np.logical_and(wave>=reg[0],wave<=reg[1]))[0]
-        #outside.append([whr[0],whr[-1]])
-        
-        otmp = (obs-obsCont)[whr]
-        stmp = (sky-skyCont)[whr]
-
-        otmp[~np.isfinite(otmp)] = 0.
-        stmp[~np.isfinite(stmp)] = 0.
-
-        f = fitSky(otmp, stmp)
-        if (f < bounds[0]):
-            f = bounds[0]
-        elif (f > bounds[1]):
-            f = bounds[1]
-
-        skyCor = stmp*f
-        
-        if sigmaClipRounds>0:
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore',RuntimeWarning)
-                for i in range(sigmaClipRounds):
-                    y = otmp-stmp*f
-                    med = np.nanmedian(y)
-                    std = np.nanstd(y)
-                    goodPix = np.where(np.abs(y-med)<=sigmaClip*std)[0]
-                    #badPix = np.where(np.abs(y-med)>sigmaClip*std)[0]
-                    badPix = np.ones(stmp.shape[0])
-                    #use only pixels with value useMax of maximum flux for fitting and subtracting
-                    if useMaxOnly > 0:
-                        #badPix2 = np.where(stmp < useMaxOnly*stmp[goodPix].max())[0]
-                        goodPix = np.where(stmp >= useMaxOnly*stmp[goodPix].max())[0]
-                        badPix[goodPix] = 0
-                        #badPixAll = np.concatenate((badPix,badPix2))
-                        #goodPixAll = np.concatenate((goodPix,goodPix2))
-                        #badPixAll = np.unique(badPixAll)
-                        #goodPixAll = np.unique(goodPixAll)
-
-                    badPix[goodPix]=0
-                        
-                    f = fitSky(otmp[goodPix], stmp[goodPix])
-
-                    if (f < bounds[0]):
-                        f = bounds[0]
-                    elif (f > bounds[1]):
-                        f = bounds[1]
-
-            skyCor[goodPix] = stmp[goodPix]*f
-            skyCor[badPix.astype(bool)] = stmp[badPix.astype(bool)]
-            
-        skyScaled[whr] = skyCont[whr] + skyCor
-        fOut.append(f)
-    return obs - skyScaled, fOut
-    
-def subScaledSkyCube(wave, obs, sky, mxScale=0.5, regions=None, MP=True, ncpus=None,sigmaClip=3, sigmaClipRounds=1, useMaxOnly=0., nContFit=50):
-    """
-    mxScale is maximum allowable scaled difference between sky/obs spectrum (e.g. 0.2 -> sky can be scaled in range of 0.8-1.2).
-    """
-
-    #get bounds based on input
-    if mxScale is not None:
-        bounds = [1.-mxScale, 1.+mxScale]
-    else:
-        bounds = [-np.inf, np.inf]
-
-    #build input list
-    inpLst = []
-    for i in range(sky.shape[0]):
-        for j in range(sky.shape[1]):
-            inpLst.append([wave,obs[i,j,:],sky[i,j,:],regions, bounds,sigmaClip,sigmaClipRounds,useMaxOnly,nContFit])
-    
-    if MP:
-    #setup multithreading
-
-        if ncpus is None:
-            ncpus = mp.cpu_count()
-        pool = mp.Pool(ncpus)
-        subLst = pool.map(subScaledSkyPix,inpLst)
-        pool.close()
-        
-        k=0
-        subCube = np.empty(obs.shape, dtype=obs.dtype)
-        fImg = np.empty((obs.shape[0], obs.shape[1], len(regions)), dtype=obs.dtype)
-        
-        for i in range(sky.shape[0]):
-            for j in range(sky.shape[1]):
-                subCube[i,j,:] = subLst[k][0]
-                for l in range(fImg.shape[2]):
-                    fImg[i,j,l] = subLst[k][1][l]
-                k+=1
-    else:
-        k=0
-        subCube = np.empty(obs.shape, dtype=obs.dtype)
-        fImg = np.empty((obs.shape[0], obs.shape[1], len(regions)), dtype=obs.dtype)
-
-        for i in range(sky.shape[0]):
-            for j in range(sky.shape[1]):
-                subLst = subScaledSkyPix(inpLst[k])
-                subCube[i,j,:] = subLst[0]
-                for l in range(fImg.shape[2]):
-                    fImg[i,j,l] = subLst[1][l]
-                k+=1
-
-    return subCube, fImg
-
 def subScaledSkySlices2(waveMap, obsSlices, skySlices, waveGridProps,hdr,mxScale=0.5, regions=None, MP=True, ncpus=None,nContFit=50, fluxThresh=0.1,fitInd=False, saveFile='', logfile=None):
     """
-    mxScale is maximum allowable scaled difference between sky/obs spectrum (e.g. 0.2 or 20%, implies that the sky emission strength can be scaled in range of +/-20% or 0.8-1.2).
-    regions is a list of lines, split into different bands (to be fit together).
+    Routine used to scale sky lines and subtract from image slices.
+    Usage: subSlices = subScaledSkySlices2(waveMap, obsSlices, skySlices, waveGridProps, hdr, mxScale=0.5,  regions=None, MP=True, ncpus=None,nContFit=50,fluxThresh=0.1,fitInd=False, saveFile='', logfile=None)
+    waveMap is a list of wavelength mapping images for each slice
+    obsSlices is the observation slices
+    skySlices is the sky slices
+    waveGridProps is a list of the grid properties associated with the waveMap ([min wave, max wave, number of grid points])
+    hdr is an astropy header object corresponding to the header associated with the observation
+    mxScale is the maximum allowable scaled difference between sky/obs spectrum (e.g. 0.2 -> sky can be scaled in range of 0.8-1.2)
+    regions is a list of wavelength coordinates specifying the different sky regions/bands
+    MP is a boolean keyword specifying if multiprocessing should be used
+    ncpus is an integer variable specfying the number of processes to use in MP mode
+    nContFit is the number of pixels to use during continuum fitting
+    fluxThresh is the relative flux ratio of lines to find and scale (relative to the line with the maximum flux in each region)
+    fitInd is a boolean keyword to support scaling/fitting of individual lines (True) or of regions as a whole (False)
+    saveFile is the name of the output file that will contain some QC plots
+    logfile is a file object corresponding to the log file
     """
 
     #create fully gridded slices from input slices
@@ -1346,6 +1408,16 @@ def subScaledSkySlices2(waveMap, obsSlices, skySlices, waveGridProps,hdr,mxScale
         
 def subScaledSkySpec(input):
     """
+    Routine used to subtract a scaled sky emission line spectrum from the observed spectrum
+    Usage: specOut = subScaledSkySpec(input)
+    input is a list containing:
+    wave - a numpy array containing the wavelength at each point
+    obs - a numpy array containing the observed spectrum
+    sky - a numpy array containing the sky spectrum
+    regions - a list of wavelength coordinates indicating the starting and ending wavelength of the regions to carry out the sky scaling
+    nContFit - an integer indicating the number of pixels used to identify continuum points
+    factors - the scaling factors used to scale individual lines or regions
+    specOut is the scaled, sky-subtracted spectrum
     """
     wave = input[0]
     obs = input[1]

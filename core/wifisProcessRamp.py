@@ -1,3 +1,9 @@
+"""
+
+tools used to process ramps
+
+"""
+
 import numpy as np
 import wifisGetSatInfo as satInfo
 import wifisNLCor as NLCor
@@ -14,6 +20,39 @@ import warnings
 
 def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=1, saveAll=True, ignoreBPM=False,skipObsinfo=False, rampNum=None, satFile='', nlFile='', bpmFile='',logfile=None, fowler=False, gain=1., ron=None, obsCoords=None, avgAll=False):
     """
+    Process a set of ramp images to create a single ramp image. Carries out all related routines (non-linearity correction, bad pixel correction, etc.)
+    Usage: imgComb, sigComb, satComb, hdr = process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=1, saveAll=True, ignoreBPM=False,skipObsinfo=False, rampNum=None, satFile='', nlFile='', bpmFile='',logfile=None, fowler=False, gain=1., ron=None, obsCoords=None, avgAll=False)
+
+    folder - the name of the input folder containing the ramp to process
+    saveName - the file name which to save the resulting image and corresponding attributes
+    satCounts - the map/image of the saturation levels of each pixel
+    nlCoeff - the non-linearity coefficient correction array for non-linearity corrections
+    BPM - a bad pixel mask to be used to mark bad pixels
+    nChannel - number of read channels used for detector readout
+    nRows - number of rows to be averaged for row reference correction (using a moving average)
+    rowSplit - number of instances to split the task of row reference correction (a higher value reduces memory limitations at the expense of longer processing times). Must be an integer number of the number of frames in the ramp sequence
+    satSplit - number of instances to split the task of carrying out saturation correction (a higher value reduces memory limitations at the expense of longer processing times). Must be integer number of the number of columns in the detector image.
+    nlSplit -  number of instances to split the task of non-linearity correction (a higher value reduces memory limitations at the expense of longer processing times). Must be integer number of the number of columns in the detector image.
+    combSlit - number of instances to split the task of creating a single ramp image (a higher value reduces memory limitations at the expense of longer processing times). Must be integer number of the number of columns in the detector image.
+    crReject - boolean flag to use routine suited to reject cosmic ray events for creating ramp image
+    bpmCorRng - the maximum separation between the bad pixel and the nearest good pixel for bad pixel corrections.
+    saveAll - a boolean keyword used to specify if all attributes should be saved along with the processed ramp image (saturation info and uncertainties)
+    ignoreBPM - a boolean keyword used to indicate if missing a bad pixel mask should show a warning or not
+    skipObsinfo - boolean flag to allow skipping of warning/failure if obsinfo.dat file is not present.
+    rampNum - an integer indicating which ramp to use if the corresponding observation has multiple ramps present
+    satFile - the name/path of the saturation info file to be specified in fits header
+    nlFile - the name/path of the non-linearity coefficient file to be specified in fits header
+    bpmFile - the name/path of the bad pixel mask file to be specified in fits header
+    logfile - file object corresponding to the logfile
+    fowler - a boolean keyword to indicate if the observation to be processed is a Fowler sampling ramp
+    gain - gain conversion factor needed if and only if RON image is given in units of e- not counts
+    ron - readout noise image/map of detector
+    obsCoords -  list containing the observatory coordinates [longitude (deg), latitude (deg), altitude (m)]
+    avgAll - boolean keyword indicating whether or not to median-average the results if multiple ramps are present in a single observation
+    imgComb - the final ramp image providing the flux of the ramp sequence
+    sigComb - the estimated uncertainties for each pixel
+    satComb - the final saturation info about each pixel
+    hdr - an astropy header object containing information about the observation
     """
 
     print('Processing folder ' + folder)
@@ -195,7 +234,13 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
         with warnings.catch_warnings():
             warnings.simplefilter('ignore',RuntimeWarning)
             imgComb = np.nanmedian(np.asarray(obsAll),axis=0)
-            sigComb = np.sqrt(np.nansum(np.asarray(sigAll)**2,axis=0))/nRamps
+
+            if sigmaImg is not None:
+                sigComb = np.sqrt(np.nansum(np.asarray(sigAll)**2,axis=0))/nRamps
+            else:
+                sigComb = np.empty(imgComb.shape,dtype='float32')
+                sigComb[:]=np.nan
+
             satComb = np.nanmedian(np.asarray(satAll),axis=0)
 
         hdr.add_history('Image is median combination of ' + str(nRamps)+ ' ramps')
@@ -217,6 +262,43 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
 
 def auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=1, saveAll=True, ignoreBPM=False, skipObsinfo=False, rampNum=None, bpmFile='', satFile='', nlFile='', gain=1., ron=None, logfile=None,obsCoords=None, avgAll=False):
     """
+    Routine to set up processing of a set of ramp images to create a single ramp image. Carries out all related routines (non-linearity correction, bad pixel correction, etc.). The location of the observation will be used to determine the type of ramp sequence and the corresponding steps to take.
+
+    Usage: imgCor, sigCor, satFrame, hdr = auto(folder, rootFolder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=1, saveAll=True, ignoreBPM=False,skipObsinfo=False, rampNum=None, satFile='', nlFile='', bpmFile='',logfile=None, fowler=False, gain=1., ron=None, obsCoords=None, avgAll=False)
+
+    folder - the name of the input folder containing the ramp to process
+    rootFolder - the location of the root folder
+    saveName - the file name which to save the resulting image and corresponding attributes
+    satCounts - the map/image of the saturation levels of each pixel
+    nlCoeff - the non-linearity coefficient correction array for non-linearity corrections
+    BPM - a bad pixel mask to be used to mark bad pixels
+    nChannel - number of read channels used for detector readout
+    nRows - number of rows to be averaged for row reference correction (using a moving average)
+    rowSplit - number of instances to split the task of row reference correction (a higher value reduces memory limitations at the expense of longer processing times). Must be an integer number of the number of frames in the ramp sequence
+    satSplit - number of instances to split the task of carrying out saturation correction (a higher value reduces memory limitations at the expense of longer processing times). Must be integer number of the number of columns in the detector image.
+    nlSplit -  number of instances to split the task of non-linearity correction (a higher value reduces memory limitations at the expense of longer processing times). Must be integer number of the number of columns in the detector image.
+    combSlit - number of instances to split the task of creating a single ramp image (a higher value reduces memory limitations at the expense of longer processing times). Must be integer number of the number of columns in the detector image.
+    crReject - boolean flag to use routine suited to reject cosmic ray events for creating ramp image
+    bpmCorRng - the maximum separation between the bad pixel and the nearest good pixel for bad pixel corrections.
+    saveAll - a boolean keyword used to specify if all attributes should be saved along with the processed ramp image (saturation info and uncertainties)
+    ignoreBPM - a boolean keyword used to indicate if missing a bad pixel mask should show a warning or not
+    skipObsinfo - boolean flag to allow skipping of warning/failure if obsinfo.dat file is not present.
+    rampNum - an integer indicating which ramp to use if the corresponding observation has multiple ramps present
+    satFile - the name/path of the saturation info file to be specified in fits header
+    nlFile - the name/path of the non-linearity coefficient file to be specified in fits header
+    bpmFile - the name/path of the bad pixel mask file to be specified in fits header
+    logfile - file object corresponding to the logfile
+    fowler - a boolean keyword to indicate if the observation to be processed is a Fowler sampling ramp
+    gain - gain conversion factor needed if and only if RON image is given in units of e- not counts
+    ron - readout noise image/map of detector
+    obsCoords -  list containing the observatory coordinates [longitude (deg), latitude (deg), altitude (m)]
+    avgAll - boolean keyword indicating whether or not to median-average the results if multiple ramps are present in a single observation
+    imgComb - the final ramp image providing the flux of the ramp sequence
+    sigComb - the estimated uncertainties for each pixel
+    satComb - the final saturation info about each pixel
+    hdr - an astropy header object containing information about the observation
+
+
     """
 
     #check if file already processed

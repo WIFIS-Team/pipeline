@@ -1,28 +1,52 @@
 """
 
-Calibrate flat field images
+Function used to process a set of raw flat field ramps
 
-Produces:
-- master flat image
-- slitlet traces
-- ??
+Usage: runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowsAvg=0,rowSplit=1,nlSplit=32, combSplit=32,bpmCorRng=100, crReject=False, skipObsinfo=False,winRng=51, polyFitDegree=3, imgSmth=5,nlFile='',bpmFile='', satFile='',darkFile='',flatCutOff=0.1,flatSmooth=0, logfile=None, gain=1., ron=None, dispAxis=0,limSmth=20, ask=True, obsCoords=None,satSplit=32)
 
+lst - list of folder names corresponding to each flat field observation
+hband - boolean flag to specify if the observation was taken with the H-band filter
+darkLst - is a reduced and processed dark image (or a list containing the dark image and associated uncertainty)
+rootFolder - specifies the root location of the raw data
+nlCoef - the non-linearity coefficient correction array for non-linearity corrections
+satCounts - the map/image of the saturation levels of each pixel
+BPM - a bad pixel mask to be used to mark bad pixels
+distMapLimitsFile - the file location corresponding to a distortion map for each slice
+plot - a boolean flag to indicate if quality control plots should be plotted and saved
+nchannel - number of read channels used for detector readout
+nRowsAvg - number of rows to be averaged for row reference correction (using a moving average)
+rowSplit - number of instances to split the task of row reference correction (a higher value reduces memory limitations at the expense of longer processing times). Must be an integer number of the number of frames in the ramp sequence
+nlSplit -  number of instances to split the task of non-linearity correction (a higher value reduces memory limitations at the expense of longer processing times). Must be integer number of the number of columns in the detector image.
+combSlit - number of instances to split the task of creating a single ramp image (a higher value reduces memory limitations at the expense of longer processing times). Must be integer number of the number of columns in the detector image.
+bpmCorRng - the maximum separation between the bad pixel and the nearest good pixel for bad pixel corrections.
+crReject - boolean flag to use routine suited to reject cosmic ray events for creating ramp image
+skipObsinfo - boolean flag to allow skipping of warning/failure if obsinfo.dat file is not present.
+winRng - window range for identifying slice edge limits, relative to defined position
+polyFitDegree - degree of polynomial fit to be used for tracing the slice edge limits
+imgSmth - a keyword specifying the Gaussian width of the smoothing kernel for finding the slice-edge limits
+nlFile - the name/path of the non-linearity coefficient file to be specified in fits header
+bpmFile - the name/path of the bad pixel mask file to be specified in fits header
+satFile - the name/path of the saturation info file to be specified in fits header
+darkFile - the name/path of the dark image file to be specified in fits header
+flatCutOff -  cutoff value for which all pixels with normalized values less than this value are set to NaN
+flatSmooth - a keyword specifying the Gaussian width of the smoothing kernel to be used for determining the response function
+logfile - file object corresponding to the logfile
+gain - gain conversion factor needed if and only if RON image is given in units of e- not counts
+ron - readout noise image/map of detector
+dispAxis - integer specifying the dispersion axis (0 - along the y-axis, 1 - along the x-axis)
+limSmth - integer specifying the Gaussian width of the smoothing kernel used to smooth the traced slice-edge limits
+ask - boolean flag used to specify if the user should be prompted if files already exist. If set to no, no reprocessing is done
+obsCoords - list containing the observatory coordinates [longitude (deg), latitude (deg), altitude (m)]
+satSplit - number of instances to split the task of carrying out saturation correction (a higher value reduces memory limitations at the expense of longer processing times). Must be integer number of the number of columns in the detector image.
 """
+
 import matplotlib
-matplotlib.use('gtkagg')
 import numpy as np
 import time
 import matplotlib.pyplot as plt
-import wifisNLCor as NLCor
-import wifisRefCor as refCor
 import os
 import wifisIO 
-import wifisCombineData as combData
 import wifisSlices as slices
-import wifisUncertainties
-import wifisBadPixels as badPixels
-import astropy.io.fits as fits
-import wifisHeaders as headers
 import wifisProcessRamp as processRamp
 from matplotlib.backends.backend_pdf import PdfPages
 import warnings

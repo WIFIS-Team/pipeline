@@ -14,9 +14,10 @@ clCodePath = path+'/opencl_code'
 def getSatInfo(data, thresh, satThresh=0.97):
     """
     Determine saturation counts for each pixel using built-in python routines
-    Usage: satCounts, satFrame = getSatInfo(data,thresh)
+    Usage: satCounts, satFrame = getSatInfo(data,thresh, satThres=0.97)
     data is the input data cube
-    thresh is the threshold level to use for determining the pixels to use for determining the saturation level
+    thresh is the threshold level to use for determining which pixels to use for determining the saturation level
+    satThresh is the relative level to report as the final saturation level (i.e. satThresh * saturation level)
     satCounts is the output that will contain the saturation level for each pixel
     satFrame is the output array that will contain the number of the first saturated frame
     """
@@ -51,6 +52,7 @@ def getSatCounts(data, thresh, satThresh=0.97):
     Usage: satCounts = getSatCounts(data,thresh)
     data is the input data cube
     thresh is the threshold level to use for determining the pixels to use for determining the saturation level
+    satThresh is the relative level to report as the final saturation level (i.e. satThresh * saturation level)
     satCounts is the output that will contain the saturation level for each pixel
     """
 
@@ -72,9 +74,10 @@ def getSatCounts(data, thresh, satThresh=0.97):
 def getSatFrame(data,satCounts, ignoreRefPix=True):
     """
     Determine frame number of first saturated frame for each pixel using built-in python routines
-    Usage: satFrame =getSatFrame(data,satCounts)
+    Usage: satFrame =getSatFrame(data,satCounts, ignoreRefPix=True)
     data is the input data cube
     satCounts is the input array containing the saturation level for each pixel
+    ignoreRefPix is the boolean keyword to specify if the reference pixels should be ignored when determining the saturation frames. Reference pixels are taken to be the 4 outside pixels around the entire detector.
     satFrame is the output array that will contain the number of the first saturated frame
     """
 
@@ -109,6 +112,7 @@ def getSatCountsCL(data, thresh, nSplit,satThresh=0.97):
     data is the input data cube
     thresh is the threshold level to use for determining the pixels to use for determining the saturation level
     nSplit is a value indicating the number of temporary arrays to split the input data array into for processing. this value should be an integer multiple of the array dimension (dimenions 1)
+    satThresh is the relative level to report as the final saturation level (i.e. satThresh * saturation level)
     satCounts is the output that will contain the saturation level for each pixel
     """
 
@@ -202,6 +206,7 @@ def getSatFrameCL(data,satCounts, nSplit, ignoreRefPix=True):
     data is the input data cube
     satCounts is the input array containing the saturation level for each pixel
     nSplit is a value indicating the number of temporary arrays to split the input data array into for processing. this value should be an integer multiple of the array dimension (dimenions 1)
+    ignoreRefPix is the boolean keyword to specify if the reference pixels should be ignored when determining the saturation frames. Reference pixels are taken to be the 4 outside pixels around the entire detector.
     satFrame is the output array that will contain the number of the first saturated frame for each pixel
     """
     

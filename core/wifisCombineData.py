@@ -13,13 +13,14 @@ path = os.path.dirname(__file__)
 clCodePath = path+'/opencl_code'
 
 def upTheRampCRRejectCL(intTime, data, satFrame, nSplit):
-    """Routine to process a sequence of up-the-ramp exposures using OpenCL code with the ability to reject influence of non-saturated cosmic ray hits
-    Usage: output = upTheRampCRRejectCL(intTime,data, satFrame, nSplit)
+    """
+    Routine to process a sequence of up-the-ramp exposures using OpenCL code with the ability to reject influence of non-saturated cosmic ray hits
+    Usage: output, ,  = upTheRampCRRejectCL(intTime,data, satFrame, nSplit)
     intTime is input array indicating the integration times of each frame in the data cube in increasing order
     data is the input data cube
     satFrame is an input image indicating the frame number of the first saturated frame in the sequence per pixel
     nSplit is input variable to allow for splitting up the processing of the workload, which is needed to reduce memory to reduce memory errors/consumption for large datasets
-    output is a 2D image, where each pixel represents the flux (slope/time)
+    output is a 2D image, where each pixel represents the flux (slope/time), and two dummy variables for compatability with other routines
     *** NOTE: Currently openCL code is hard-coded to handle a maximum of 1000 frames. Adjust code if needed. ***
     """
 
@@ -86,13 +87,16 @@ def upTheRampCRRejectCL(intTime, data, satFrame, nSplit):
 
 
 def upTheRampCL(intTime, data, satFrame, nSplit):
-    """Routine to process a sequence of up-the-ramp exposures using OpenCL code
-    Usage: output = upTheRampCL(intTime,data, satFram, nSplit)
+    """
+    Routine to process a sequence of up-the-ramp exposures using OpenCL code
+    Usage: outImg, zpntImg, varImg = upTheRampCL(intTime,data, satFram, nSplit)
     intTime is input array indicating the integration times of each frame in the data cube in increasing order
     data is the input data cube
     satFrame is an input image indicating the frame number of the first saturated frame in the sequence per pixel
     nSplit is input variable to allow for splitting up the processing of the workload, which is needed to reduce memory to reduce memory errors/consumption for large datasets
-    output is a 2D image, where each pixel represents the flux (slope/time)
+    outImg is a 2D image, where each pixel represents the flux (slope/time)
+    zpntImg is the zero point image (bias image) resulting from the linear fit of the ramp
+    varImg is the variance image from the linear fitting procedure
     *** NOTE: Currently openCL code outputs both offset and slope of the fit. Can remove offset as not needed ***
     """
 
@@ -179,10 +183,11 @@ def upTheRampCL(intTime, data, satFrame, nSplit):
     return outImg, zpntImg, varImg
 
 def createMaster(data):
-    """Creates a collapsed image from a cube of images as a simple median of the images.
-    Usage output = createMaster(data)
+    """
+    Creates a collapsed image from a cube of images as a simple median of the images.
+    Usage out = createMaster(data)
     data is the input data cube containing a series of images
-    output is a 2D image created from the series of input images
+    out is a 2D image created from the series of input images
     """
 
     out = np.median(data,axis=2)
@@ -196,7 +201,7 @@ def fowlerSampling(intTime, data, satFrame):
     intTime is input array indicating the integration times of each frame in the data cube in increasing order
     data is the input data cube
     satFrame is an input image indicating the frame number of the first saturated frame in the sequence per pixel
-    output is a 2D image, where each pixel represents the flux (slope/time)
+    outImg is a 2D image, where each pixel represents the flux (slope/time)
     """
     
     nx = data.shape[1]
@@ -223,13 +228,13 @@ def fowlerSampling(intTime, data, satFrame):
     
 def fowlerSamplingCL(intTime, data, satFrame, nSplit):
     """
-    Routine to process a sequence of Fowler sampled exposures
+    Routine to process a sequence of Fowler sampled exposures using OpenCL code
     Usage: outImg = fowlerSampling(intTime, data, satFrame)
     intTime is input array indicating the integration times of each frame in the data cube in increasing order
     data is the input data cube
     satFrame is an input image indicating the frame number of the first saturated frame in the sequence per pixel
     nSplit is input variable to allow for splitting up the processing of the workload, which is needed to reduce memory to reduce memory errors/consumption for large datasets
-    output is a 2D image, where each pixel represents the flux (slope/time)
+    outImg is a 2D image, where each pixel represents the flux (slope/time)
     """
 
     #get dimenions of input images

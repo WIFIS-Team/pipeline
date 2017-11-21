@@ -1,6 +1,6 @@
 """
 
-Tools to create final data cube
+Set of tools used during the creation of the final data cube
 
 """
 
@@ -15,12 +15,12 @@ import matplotlib.pyplot as plt
 
 def compSpatGrid(distTrimSlices):
     """
-    Routine to compute the maximum, minimum and average resolution element for spatial coordinates from a list of trimmed distortion corrected spatial map image slices.
-    Usage: [spatMin, spatMax, dSpat] = compSpatGrid(distTrimSlices)
+    Routine to compute the grid properties (maximum, minimum and total number of spatial coordinates) from a list of trimmed distortion corrected spatial map image slices.
+    Usage: [spatMin, spatMax, N] = compSpatGrid(distTrimSlices)
     distTrimSlices should be a list of image slices containing the spatial maps for each slice, that have already been distortion corrected and trimmed.
     spatMin is the minimum spatial coordinate
     spatMax is the maximum spatial coordinate
-    dSdpat is the mean dispersion or resolution of all slices
+    N is the final number of grid points to be used during spatial rectification (gridding)
     """
     
     dMin = []
@@ -46,11 +46,13 @@ def compSpatGrid(distTrimSlices):
 def distCorAll(dataSlices, distMapSlices, method='linear', ncpus=None, spatGridProps=None, MP=True):
     """
     Routine to distortion correct a list of slices.
-    Usage: outLst = distCorAll(dataSlices, distMapSlices, method='linear', ncpus=None)
+    Usage: outLst = distCorAll(dataSlices, distMapSlices, method='linear', ncpus=None,spatGridProps=None, MP=True)
     dataSlices is the list of the data slices to be distortion corrected
     distMapSlices is the list of slices containing the distortion mapping
-    method is a keyword to control how the interpolation is carried out (default is using bilinear interpolation)
+    method is a keyword to control how the interpolation is carried out (default is using linear interpolation along the spatial axis)
     ncpus is a keyword that allows to control the number of multi-processesing processes
+    spatGridProps  is the an optional keyword that provides the properties for the output spatial grid
+    MP is a boolean keyword used to specify if multiprocessing should be used.
     returned is a list of distortion corrected slices.
     """
 
@@ -86,7 +88,8 @@ def distCorSlice1D(input):
     dataSlc - is the image slice of the input data to be distortion corrected,
     distSlc - is the distortion mapping for the specific slice
     method - is a string indicating the interpolation method to use ("linear", "cubic", or "nearest"). Not used for anything other than compatability with older function.
-    Returned is a distortion corrected image.
+    spatGridProps - the final output properties of the spatial grid. If set to None, then the code automatically determines the grid properties for the slice
+    Returned is the distortion corrected image slice placed on a grid.
     """
 
     dataSlc = input[0]
@@ -122,6 +125,7 @@ def distCorSlice(input):
     dataSlc - is the image slice of the input data to be distortion corrected,
     distSlc - is the distortion mapping for the specific slice
     method - is a string indicating the interpolation method to use ("linear", "cubic", or "nearest")
+    spatGridProps - the final output properties of the spatial grid. If set to None, then the code automatically determines the grid properties for the slice.
     Returned is a distortion corrected image.
     """
 
@@ -165,11 +169,11 @@ def distCorSlice(input):
 def compWaveGrid(waveTrimSlices):
     """
     Determines mean dispersion solution to use for placing all slices on a uniform wavelength grid. 
-    Usage: [gridMin, gridMax, gridDisp] = compWaveGrid(waveTrimSlices)
+    Usage: [gridMin, gridMax, N] = compWaveGrid(waveTrimSlices)
     waveTrim is a list of all trimmed wave map slices, providing the wavelength at each pixel for a given slice
     gridMin is the minimum wavelength of the grid
     gridMax is the maximum wavelength of the grid
-    gridDisp is the linear dispersion solution of the grid
+    N is the total number of grid points between the min and maximum wavelength of the grid
     """
 
 
@@ -216,11 +220,11 @@ def mkCube(corSlices, ndiv=1, MP=True, ncpus=None):
     """
     Routine to create a complete image cube from a list of grided (for both spatial and wavelength) image slices
     Usage: outCube = mkCube(corSlices, ndiv=1, MP=True, ncpus=None)
-    corSlices is the list of slices placed on a uniform spatial and wavelength grid
+    corSlices is the list of slices placed on a uniform spatial and wavelength grid (all having the same dimensions/properties)
     ndiv is a keyword to specify how to subdivide the original slices to artificially increase the output resolution along the y-axis (the between slices). A value of 0 will not increase the number of pixels between each slice. A value of 1 will introduce a single pixel between each slice and linearly interpolate to fill in that value. A value of n will introduce n pixels between each slice.
     MP is a keyword to specify whether multi-processing should be used. For some machines, setting MP=False may result in a speed improvement.
     ncpu is a keyword to specify the number of processes to run simultaneously when running in MP mode. The default is None, which allows python to set this value automatically based on the number of threads supported by your CPU.
-    Return an image cube with the first axis corresponding to the y-axis of the image, the 2nd to the x-axis, and the third to the wavelength axis.    """
+    Returns an image cube with the first axis corresponding to the y-axis of the image, the 2nd to the x-axis, and the third to the wavelength axis.    """
     
     #initialize output cube
 
@@ -259,7 +263,7 @@ def mkCube(corSlices, ndiv=1, MP=True, ncpus=None):
 
 def interpCube(inCube, ndiv=1, MP=True, ncpus=None):
     """
-    Routine to interpolate between image slices
+    Routine to linearly interpolate between image slices
     Usage: out = interpCube(inCube, ndiv=1, MP=True, ncpus=None)
     inCube is the original image cube without
     ndiv is a keyword to specify how to subdivide the original slices to artificially increase the output resolution along the y-axis (the between slices). A value of 0 will not increase the number of pixels between each slice. A value of 1 will introduce a single pixel between each slice and linearly interpolate to fill in that value. A value of n will introduce n pixels between each slice.
@@ -327,6 +331,7 @@ def interpFrame(input):
 
 def mkWaveSpatGridAll(dataSlices, waveMapSlices, distMapSlices,waveGridProps, spatGridProps,method='linear', ncpus=None):
     """
+    *** THIS ROUTINE IS NO LONGER USED BY THE PIPELINE ***
     Routine to place all image slices on a uniform spatial and wavelength grid.
     Usage: mkWaveSpatGridAll(dataSlices, waveMapSlices, distMapSlices, waveGridProps, spatGridProps,methd='linear', ncpus=None)
     dataSlices is a list of the original image slices to be place on the uniform grid
@@ -356,6 +361,7 @@ def mkWaveSpatGridAll(dataSlices, waveMapSlices, distMapSlices,waveGridProps, sp
 
 def mkWaveSpatGridSlice(input):
     """ 
+    *** THIS ROUTINE IS NO LONGER USED BY THE PIPELINE ***
     Routine to place image slice on a uniform spatial and wavelength grid.
     Usage: out= mkWaveSpatGridSlice(input) 
     input is a list containing:
@@ -363,7 +369,7 @@ def mkWaveSpatGridSlice(input):
     waveSlc - the wavelength mapping for each pixel in the slice
     distSlc - the spatial mapping for each pixel in the slice
     waveGridProps - a list specifying the properties of the wavelength grid - the minimum wavelength coordinate, the maximum wavelength coordinate, and the dispersion along the wavelength axis
-    spatGridProps - a list specifying the properties of the spatial grid - the minimum spatial coordinate, the maximum spatial coordinate, and the dispersion along the spatial direction
+    spatGridProps - a list specifying the properties of the spatial grid - the minimum spatial coordinate, the maximum spatial coordinate, and the number of grid points along the spatial direction
     method - indicating what type of interpolation to use ("nearest" neighbour, bi-"linear" interpolation, or "cubic" interpolation)
     """
     
@@ -410,8 +416,10 @@ def waveCorAll(dataSlices, waveMapSlices, method='linear', ncpus=None, waveGridP
     Usage: outLst = waveCorAll(dataSlices, waveMapSlices, method='linear', ncpus=None)
     dataSlices is the list of the data slices to be distortion corrected
     waveMapSlices is the list of slices containing the wavelength mapping
-    method is a keyword to control how the interpolation is carried out (default is using bilinear interpolation)
+    method is a keyword to control how the interpolation is carried out (default is using linear interpolation)
     ncpus is a keyword that allows to control the number of multi-processesing processes
+    waveGridProps is a list containing the (optional) grid properties to be used by all slices.
+    MP is a boolean keyword to specify if multiprocessing should be used.
     returned is a list of distortion corrected slices.
     """
 
@@ -439,13 +447,14 @@ def waveCorAll(dataSlices, waveMapSlices, method='linear', ncpus=None, waveGridP
 
 def waveCorSlice1D(input):
     """
-    Routine to place individual slices on uniform wavelength grid.
+    Routine to place individual slices on uniform wavelength grid using linear interpolation along the wavelength axis.
     Usage out = waveCorSlice(input)
     input is a list that contains:
     dataSlc - is the image slice of the input data to be distortion corrected,
     waveSlc - is the wavelength mapping for the specific slice
-    method - is a string indicating the interpolation method to use ("linear", "cubic", or "nearest")
-    Returned is a list of distortion corrected images.
+    method - is a string indicating the interpolation method to use ("linear", "cubic", or "nearest"). This is only present for compatability reasons.
+    waveGridProps is a list specifying the properties of the wavelength grid - the minimum and maximum wavelength coordinate, and the number of grid points along the wavelength direction. If None is given, the code automatically determines these properties for the given slice.
+    Returned is a slice image placed on a uniform linearized wavelength grid.
     """
 
     #rename input
@@ -477,6 +486,7 @@ def waveCorSlice1D(input):
 
 def waveCorSlice(input):
     """
+    *** THIS ROUTINE IS NO LONGER USED BY THE PIPELINE ***
     Routine to place individual slices on uniform wavelength grid.
     Usage out = waveCorSlice(input)
     input is a list that contains:

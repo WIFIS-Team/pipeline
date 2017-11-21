@@ -1,6 +1,6 @@
 """
 
-tools to carry out the measurement and correction for non-linearity behaviour of detector
+Tools to carry out the measurement and correction for non-linearity behaviour of detector
 
 """
 
@@ -8,6 +8,7 @@ import numpy as np
 import pyopencl as cl
 import os
 
+#define paths to be used for OpenCL code
 path = os.path.dirname(__file__)
 clCodePath = path+'/opencl_code'
 
@@ -17,7 +18,7 @@ def getNLCorNumpy(data, satFrame):
     Usage: nlCoef = getNLCorNumpy(data, satFrame)
     data is the input data cube
     satFrame is an array specifying the frame number of the first saturated frame for each pixel
-    # nlCoeff is output that contains the non-linearity corrections for each pixel as an (ny x nx x 4) size array
+    nlCoeff is output that contains the non-linearity corrections for each pixel as an (ny x nx x 4) size array
     """
 
     #get input array dimensions

@@ -1,6 +1,12 @@
-import matplotlib
+"""
+
+set of functions used to run a quick reduction of the WIFIS pipeline
+
+"""
+
+#import matplotlib
 #*******************************************************************
-matplotlib.use('gtkagg') #default is tkagg, but using gtkagg can speed up window creation on some systems
+#matplotlib.use('gtkagg') #default is tkagg, but using gtkagg can speed up window creation on some systems
 #*******************************************************************
 
 import wifisIO
@@ -8,9 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import wifisSlices as slices
 import wifisCreateCube as createCube
-import wifisCombineData as combData
 import wifisHeaders as headers
-import wifisGetSatInfo as satInfo
 from astropy import wcs 
 import os
 from astropy.modeling import models, fitting
@@ -94,6 +98,15 @@ def initPaths(hband=False):
 
 def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRange=None, varFile='',scaling='zscale'):
     """
+    Routine to quickly process the raw data from a science ramp and plot a 2D collapse of the final image cube
+    Usage procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRange=None, varFile='',scaling='zscale')
+    rampFolder is the folder name of the observation to process and plot
+    flatFolder is the corresponding flat field observation associated with rampFolder
+    noProc is a boolean keyword used to indicate if the ramp image should be computed using the pipeline (but skipping non-linearity and reference corrections) (False) or if the ramp image should be found in a simple manner using the first and last images (True). The latter option does not handle saturation well, which is handled with the usual pipeline method if False.
+    skyFolder is an optional keyword to specify the name of an associated sky ramp folder
+    pixRange is an optional list containing the first and last pixel in a range (along the dispersion axis) of pixels to use for creating the ramp image.
+    varFile is the name of the configuration file
+    scaling is a keyword that specifies the type of image scaling to use for plotting the final image. If set to "zscale", z-scaling is used. Anything else will set the scale to min-max scaling.
     """
 
     #initialize variables using configuration file
@@ -359,6 +372,13 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
 
 def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFile=''):
     """
+    Routine to quickly process the raw data from an arc lamp/wavelength correction ramp and plot the resulting FWHM map across each slice
+    Usage: procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFile='')
+    waveFolder is the ramp folder to be processed
+    flatFolder is the flat field ramp folder associated with waveFolder
+    hband is a boolean keyword to specify if the ramp used the h-band filter (and thus does not span the entire detector)
+    colorbarLims is a keyword that allows one to specify the limits to use when plotting the FWHM map. If set to None, the default method uses z-scaling
+    varFile is the name of the input configuration file.
     """
 
     #initialize variables using configuration file
@@ -562,8 +582,16 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
 
     return
 
-def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxWidth=4, varFile='',noPlot=False):
+def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, varFile='',noPlot=False):
     """
+    Routine to quickly process a ramp containing a Ronchi mask observation and plot the map of the measured amplitudes
+    Usage: procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxWidth=4, varFile='',noPlot=False)
+    ronchiFolder is the ramp folder of the Ronchi mask observation to be processed
+    flatFolder is the flat field ramp folder associated with the ronchiFolder
+    hband is a boolean flag to indicate whether the data was obtained with the H-band filter
+    colorbarLims is a keyword that allows one to set the colour bar limits of the amplitude map plot. If None given, the code uses z-scaling
+    varFile is the name of the configuration file to read
+    noPlot is a boolean keyword used to specify if no map plotting should be carried out (the plots are still saved to files)
     """
 
     #initialize variables using configuration file

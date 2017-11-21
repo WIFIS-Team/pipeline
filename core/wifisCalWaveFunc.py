@@ -1,14 +1,59 @@
 """
 
-Calibrates arc lamp images
+Function used to process a set of raw arc lamp/wavelength calibration ramps and associated flat field ramps (if not already processed)
 
-Requires:
-- 
+Usage: runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowsAvg=0,rowSplit=1,nlSplit=1, combSplit=1,bpmCorRng=2, crReject=False, skipObsinfo=False, darkLst=None, flatWinRng=51, flatImgSmth=5, limitsPolyFitDegree=3, rootFolder='', distMapFile='', spatGridPropsFile='', atlasFile='', templateFile='', prevResultsFile='', sigmaClip=2, sigmaClipRounds=2, sigmaLimit=3,cleanDispSol=False,cleanDispThresh = 0, waveTrimThresh=0, waveSmooth=1, nlFile='', bpmFile='', satFile='',darkFile='',logfile=None, ask=True, obsCoords=None, dispAxis=0, mxOrder=3,winRng=9,waveSolMP=True,waveSolPlot=False, nRowSplitFlat=1,ron=None, gain=1.,flatbpmCorRng=20.,mxCcor=150, adjustFitWin=True)
 
-Produces:
-- per pixel wavelength solution
-
-
+waveLst - list of folder names corresponding to each arc lamp observation
+hband - boolean flag to specify if the observation was taken with the H-band filter
+nlCoef - the non-linearity coefficient correction array for non-linearity corrections
+satCounts - the map/image of the saturation levels of each pixel
+BPM - a bad pixel mask to be used to mark bad pixels
+distMapLimitsFile - the file location corresponding to a distortion map for each slice
+plot - a boolean flag to indicate if quality control plots should be plotted and saved
+nchannel - number of read channels used for detector readout
+nRowsAvg - number of rows to be averaged for row reference correction (using a moving average)
+rowSplit - number of instances to split the task of row reference correction (a higher value reduces memory limitations at the expense of longer processing times). Must be an integer number of the number of frames in the ramp sequence
+nlSplit -  number of instances to split the task of non-linearity correction (a higher value reduces memory limitations at the expense of longer processing times). Must be integer number of the number of columns in the detector image.
+combSlit - number of instances to split the task of creating a single ramp image (a higher value reduces memory limitations at the expense of longer processing times). Must be integer number of the number of columns in the detector image.
+bpmCorRng - the maximum separation between the bad pixel and the nearest good pixel for bad pixel corrections.
+crReject - boolean flag to use routine suited to reject cosmic ray events for creating ramp image
+skipObsinfo - boolean flag to allow skipping of warning/failure if obsinfo.dat file is not present.
+darkLst - is a reduced and processed dark image (or a list containing the dark image and associated uncertainty)
+flatWinRng - window range for identifying slice edge limits, relative to defined position
+flatImgSmth - a keyword specifying the Gaussian width of the smoothing kernel for finding the slice-edge limits
+limitsPolyFitDegree - degree of polynomial fit to be used for tracing the slice edge limits
+rootFolder - specifies the root location of the raw data
+distMapFile - file location of the distortion map associated with the set of arc lamp observations
+spatGridPropsFile - file location of the spatial grid properties corresponding to the distMapFile
+atlasFile - file location corresponding to the line atlas associated with the wavelength calibration observations
+templateFile - file location corresponding to the arc lamp ramp image file from a previously processed observation
+prevResultsFile - file location corresponding to the results of the previously processed ramp image/observation specified in templateFile
+sigmaClip - threshold for excluding lines which have a deviation > sigmaClip times the standard deviation between the measured line centres and the polynomial fit (in pixels)
+sigmaClipRounds - number of sigma-clipping rounds to carry out to remove poorly fit lines or lines that differ from the polynomial fit dispersion solution
+sigmaLimit - threshold for determining if a identified line should be included in the polynomial fitting. Lines width amplitudes > sigmaLimit times the noise level are included.
+cleanDispSol - boolean flag to identify rows with badly fit dispersion solutions and to replace them with interpolated fits with the adjacent rows
+cleanDispThresh - sigma threshold to use for identifying badly fit rows. Row with RMSes > sigma times the standard deviation of the RMSes are considered badly fit rows.
+waveTrimThresh - relative flux threshold to use for determining wavelength cutoff of each slice. The flux threshold is determined relative to the scaled flat field slices associated with the arc lamp observations. Flux levels with relative values less than the threshold are excluded from the wavelength map. This option is useful for H-band data, where the image only spans a small portion of the detector.
+waveSmooth - Gaussian width of the smoothing kernel used to smooth the wavelength map to reduce pixel-to-pixel variations
+nlFile - the name/path of the non-linearity coefficient file to be specified in fits header
+bpmFile - the name/path of the bad pixel mask file to be specified in fits header
+satFile - the name/path of the saturation info file to be specified in fits header
+darkFile - the name/path of the dark image file to be specified in fits header
+logfile - file object corresponding to the logfile
+ask - boolean flag used to specify if the user should be prompted if files already exist. If set to no, no reprocessing is done
+obsCoords - list containing the observatory coordinates [longitude (deg), latitude (deg), altitude (m)]
+dispAxis - integer specifying the dispersion axis (0 - along the y-axis, 1 - along the x-axis)
+mxOrder - maximum polynomial degree to be used for polynomial fitting of the dispersion solution
+winRng - window range used for carrying out fitting of the line profiles for determining line centres. A value too large may result in multiple lines found in the range and a value too small may result in a poor fit.
+waveSolMP - a boolean flag to specify if the wavelength fitting routine should be split into multiple processes
+waveSolPlot - a boolean flag to specify if interactive plotting should be done during the wavelength fitting process. This should only be set to True for debugging purposes.
+nRowSplitFlat - number of instances to split the task of row reference correction of the flat field ramp (a higher value reduces memory limitations at the expense of longer processing times). Must be an integer number of the number of frames in the ramp sequence.
+ron - the read-out noise ramp image of the detector
+gain - gain conversion factor needed if and only if RON image is given in units of e- not counts
+flatbpmCorRng - the maximum separation between the bad pixel and the nearest good pixel for bad pixel corrections of the flat field ramp images
+mxCcor - the maximum allowed pixel difference during the cross-correlation routine between the current observation and the template 
+adjustFitWin - a boolean flag to specify if the winRng should be automatically adjusted to better match the measured line width of the spectral line.
 """
 
 import numpy as np

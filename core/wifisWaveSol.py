@@ -1,6 +1,6 @@
 """
 
-Tools to help determine dispersion solution and line fitting
+Tools to assist in the processing of arc lamp and wavelength calibration data
 
 """
 
@@ -58,6 +58,11 @@ def gaussian(x,amp,cen,wid):
 
 def getWeightedCent(x,y):
     """
+    Returns the weighted centre of the x-coordinate array, based on the weight values provided the y-values array
+    Usage: cent = getWeightedCent(x,y)
+    x is a numpy array of coordinate values
+    y is a numpy array of signal values, to be used as the weights
+    cent is the returned centre-of-gravity
     """
 
     #get the 4-pixels with the greatest flux
@@ -85,12 +90,13 @@ def getWeightedCent(x,y):
 def gaussFit(x, y, guessWidth, plot=False,title=''):
     """
     Routine to fit a Gaussian to provided x and y data points and return the fitted coefficients.
-    Usage: params = gaussFit(x, y, guessWidth, plot=True/False)
-    x is the 1D array of coordinates
-    y is the 1D array of data values at the given coordinates
+    Usage: params = gaussFit(x, y, guessWidth, plot=True/False,title='')
+    x is the 1D numpy array of coordinates
+    y is the 1D numpy array of data values at the given coordinates
     guessWidth is the initial guess for the width of the Gaussian
     plot is a keyword to allow for plotting of the fit (for debug purposes)
-    params is a list containing in the fitted parameters in the following order: amplitude, centre, width
+    title is an optional title to provide the plot
+    params is a list containing the fitted parameters in the following order: amplitude, centre, width
     """
 
     ytmp = y - np.min(y)
@@ -113,15 +119,33 @@ def getSolQuick(input):
     """
     Determine dispersion solution for given dataset
     Usage solution = getSolQuick(input)
-    input is a list containing the following items: spectrum, template, line atlas, maximum polynomial order for fitting, dispersion solution of the template, window range for line fitting, flag to use a weighted fitting or not, window size for carrying out the cross-correlation, flag to plot the results of each step (for debugging).
-    spectrum is a 1D array of the data values at each pixel
-    template is the corresponding 1D array for the template spectrum
-    the line atlas is a list of line centres (in units of wavelength) and corresponding predicted strengths
-    the polynomial is of the form y = Sum_i^mx a_i*x^i, where mx is the maximum polynomial order (e.g. mx = 1 -> y = a0 + a1*x).
-    the dispersion solution is a list containing the polynomial coefficients in increasing order (e.g. [a0, a1, ..., an]) for converting WAVELENGTH TO PIXELS, NOT PIXELS TO WAVELENGTH (i.e. it is the inverse solution, but is an output of this code)
-    the window range is an integer value setting the window for the maximum searchable pixel shift between the template and spectrum
-    setting the weight flag to 'True' will weight the line centres by their fitted amplitudes when carrying out the polynomial fitting
-    setting the plot flag to 'True' will plot individual steps of the fitting (use for debugging purposes only)
+    input is a list containing:
+    - a numpy array providing the spectrum
+    - a numpy array providing the template spectrum
+    - a numpy array providing the line atlas. The line atlas is a list of line centres (in units of wavelength) and corresponding predicted strengths
+    - the maximum polynomial order for fitting of the dispersion solution
+    - the dispersion solution (in wavelength -> pixel mapping) associated with the template
+    - the window range for line fitting
+    - the maximum allowed pixel shift between the template and the observed spectrum, in pixels
+    - a boolean flag that specifies if a weighted fitting of the polynomial solution should be used (weighted by the fitted line strengths)
+    - a boolean flag that indicates if plotting of the fitting process should occur (for debugging purposes only)
+    - a boolean flag that specifies if the dispersion solution used to find/identify lines should be built up during the current fitting process (useful for building a template solution, but can often lead to poor solutions)
+    - a boolean flag that indicates if a polynomial order lower than the degree specified by mxorder can be used to fit spectra with insufficient number of lines
+    - the sigma-clipping threshold to use during the dispersion solution fitting stage
+    - a boolean flag that indicates if a linear dispersion solution will be forced on the spectrum, if the pixel distance between the furthest separated fitted lines is less than 1000 pixels
+    - a boolean flag that specifies if the fit window can be automatically adjusted by the code in order to increase the window range to achieve a better fit to the line
+    - the sigma-clipping threshold to use when searching for useable lines to fit. Lines with strengths/amplitude fits less than this value times the estimated noise level are rejected and not used to find the dispersion solution
+    - a boolean flag to indicate if the window position for identifying/fitting lines is allowed to wander from its initial guess. This option can be useful if the dispersion solution is slightly off, but it can also cause problems if there are several lines that are close in proximity.
+    - the number of sigma-clipping iterations to use during the dispersion solution fitting stage
+    - the number of pixels to use for continuum fitting of the spectrum.
+    - the maximum number of iterations allowed if the search window is allowed to wander
+    Returned is a list containing the following elements:
+    - the fitted polynomial coefficients (in increasing order) describing the transformation from pixel to wavelength
+    - the FWHM of each fitted line used to determine the dispersion solution
+    - the line centres (in pixels) of the fitted lines
+    - the predicted line centres (in wavelength) corresponding to the fitted lines
+    - the RMS difference between the final fitted polynomial solution and the measured line centres (in pixels)
+    - the fitted polynomial coefficients (in increasing order) describing the transformation from wavelength to pixels
     """
     
     yRow = input[0]
@@ -569,20 +593,36 @@ def getSolQuick(input):
 
 def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None, allowLower=False, sigmaClip=2., lngthConstraint=False, MP=True, adjustFitWin=False, sigmaLimit=3, allowSearch=False, sigmaClipRounds=1,nPixContFit=50,nSearchRounds=1,plot=False):
     """
-    Computes dispersion solution for each set of pixels along the dispersion axis in the provided image slices.
-    Usage: output = getWaveSol(dataSlices, template, mxorder, prevSolution, winRng, mxCcor, weights, buildSol, ncpus, allowLower, sigmaClip, lngthConstraint)
+    Computes dispersion solution for each row of pixels (along the dispersion axis) in the provided image slices.
+    Usage: output = getWaveSol(dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mxCcor=30, weights=False, buildSol=False, ncpus=None, allowLower=False, sigmaClip=2., lngthConstraint=False, MP=True, adjustFitWin=False, sigmaLimit=3, allowSearch=False, sigmaClipRounds=1,nPixContFit=50,nSearchRounds=1,plot=False)
     dataSlices is a list of the input 2D images from which the new dispersion solution will be derived. The dispersion axis of each slice is oriented along the x-axis.
-    templateSlices is a list of template images from which a known solution is already determined. templateSlices can instead be a list of 1D spectra that will be used as input for all vectors along the dispersion axis for each image slice.
+    templateSlices is a list of template images from which a known solution is already determined. templateSlices can also be a list of 1D spectra, with a length equal to the number of slices, which will be used as input for all vectors along the dispersion axis for each image slice.
     atlas is the name of the file containing the atlas line list to use for fitting (a 2 column file with the first column corresponding to the central wavelength of the line, and the second the line intensity/flux)
     mxorder is the highest allowable term in the polynomial solution of the form y = Sum_i^mx a_i*x^i, where mx is the maximum polynomial order (e.g. mx = 1 -> y = a0 + a1*x).
-    prevSolution is a list of containing the previously determined coefficients for each set of pixels. If a single solution is given, then it is used as input for all vectors along the dispersion axis.
-    dispAxis specifies the dispersion direction (0 -> along the y-axis, 1-> along the x-axis)
-    winRng is a keyword to change window range for searching for line centre and fitting (default is 7 pixels)
-    mxCcor is a keyword to change the the window range for finding the maximum searchable pixel shift between the template and spectrum (default is 30 pixels)
-    weights is a keyword to carry out a weighted polynomial fit for determining dispersion solution (default is False) 
+    prevSolution is a list of containing the previously determined polynomial solution coefficients for each row of each slice. If a single solution is given, then it is used as input for all vectors along the dispersion axis.
+    winRng specifies the window range used for searching fitting of individual line profiles
+    mxCcor specifies the maximum searchable pixel shift between the template and spectrum
+    weights is a boolean flag that specifies if a weighted fitting of the polynomial solution should be used (weighted by the fitted line strengths)
     buildSol is a boolean keyword indicating if the dispersion solution (and hence finding of lines) should be determined as searching goes, or whether the previous input solution is only used
-    ncpus is an integer keyword indicating the number of simultaneously run processes
-    Returns the coefficients of the polynomial fits [lambda(pixel) = p(pixel)], the FWHM of each fit, the line centres of the lines that were fit (in pixels), the corresponding line centres according to the line atlas, the RMS of the polynomial solution
+    ncpus is an integer indicating the number of simultaneously run processes to use if run in MP mode
+    allowLower is a boolean flag that indicates if a polynomial order lower than the degree specified by mxorder can be used to fit spectra with insufficient number of useable lines
+    sigmaClip is the sigma-clipping threshold to use during the dispersion solution fitting stage
+    lngthConstraint is a boolean flag that indicates if a linear dispersion solution will be forced, if the pixel distance between the furthest separated fitted lines is less than 1000 pixels 
+    MP is a boolean value that indicates if the fitting routine should be run in multiprocessing mode
+    adjustFitWin is a boolean flag that specifies if the fit window can be automatically adjusted by the code in order to increase the window range to achieve a better fit to the line
+    sigmaLimit is the sigma-clipping threshold to use when searching for useable lines to fit. Lines with strengths/amplitude fits less than this value times the estimated noise level are rejected and not used to find the dispersion solution
+    allowSearch is a boolean flag to indicate if the window position for identifying/fitting lines is allowed to wander from its initial guess. This option can be useful if the dispersion solution is slightly off, but it can also cause problems if there are several lines that are close in proximity.
+    sigmaClipRounds specifies the number of sigma-clipping iterations to use during the dispersion solution fitting stage
+    nPixContFit is the number of pixels to use for identifying continuum points during the continuum fitting stage of the spectrum.
+    nSearchRounds indicates the maximum number of iterations allowed if the search window is allowed to wander (allowSearch is True)
+    plot is a boolean value that indicates if plotting of the fitting process should occur (useful for debugging purposes only)
+    Returned is a list containing the following elements for each row in each slice:
+    - the fitted polynomial coefficients (in increasing order) describing the transformation from pixel to wavelength
+    - the FWHM of each fitted line used to determine the dispersion solution
+    - the line centres (in pixels) of the fitted lines
+    - the predicted line centres (in wavelength) corresponding to the fitted lines
+    - the RMS difference between the final fitted polynomial solution and the measured line centres (in pixels)
+    - the fitted polynomial coefficients (in increasing order) describing the transformation from wavelength to pixels
     """
 
     #read in line atlas 
@@ -725,9 +765,11 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
 def buildWaveMap(dispSolLst, npts, fill_missing=True, extrapolate=False):
     """
     Routine to build a wavelength map from the provided dispersion solution list for each image slice
-    Usage: waveMapLst = buildWaveMap(dispSolLst, npts)
+    Usage: waveMapLst = buildWaveMap(dispSolLst, npts, fill_missing=True, extrapolate=False)
     dispSolLst is a list of arrays providing the measured dispersion solution for each pixel in the image slice
     npts sets the length of the resulting image
+    fill_missing is a boolean keyword to indicate if interpolation between fitted lines should be used to fill in regions where no information exists
+    extrapolate is a boolean keyword to specify if extrapolation should be used to fill in regions outside of regions with fitted lines
     waveMapLst is the output image providing the wavelength at each pixel
     """
 
@@ -780,9 +822,10 @@ def buildFWHMMap(pixCentLst,fwhmLst,npts):
     """
     Routine to build a wavelength map from the provided dispersion solution list for each image slice
     Usage: waveMapLst = buildWaveMap(dispSolLst, npts)
-    dispSolLst is a list of arrays providing the measured dispersion solution for each pixel in the image slice
-    npts sets the length of the resulting image
-    waveMapLst is the output image providing the wavelength at each pixel
+    pixCentLst provides the central pixel location for each fitted line, in each row, of each slice
+    fwhmLst is a list containing the measured FWHM at each fitted line position provided in pixCentLst
+    npts sets the length of the resulting image to create
+    waveMapLst is the output image providing the FWHM at each pixel, interpolated using the information provided in pixCentLst and fwhmLst
     """
 
     fwhmMapLst = []
@@ -811,12 +854,12 @@ def buildFWHMMap(pixCentLst,fwhmLst,npts):
 
 def trimWaveSliceAll(waveSlices, flatSlices, threshold, MP=True, ncpus=None):
     """
-    Routine used to identify useful limits of wavelenth mapping 
+    Routine used to identify useful limits of the wavelenth mapping 
     Usage: out = trimWaveSlice(waveSlices, flatSlices, threshold, MP=True, ncpus=None)
     waveSlices is a list of the wavelength mapping slices
     flatSlices is a list of the flatfield image slices
-    threshold is a value indicating the cutoff value relative to the maximum flatfield flux in a given slice to be used to determine the limits
-    MP is a boolean used to indicate whether multiprocessing should be used
+    threshold is a value indicating the cutoff value relative to the scaled maximum flatfield flux in a given slice to be used to determine the limits (i.e. maximum flux as scaled value of 1.0, minimum flux has scaled value of 0.0)
+    MP is a boolean value used to indicate whether multiprocessing should be used
     ncpus is an integer to set the maximum number of simultaneously run processes during MP mode
     out is a list containing the trimmed wavelength mapped slices. All values outside of the trim limits are set to NaN
     """
@@ -844,11 +887,11 @@ def trimWaveSliceAll(waveSlices, flatSlices, threshold, MP=True, ncpus=None):
     
 def trimWaveSlice(input):
     """
-    Routine used to identify useful limits of wavelenth mapping slice
+    Routine used to identify useful limits of wavelength mapping for a single slice
     Usage: slc = trimWaveSlice(input), where input is a list containing:
-    waveSlc - the wavelength mapping slice
+    slc - the wavelength mapping slice
     flatSlc - the flatfield slice image
-    threshold - the cutoff value relative to the maximum flatfield flux to determine the limits
+    threshold - the scaled cutoff value relative to the maximum flatfield flux to determine the limits. A median-averaging routine is useed to determine the scaling values, to avoid hot pixels
     slc is the trimmed wavelength mapped slice. All values outside of the trim limits are set to NaN
     """
 
@@ -880,6 +923,12 @@ def trimWaveSlice(input):
 
 def polyFitDispSolution(dispIn,plotFile=None, degree=2):
     """
+    Routine to fit a polynomial to the dispersion solution coefficients, to describe the change in the dispersion solution across the spatial direction of each slice. This routine is useful for excluding badly-fit rows.
+    Usage: polySol = polyFitDispSolution(dispIn,plotFile=None, degree=2)
+    dispIn is a list containing the dispersion coefficients for each row of each slice
+    plotFile is the name of the file to save the QC control plots illustrating the quality of fit to each coefficient
+    degree is the maximum order/degree of the polynomial allowed to fit each coefficient
+    Returned is a list of the same size as dispIn with the polynomial coefficients replaced by the fits
     """
     
     nTerms = 0
@@ -1017,6 +1066,12 @@ def polyFitDispSolution(dispIn,plotFile=None, degree=2):
 
 def medSmoothDispSolution(dispIn, nPix=5, plot=False):
     """
+    Routine used to smooth a list of coefficients of a polynomial dispersion solutions by using median-averaging.
+    Usage: smoothSol = medSmoothDispSolution(dispIn, nPix=5, plot=False)
+    dispIn is a list containing the dispersion coefficients for each row of each slice
+    nPix is the number of pixels to use for determining the median-averaging
+    plot is a boolean keyword to indicate whether plotting should be carried out (for debugging purposes)
+    Returned is the smoothed version of dispIn
     """
 
     nTerms = 0
@@ -1067,6 +1122,12 @@ def medSmoothDispSolution(dispIn, nPix=5, plot=False):
 
 def gaussSmoothDispSolution(dispIn, nPix=5, plotFile=None):
     """
+    Routine used to smooth a list of coefficients of a polynomial dispersion solutions by convolution with a Gaussian kernel.
+    Usage: smoothSol = gaussSmoothDispSolution(dispIn, nPix=5, plotFile=None)
+    dispIn is a list containing the dispersion coefficients for each row of each slice
+    nPix is the 1-sigma width of the Gaussian kernel 
+    plotFile is the name of the file to save the QC control plots illustrating the quality of fit to each coefficient
+    Returned is the smoothed version of dispIn
     """
 
     gKern = conv.Gaussian1DKernel(nPix)
@@ -1188,7 +1249,15 @@ def gaussSmoothDispSolution(dispIn, nPix=5, plotFile=None):
 
 def cleanDispSol(result, plotFile=None, threshold=1.5):
     """
-    """
+    Routine to identify rows with badly-fit dispersion solutions
+    result is the full output returned from getWaveSol
+    plotFile is the name of the file for which to save the QC image
+    threshold specifies the sigma-clipping threshold used to identify badly-fit rows
+    Returned is a list containing the following:
+    - rmsClean - the list of RMS values for each row of each slice, with the bad solutions replaced with NaNs
+    - dispSolClean - the list of coefficients describing the transformation from pixel to wavelengths for each row of each slice, with the bad solutions replaced with NaNs
+    - pixSolClean - the list of coefficients describing the transformation from wavelength to pixel for each row of each slice, with the bad solution replaced with NaNs
+   """
 
     dispSolLst = result[0]
     rms = result[4]
@@ -1251,10 +1320,14 @@ def cleanDispSol(result, plotFile=None, threshold=1.5):
 def buildWaveMap2(dispSolLst, npts, fill_missing=True, extrapolate=False, MP=True, ncpus=None):
     """
     Routine to build a wavelength map from the provided dispersion solution list for each image slice
-    Usage: waveMapLst = buildWaveMap(dispSolLst, npts)
-    dispSolLst is a list of arrays providing the measured dispersion solution for each pixel in the image slice
-    npts sets the length of the resulting image
-    waveMapLst is the output image providing the wavelength at each pixel
+    Usage: waveMapLst = buildWaveMap2(dispSolLst, npts, fill_missing=True,extrapolate=False,MP=True, ncpus=None)
+    dispSolLst is a list of arrays providing the polynomial coefficients for the dispersion solution (pixel to wavelength) for each row in each slice
+    npts is not used and is only arround for backwards compatability with older routines
+    fill_missing is a boolean keyword to specify if rows with missing solutions should be filled by linear interpolation of the surrounding rows with good solutions
+    extrapolate is a boolean flag to indicate if rows with missing solutions that are not surrounded by good solutions should be filled by linear extrapolation
+    MP is a boolean flag to indicate if the routine should be run in multiprocessing mode
+    ncpus sets the maximum number of processes to simultaneously run in MP mode
+    waveMapLst is the list output images providing the wavelength at each pixel
     """
 
     x = np.arange(npts)
@@ -1284,6 +1357,14 @@ def buildWaveMap2(dispSolLst, npts, fill_missing=True, extrapolate=False, MP=Tru
 
 def buildWaveMap2Slice(input):
     """
+    Routine to build a wavelength map from the provided dispersion solution for a single image slice
+    Usage: waveMapOut = buildWaveMap2Slice(input)
+    input is a list containing:
+    - a list of arrays providing the polynomial coefficients for the dispersion solution (pixel to wavelength) for each row in the slice
+    - a numpy array providing the pixel coordinates along the dispersion direction of the input slice
+    - a boolean keyword to specify if rows with missing solutions should be filled by linear interpolation of the surrounding rows with good solutions
+    - a boolean flag to indicate if rows with missing solutions that are not surrounded by good solutions should be filled by linear extrapolation
+    waveMapOut is the output maps providing the wavelength at each pixel
     """
 
     dispSol = input[0]
@@ -1373,6 +1454,12 @@ def smoothWaveMapAll(waveMapLst, smth=3, MP=True, ncpus=None):
 
 def smoothWaveMapSlice(input):
     """
+    Routine used to smooth a map of pixel to wavelength coordinates using a Gaussian convolution. The smoothing occurs along the spatial axis only.
+    Usage: waveSmth = smoothWaveMapSlice(input)
+    input is a list containing:
+    - the original wavelength map image to be smoothed
+    - the number of pixels specifying the 1-sigma width of the Gaussian kernel to be used for smoothing
+    Returned is a smoothed version of the input wavelength map    
     """
 
     waveMap = input[0]
@@ -1389,6 +1476,12 @@ def smoothWaveMapSlice(input):
 
 def polyFitWaveMapSlice(input):
     """
+    Routine used to replace all values of a wavelength map by a polynomial fit instead. The polynomial fit occurs along the spatial axis, for each pixel along the dispersion axis.
+    Usage: waveFit = polyFitWaveMapSlice(input)
+    input is a list containing:
+    - the input wavemap image
+    - the polynomial degree/order to use for the fitting
+    Returned is an image of the same dimensions as the input image, but with all values replaced by the fits 
     """
 
     waveMap = input[0]
@@ -1412,6 +1505,13 @@ def polyFitWaveMapSlice(input):
 
 def polyFitWaveMapAll(waveMapLst, degree=3, MP=True, ncpus=None):
     """
+    Routine used to replace all values of a list of wavelength maps by polynomial fits instead. The polynomial fits occur along the spatial axis, for each pixel along the dispersion axis.
+    Usage: waveMapOut = polyFitWaveMapAll(waveMapLst, degree=3, MP=True, ncpus=None)
+    waveMapLst is the list of wavemap images to be fit
+    degree specifies the polynomial order/degree to use for fitting
+    MP is boolean value that specifies if multiprocessing should be used for the routine
+    ncpus specifies the number of processes to simultaneously run when in MP mode
+    Returned is a list of images of the same dimensions as the input images, but with all wavemap values replaced by the fits 
     """
 
     inpLst = []

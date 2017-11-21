@@ -1,6 +1,6 @@
 """
 
-Tools used to separate slitlets 
+Tools used to process slice images
 
 """
 
@@ -17,12 +17,19 @@ def limFit1(input):
     """
     Used to determine slice edges for a single column, assuming dispersion axis is aligned along rows.
     Usage: limMeas = limFit1(input)
-    input is a list, with the first item being the spatial spectrum and the second item being the window range for finding the limits
+    input is a list:
+    - first item being the spatial spectrum
+    - the second item being the window range for finding the limits
     limMeas is a list the limits of the slices
     """
+
+    #*******************************************************************************************************************
+    #from third commissioning run, better alignment - should consider placing this in the input configuration file,
+    #so that this file does not need to be edited if the values change dramatically in the future
     
-    #from third commissioning run, better alignment
     centGuess = [25, 138, 252, 366, 479, 594, 706, 820, 935, 1048, 1163, 1278, 1390, 1506, 1620, 1735, 1849, 1965, 2044]
+    #*******************************************************************************************************************
+
     y = input[0]
     nRng = input[1]
    
@@ -174,7 +181,10 @@ def getResponse2D(input):
     """
     Returns a possibly smoothed and normalized response function for the provided slice
     Usage: norm = getResponse2D(input)
-    input is a list containing the image slice, the width of the Gaussian kernel to use for smoothing, and the cutoff for which the normalized response function is just set to 1.
+    input is a list containing:
+    - the image slice
+    - the width of the Gaussian kernel to use for smoothing
+    - the cutoff for which the normalized response function is just set to NaN.
     """
 
     slice = input[0]
@@ -201,11 +211,12 @@ def getResponse2D(input):
 def getResponseAll(flatSlices, sigma, cutoff, MP=True, ncpus=None):
     """
     Returns a possibly smoothed and normalized response function for all slices in the provided list
-    Usage: result = getResponseAll(slices, sigma, cutoff, MP=)
+    Usage: result = getResponseAll(slices, sigma, cutoff, MP=True, ncpus=None)
     slices is a list of image slices from which to derive the response function
     sigma is the Gaussian width of the kernel to use for smoothing the input data
     cutoff is a value for which all pixels with normalized values less than this value are set to 1.
     MP is a keyword used to enable multiprocessing routines that may improve performance
+    ncpus sets the number of processes when using MP mode.
     """
 
     #first determine the normalization weight, based on the maximum median value along each slice
@@ -289,6 +300,7 @@ def ffCorrectAll(slices, response, MP=False, ncpus=None):
     slices is a list of image slices that you wish to flat-field
     response is the normalized flat-field image responses functions to use for flat-fielding
     MP is a keyword used to enable multiprocessing routines that may improve performance  
+    ncpus is the number of processes to use during MP mode
     """
 
     #only use MP if many slices. Serial version (non-MP) is faster for WIFIS
@@ -324,7 +336,9 @@ def ffCorrectSlice(input):
     """
     Returns flat-field corrected image determined from the provided data
     Usage: result = ffCorrectSlice(input)
-    input is a list containing the image slice and the normalized flat-field image
+    input is a list containing:
+    - the image slice
+    - the normalized flat-field image
     """
 
     slc = input[0]
@@ -463,7 +477,6 @@ def trimSliceAll(extSlices, limits, MP=False, ncpus=None):
     MP is a keyword used to determine if multiprocessing should be used
     ncpus is a keyword to control the maximum number of simultaneously running processes, when in MP mode
     outSlices is the returned list of trimmed slices 
-
     """
 
     if (MP):
@@ -491,11 +504,12 @@ def trimSliceAll(extSlices, limits, MP=False, ncpus=None):
 def extSlices(data, limits,shft=0, dispAxis=0):
     """
     Extract a list of slices (sub-images) from the given image based on relative slice limits
-    Usage: slices = extSlices(data, limits, shft,dispAxis=)
+    Usage: slices = extSlices(data, limits, shft,dispAxis=0)
     data is the input data image from which the slices will be extracted
     limits is an array specifying the slice-edge limits of each slice
     shft is the shift needed to apply to the limits to match the current image
     dispAxis is a keyword specifying the dispersion direction (0-> along the y-axis, 1-> along the x-axis)
+    slices is a list containing the extracted images corresponding to each slice in the original, full detector image
     """
 
     #modify dispersion direction to fit with routine
@@ -541,7 +555,13 @@ def extSlices(data, limits,shft=0, dispAxis=0):
 
 def polyFitLimits(limits, degree=2,constRegion=None, sigmaClipRounds=0):
     """
-    constRegion are limits to constrain the fit between two cutoff points. Useful for Hband.
+    Routine to fit polynomial functions to traced slice edge limits.
+    Usage: polyLimits = polyFitLimits(limits, degree=2,constRegion=None, sigmaClipRounds=0)
+    limits is the original numpy array containing the traced edge limits for each slice
+    degree is the polynomial order to use for fitting
+    constRegion is a list of pixel coordintes containing the limits for which to constrain the fit between. Useful for Hband.
+    sigmaClipRounds is a an integer specifying the number of sigma-clipping rounds to carry out. Usefull for improving the fit to traces that have significant outliers
+    polyLimits is a numpy array containing the polynomial fit at each pixel location
     """
 
     polyLimits = []
@@ -579,6 +599,13 @@ def polyFitLimits(limits, degree=2,constRegion=None, sigmaClipRounds=0):
         
 def medSmoothSlices(extSlices, nPix, MP=True, ncpus=None):
     """
+    Routine to smooth all slices in a list by replacing the pixel with the median value of all surrounding pixels
+    Usage: result = medSmoothSlices(extSlices, nPix, MP=True, ncpus=None)
+    extSlices is a list containing the images of the extracted slices
+    nPix is the number of pixels to use for median averaging
+    MP is a boolean keyword to specify if multiprocessing to be used
+    ncpus specifies the number of processes to use when opertating in MP mode
+    result is a list of smoothed image slices
     """
     
     
@@ -603,6 +630,11 @@ def medSmoothSlices(extSlices, nPix, MP=True, ncpus=None):
 
 def medSmoothSlice(input):
     """
+    out = medSmoothSlice(input)
+    input is a list containing:
+    slc - the image slice to smooth
+    nPix - the number of pixels to use for computing the median
+    out is the returned smoothed image
     """
 
     slc = input[0]
@@ -620,9 +652,14 @@ def medSmoothSlice(input):
 
 def getMedLevelAll(extSlices, MP=True, ncpus=None):
     """
+    Routine to compute the median signal strength along the dispersion axis for each slice in a list
+    Usage: result = getMedLevelAll(extSlices, MP=True, ncpus=None)
+    extSlices is the list of extracted image slices
+    MP is a boolean keyword to specify if the routine should be run in multiprocessing mode
+    ncpus specifies the number of processes to use in multiprocessing mode
+    result is a list containing the 1D median averaged spectrum for each slice
     """
-    
-    
+        
     if (MP):
         #set up input list
         lst = []
@@ -641,6 +678,10 @@ def getMedLevelAll(extSlices, MP=True, ncpus=None):
 
 def getMedLevelSlice(slc):
     """
+    Routine to compute the median 1D spectrum of an image, across the dispersion direction
+    Usage: out = getMedLevelSlice(slc)
+    slc is the image slice from which to compute the 1D spectrum
+    out is the returned spectrum
     """
 
     out = np.empty(slc.shape[1])
@@ -657,7 +698,12 @@ def getResponse2DMed(input):
     """
     Returns a possibly smoothed and normalized response function for the provided slice
     Usage: norm = getResponse2D(input)
-    input is a list containing the image slice, the width of the Gaussian kernel to use for smoothing, and the cutoff for which the normalized response function is just set to 1.
+    input is a list containing:
+    slc - the image slice
+    sigma - the width of the Gaussian kernel to use for smoothing
+    cutoff - the cutoff for which pixesl with values less than this value is set to NaN
+    nrmValue - the value at which to normalize all other strengths to
+    norm is the returned normalized response function for the provided slice
     """
 
     slc = input[0]
@@ -694,11 +740,12 @@ def getResponse2DMed(input):
 def getResponseAllMed(flatSlices, sigma, cutoff, MP=True, ncpus=None):
     """
     Returns a possibly smoothed and normalized response function for all slices in the provided list
-    Usage: result = getResponseAll(slices, sigma, cutoff, MP=)
-    slices is a list of image slices from which to derive the response function
+    Usage: result = getResponseAll(slices, sigma, cutoff, MP=True, ncpus=None)
+    flatSlices is a list of flat field slices from which to derive the response function
     sigma is the Gaussian width of the kernel to use for smoothing the input data
     cutoff is a value for which all pixels with normalized values less than this value are set to 1.
     MP is a keyword used to enable multiprocessing routines that may improve performance
+    ncpus sets the number of processes to use during MP mode
     """
 
     #first determine the normalization weight, based on the maximum median value along each slice
