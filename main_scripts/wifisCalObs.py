@@ -1,3 +1,36 @@
+"""
+
+Main script used to process science data, sky data, and standard star data (NOT YET IMPLEMENTED)
+
+Input:
+- All input is read from the configuration file listed in variable varFile
+- Processing requires a corresponding flat field data, arc lamp/wavelength calibration data associated with each observation
+- A distortion map that is applicable to all data
+- All observation to be processed are assumed to be part of a single observing sequence and hence the data can be combined
+
+Produces:
+For each target observation:
+- The ramp image (XXX_obs.fits)
+- A multi-extension fits file containing the extracted slices (XXX_obs.slices.fits)
+- The distortion corrected/spatially rectified slices (XXX_obs_slices_distCor.fits)
+- The fully gridded (spatially and spectrally rectified) slices (XXX_obs_slices_fullGrid.fits)
+- The cube derived from the gridded data (XXX_obs_cube.fits)
+- A collapsed image of the cube (XXX_obs_cubeImg.fits)
+
+For each sky observation:
+- The ramp image (XXX_obs.fits)
+- A multi-extension fits file containing the extracted slices (XXX_sky.slices.fits)
+- The distortion corrected/spatially rectified slices (XXX_sky_slices_distCor.fits)
+- The fully gridded (spatially and spectrally rectified) slices (XXX_sky_slices_fullGrid.fits)
+- The cube derived from the gridded data (XXX_sky_cube.fits)
+
+- A combined cube of the final processed science observations ('target name'_combined_cube_#.fits)
+- The collapsed image from the final combined cube ('target name'_combined_cubeImg_#.fits)
+
+"""
+
+
+
 import matplotlib
 matplotlib.use('gtkagg')
 
@@ -97,16 +130,12 @@ if not (os.path.exists(distMapLimitsFile)):
     logfile.write('*** FAILURE: Cannot continue, distorion map limits file ' + distMapLimitsFile + ' does not exist. Please process a Ronchi calibration sequence or provide the necessary file ***\n')
     raise Warning('*** Cannot continue, distorion map limits file ' + distMapLimitsFile + ' does not exist. Please process a Ronchi calibration sequence or provide the necessary file ***')
 else:
-    distMapLimits = wifisIO.readImgsFromFile(distMapLimitsFile)[0]
     logfile.write('Using distortion/spatial mapping limits file from file:\n')
     logfile.write(distMapLimitsFile+'\n')
 
 if not (os.path.exists(spatGridPropsFile)):
     logfile.write('*** FAILURE: Cannot continue, spatial propertites grid file ' + spatGridPropsFile + ' does not exist. Please process a Ronchi calibration sequence or provide the necessary file ***\n')
     raise Warning ('*** Cannot continue, spatial propertites grid file does not exist. Please process a Ronchi calibration sequence or provide the necessary file ***')
-
-satCounts = wifisIO.readImgsFromFile(satFile)[0]
-nlCoeff = wifisIO.readImgsFromFile(nlFile)[0]
 
 #first check if BPM is provided
 if os.path.exists(bpmFile):

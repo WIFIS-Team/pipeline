@@ -1,11 +1,17 @@
 """
 
-Calibrate flat field images
+Main script used to process raw flat field data
+
+Input:
+- Uses input as defined in configuration file denoted by variable varFile
 
 Produces:
-- master flat image
-- slitlet traces
-- ??
+- for each observation listed:
+- flat field ramp image (XXX_flat.fits)
+- limits corresponding to the edges of all identified slices (XXX_flat_limits.fits)
+- multi-extension image including all extracted slices
+- multi-extension image containing the normalized response function of each slice
+
 
 """
 import matplotlib

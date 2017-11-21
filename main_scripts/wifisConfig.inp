@@ -15,7 +15,7 @@ detLstFile = 'det.lst'
 pyCLCompOut = '0'
 
 #select OpenCL device. If empty, program will prompt EACH TIME
-pyCLCTX = '1'
+pyCLCTX = '2'
 
 ######################################################
 #optional parameters
@@ -242,7 +242,19 @@ flatLimSmth = 20
 flatCutOff = 0.1
 
 #specifies the maximum separation of pixel search to use during bad pixel correction
-flatbpmCorRng=20 
+flatbpmCorRng=20
+
+######################################################
+#flat field correction options
+
+#name of file containing the observation folder for the Dome flat
+domeFile = 'dome.lst'
+
+#name of file containing the observation folder for the associated background image
+domeBackFile = 'domeBack.lst'
+
+
+
 
 ######################################################
 #parameters for processing darks

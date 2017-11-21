@@ -1,15 +1,23 @@
 """
 
-Calibrates Ronchi mask and zero-point file
+Main script used to process raw Ronchi data and raw data corresponding that provides constraints about the zero-point offset of each slice
 
-Requires:
-- 
+Input:
+- All variables are read from the configuration file specified by varFile
+- A flat field observation that specifies the limits of each slice that is applicable to the Ronchi data (and ideally the zero-point data, if needed)
 
 Produces:
--
-
-
+- The ramp image of the Ronchi data (XXX_ronchi.fits)
+- A multi-extension file containing the extracted slices of the Ronchi data (XXX_ronchi_slices.fits)
+- The traces of the Ronchi mask, for each slice (XXX_ronchi_traces.fits)
+- The polynomial fits to the Ronchi traces, for each slice (XXX_ronchi_poly_traces.fits)
+- The distortion map derived from the Ronchi tracing and (if provided) the zero-point offset (XXX_ronchi_distMap.fits)
+- The grid parameters to be used for spatial rectification (XXX_ronchi_spatGridProps.dat)
+- The combined (and individual) ramp image(s) associated with the zero-point offset observation(s) (XXX_zpnt_obs.fits and XXX_zpnt_obs_comb.fits)
+- A multi-extension image containing the extracted slices from the combined zero-point offset data (XXX_zpnt_obs_comb_slices.fits)
+- The traces (or the polynomial fits to the traces) of the zero-point offset, for each slice
 """
+
 import matplotlib
 matplotlib.use('gtkagg')
 import wifisIO

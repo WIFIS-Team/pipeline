@@ -1,13 +1,21 @@
 """
 
-Calibrates arc lamp images
+Main script used to calibrate arc lamp/wavelength calibration data
 
-Requires:
-- 
+
+Input: 
+- All input is read from configuration file denoted by variable varFile
+- Flat field data associated with each observation
+- A distortion map that is applicable to all data
 
 Produces:
-- per pixel wavelength solution
-
+- A ramp image of each observation (XXX_wave.fits)
+- A multi-extension image containing all extracted slices (XXX_wave_slices.fits)
+- Distortion corrected/spatially rectified slices (XXX_wave_distCor.fits)
+- A Pickled save of the results of the wavelength fitting procedure (XXX_wave_fitResults.pkl)
+- A map of the wavelength associated with each spatially rectified pixel (XXX_wave_waveMap.fits)
+- Grid parameters to be used for the spectral rectification (XXX_wave_waveGridProps.dat)
+- A fully gridded (both spatial and spectral rectified) version of the slices (XXX_wave_fullGrid.fits)
 
 """
 

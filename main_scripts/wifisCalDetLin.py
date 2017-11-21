@@ -1,14 +1,17 @@
 """
 
-Fully calibrates set of images used to measure the non-linearity behaviour of the detector
+Main script to process a set of raw data to measure the non-linearity behaviour of the detector. Data is expected to consist of an up-the-ramp exposure of long enough duration that each pixel saturates.
 
-Requires:
-- specifying the folder where these files can be found
+Input:
+- All variables are read from file given by variable varFile
+- Including, at minimum, an ASCII file containing the folder name(s) of the raw observations
 
 Produces:
-- map of saturation level
-- map of per-pixel non-linearity corrections
-- bad pixel mask for pixels with very bad non-linearity (*** STILL TO DO ***)
+- individual (for each ramp) and master:
+  - map of saturation level (XXX_satCounts.fits)
+  - map of non-linearity corrections coefficients (XXX_detLin_NLCoeff.fits)
+  - map of bias and ramp coefficients corresponding to the polynomial fitting of the linearized ramp (XXX_detLin_polyCoeff.fits)
+- master bad pixel mask for pixels based on outliers from the first two non-linearity coefficients (master_detLin_BPM.fits)
 
 """
 

@@ -1,17 +1,16 @@
 """
 
-Calibrate dark images
+Main script to process raw data for darks
 
-Input: 
-- BPM from linearity measurents (optional, will be merged) *** NOT IMPLEMENTED YET ***
-
-Requires:
-- specifying the ascii list containing folder names to process and from which to create a master dark frame
+Input:
+- Read from file indicated by variable varFile
+- Name as of ASCII file containing the list of ramp observations to be used (darkLstFile)
 
 Produces: 
-- master dark image
-- bad pixel map (merged) *** STILL TO DO ***
-
+- For the individual ramps and the master:
+  - dark image
+  - Map of the per-pixel read-out noise
+- (optional) master bad pixel map (possibly merged with input mask, if given)
 
 TODO: ADD LOGFILE WRITING
 """
