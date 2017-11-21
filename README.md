@@ -13,11 +13,11 @@ The versions provided are the releases for which the pipeline was tested on. You
 To setup:
 add the core directory containing the core modules to your PYTHONPATH environment variable.
 
-The code is largely designed such that: the main scripts are copied/linked to the directory where to be run:
+The code is largely designed such that: the main scripts are copied/linked to the directory where to be run, along with the configuration file:
 - the python scripts found under ~base~/scripts
 where ~base~ is the folder where the pipeline is installed.
 
-Main scripts to edit and run:
+Main scripts to run, editing should (mostly) not be needed:
 wifisCalDetLin.py
 wifisCalDark.py
 wifisCalWave.py
@@ -26,6 +26,5 @@ wifisCalObs.py
 wifisCalSpatialCor.py
 wifisCalObs.py
 
-These main scripts will call the secondary scripts or opencl codes as needed.
+These main scripts will call the secondary scripts, functions, or opencl codes as needed.
 
-The main scripts are a work in progress and may not work as intended at this point in time.
