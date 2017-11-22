@@ -54,6 +54,7 @@ gain - gain conversion factor needed if and only if RON image is given in units 
 flatbpmCorRng - the maximum separation between the bad pixel and the nearest good pixel for bad pixel corrections of the flat field ramp images
 mxCcor - the maximum allowed pixel difference during the cross-correlation routine between the current observation and the template 
 adjustFitWin - a boolean flag to specify if the winRng should be automatically adjusted to better match the measured line width of the spectral line.
+centGuess - a list of the initial guesses for the slice edge positions
 """
 
 import numpy as np
@@ -74,7 +75,7 @@ from astropy import time as astrotime, coordinates as coord, units
 import colorama
 from astropy.visualization import ZScaleInterval
 
-def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowsAvg=0,rowSplit=1,nlSplit=1, combSplit=1,bpmCorRng=2, crReject=False, skipObsinfo=False, darkLst=None, flatWinRng=51, flatImgSmth=5, limitsPolyFitDegree=3, rootFolder='', distMapFile='', spatGridPropsFile='', atlasFile='', templateFile='', prevResultsFile='', sigmaClip=2, sigmaClipRounds=2, sigmaLimit=3,cleanDispSol=False,cleanDispThresh = 0, waveTrimThresh=0, waveSmooth=1, nlFile='', bpmFile='', satFile='',darkFile='',logfile=None, ask=True, obsCoords=None, dispAxis=0, mxOrder=3,winRng=9,waveSolMP=True,waveSolPlot=False, nRowSplitFlat=1,ron=None, gain=1.,flatbpmCorRng=20.,mxCcor=150, adjustFitWin=True):
+def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowsAvg=0,rowSplit=1,nlSplit=1, combSplit=1,bpmCorRng=2, crReject=False, skipObsinfo=False, darkLst=None, flatWinRng=51, flatImgSmth=5, limitsPolyFitDegree=3, rootFolder='', distMapFile='', spatGridPropsFile='', atlasFile='', templateFile='', prevResultsFile='', sigmaClip=2, sigmaClipRounds=2, sigmaLimit=3,cleanDispSol=False,cleanDispThresh = 0, waveTrimThresh=0, waveSmooth=1, nlFile='', bpmFile='', satFile='',darkFile='',logfile=None, ask=True, obsCoords=None, dispAxis=0, mxOrder=3,winRng=9,waveSolMP=True,waveSolPlot=False, nRowSplitFlat=1,ron=None, gain=1.,flatbpmCorRng=20.,mxCcor=150, adjustFitWin=True,centGuess=None):
     """
     """
 
@@ -173,7 +174,7 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                     distMap = wifisIO.readImgsFromFile(distMapFile)[0]
                     print('Flat limits do not exist for folder ' +flatFolder +', processing flat folder')
 
-                    calFlat.runCalFlat(np.asarray([flatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, distMapLimitsFile = distMapLimitsFile, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=combSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile, logfile=logfile, polyFitDegree=limitsPolyFitDegree,gain=gain,ron=ron)
+                    calFlat.runCalFlat(np.asarray([flatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, distMapLimitsFile = distMapLimitsFile, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=combSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile, logfile=logfile, polyFitDegree=limitsPolyFitDegree,gain=gain,ron=ron, centGuess=centGuess)
 
                 print('Reading slice limits file')
                 limits, limHdr = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_limits.fits')

@@ -27,11 +27,14 @@ def limFit1(input):
     #from third commissioning run, better alignment - should consider placing this in the input configuration file,
     #so that this file does not need to be edited if the values change dramatically in the future
     
-    centGuess = [25, 138, 252, 366, 479, 594, 706, 820, 935, 1048, 1163, 1278, 1390, 1506, 1620, 1735, 1849, 1965, 2044]
+    #centGuess = [25, 138, 252, 366, 479, 594, 706, 820, 935, 1048, 1163, 1278, 1390, 1506, 1620, 1735, 1849, 1965, 2044]
+
+    # **** CENTGUESS IS NO LONGER SPECIFIED HERE. IT IS READ FROM THE GLOBAL VARIABLE CENTGUESS, THAT IS SPECIFIED IN THE INPUT CONFIGURATION FILE. ***
     #*******************************************************************************************************************
 
     y = input[0]
     nRng = input[1]
+    centGuess = input[2]
    
     winRng = np.arange(nRng)-nRng/2
     limMeas = []
@@ -60,7 +63,7 @@ def limFit1(input):
 
     return limMeas
 
-def findLimits(data, dispAxis=0, winRng=51, imgSmth=5, limSmth=10, ncpus=None, rmRef=False):
+def findLimits(data, dispAxis=0, winRng=51, imgSmth=5, limSmth=10, ncpus=None, rmRef=False, centGuess=None):
     """
     Used to determine slice limits from a full flat-field image
     Usage: limits = findLimits(data, dispAxis=,winRng=,imgSmth=,limSmth= )
@@ -71,6 +74,7 @@ def findLimits(data, dispAxis=0, winRng=51, imgSmth=5, limSmth=10, ncpus=None, r
     limSmth is a keyword specigying the Gaussian width of the smoothing kernel for smoothing the found limits
     ncpus is a keyword indicating the number of processes to spawn
     rmRef is a keyword indicating if the image includes the reference pixels and if they should be removed from the limits
+    centGuess is the initial guess of the pixel coordinates of the slice edges
     returns an array containing the pixel limits for each slice edge along the dispersion axis
     """
 
@@ -95,7 +99,7 @@ def findLimits(data, dispAxis=0, winRng=51, imgSmth=5, limSmth=10, ncpus=None, r
     #next smooth the image and add to input list
     for i in range(ny):
         y = conv.convolve(dTmp[:,i],gKern, boundary='extend', normalize_kernel=True)
-        inpLst.append([y, winRng])
+        inpLst.append([y, winRng, centGuess])
 
     #setup and run the MP code for finding the limits
     if (ncpus == None):

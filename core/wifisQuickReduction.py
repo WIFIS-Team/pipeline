@@ -96,7 +96,7 @@ def initPaths(hband=False):
 #*******************************************************************************
 
 
-def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRange=None, varFile='',scaling='zscale'):
+def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRange=None, varFile='',scaling='zscale', colorbar=False):
     """
     Routine to quickly process the raw data from a science ramp and plot a 2D collapse of the final image cube
     Usage procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRange=None, varFile='',scaling='zscale')
@@ -281,7 +281,7 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
             
 
         print('Getting slice limits')
-        limits = slices.findLimits(flat, dispAxis=0, rmRef=True)
+        limits = slices.findLimits(flat, dispAxis=0, rmRef=True,centGuess=centGuess)
         wifisIO.writeFits(limits, 'quick_reduction/'+flatFolder+'_limits.fits', ask=False)
 
     #get ronchi slice limits
@@ -341,6 +341,10 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
     else:
         lims=[dataImg.min(),dataImg.max()]
     plt.imshow(dataImg, origin='lower', cmap='jet', clim=lims)
+
+    if colorbar:
+        plt.colorbar()
+        
     r = np.arange(360)*np.pi/180.
     fwhmX = np.abs(2.3548*gFit.x_stddev*xScale)
     fwhmY = np.abs(2.3548*gFit.y_stddev*yScale)
@@ -457,7 +461,7 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
                 raise Warning('*** Flat folder ' + flatFolder + ' does not exist ***')
 
             print('Finding flat limits')
-            limits = slices.findLimits(flat, dispAxis=0, winRng=51, imgSmth=5, limSmth=20,rmRef=True)
+            limits = slices.findLimits(flat, dispAxis=0, winRng=51, imgSmth=5, limSmth=20,rmRef=True, centGuess=centGuess)
             distMapLimits = wifisIO.readImgsFromFile(distMapLimitsFile)[0]
             shft = int(np.nanmedian(limits[1:-1,:] - distMapLimits[1:-1,:]))
             limits = distMapLimits
@@ -572,7 +576,6 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
             lims = colorbarLims
 
         plt.imshow(fwhmMap, aspect='auto', cmap='jet', clim=lims, origin='lower')
-
         plt.colorbar()
         plt.title('Median FWHM is '+'{:3.1f}'.format(fwhmMed) +', min wave is '+'{:6.1f}'.format(waveMin)+', max wave is '+'{:6.1f}'.format(waveMax))
         plt.tight_layout()
@@ -635,7 +638,7 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, var
     
         #find limits
         print('finding limits and extracting flat slices')
-        limits = slices.findLimits(flat, dispAxis=dispAxis, limSmth=flatLimSmth, rmRef=True)
+        limits = slices.findLimits(flat, dispAxis=dispAxis, limSmth=flatLimSmth, rmRef=True, centGuess=centGuess)
 
         polyLims = slices.polyFitLimits(limits, degree=limitsPolyFitDegree, sigmaClipRounds=1)
 
@@ -705,7 +708,7 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, var
 
                 lims = interval.get_limits(ronchiSlices[i])
                 plt.imshow(ronchiSlices[i], aspect='auto', clim=lims, origin='lower')
-
+                plt.colorbar()
                 for j in range(len(ronchiTraces[i])):
                     plt.plot(ronchiTraces[i][j,:], 'r--')
                 plt.title('Slices #'+str(i))
