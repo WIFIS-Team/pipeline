@@ -102,7 +102,6 @@ if os.path.exists(satFile):
     satCounts = wifisIO.readImgsFromFile(satFile)[0]
     logfile.write('Using saturation limits from file:\n')
     logfile.write(satFile+'\n')
-
 else:
     satCounts = None
     print(colorama.Fore.RED+'*** WARNING: No saturation counts array provided and will not be taken into account ***'+colorama.Style.RESET_ALL)
@@ -132,10 +131,13 @@ if not (os.path.exists(distMapLimitsFile)):
 else:
     logfile.write('Using distortion/spatial mapping limits file from file:\n')
     logfile.write(distMapLimitsFile+'\n')
-
+    distMapLimits = wifisIO.readImgsFromFile(distMapLimitsFile)[0]
+    
 if not (os.path.exists(spatGridPropsFile)):
     logfile.write('*** FAILURE: Cannot continue, spatial propertites grid file ' + spatGridPropsFile + ' does not exist. Please process a Ronchi calibration sequence or provide the necessary file ***\n')
     raise Warning ('*** Cannot continue, spatial propertites grid file does not exist. Please process a Ronchi calibration sequence or provide the necessary file ***')
+else:
+    spatGridProps = wifisIO.readTable(spatGridPropsFile)
 
 #first check if BPM is provided
 if os.path.exists(bpmFile):
@@ -143,10 +145,6 @@ if os.path.exists(bpmFile):
     BPM = BPM.astype(bool)
 else:
     BPM = None
-
-#read in ronchi mask
-distMap = wifisIO.readImgsFromFile(distMapFile)[0]
-spatGridProps = wifisIO.readTable(spatGridPropsFile)
 
 #read input lists
 if os.path.exists(obsLstFile):
@@ -241,7 +239,7 @@ for i in range(len(obsLst)):
         print('\n*** Processed flat field files do not exist for folder ' +flatFolder +', processing flat folder ***')
         logfile.write('Processed flat field files do not exist for folder ' +flatFolder +', processing flat folder\n')
         
-        calFlat.runCalFlat(np.asarray([flatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, distMapLimitsFile = distMapLimitsFile, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile,darkFile=darkFile, logfile=logfile, ask=False, obsCoords=obsCoords, limSmth=flatLimSmth, flatCutOff=flatCutOff, gain=gain, ron=RON, polyFitDegree=limitsPolyFitDegree)
+        calFlat.runCalFlat(np.asarray([flatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, distMapLimitsFile = distMapLimitsFile, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile,darkFile=darkFile, logfile=logfile, ask=False, obsCoords=obsCoords, limSmth=flatLimSmth, flatCutOff=flatCutOff, gain=gain, ron=RON, polyFitDegree=limitsPolyFitDegree,centGuess=centGuess)
         
     print('Reading slice limits')
     logfile.write('Reading slice limits from file:\n')
@@ -283,7 +281,7 @@ for i in range(len(obsLst)):
         print('\n*** Processed arc files do not exist for folder ' +waveFolder +', processing wave folder ***')
         logfile.write('\nProcessed arc files do not exist for folder ' +waveFolder +', processing wave folder\n')
         
-        calWave.runCalWave(waveLst, flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=True, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=nRowSplitFlat, nlSplit=nlSplit, combSplit=nCombSplit, bpmCorRng=flatbpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, flatWinRng=flatWinRng,flatImgSmth=flatImgSmth, limitsPolyFitDegree=limitsPolyFitDegree, distMapFile=distMapFile, spatGridPropsFile=spatGridPropsFile, atlasFile=atlasFile, templateFile=waveTempFile, prevResultsFile=waveTempResultsFile,  sigmaClip=sigmaClip, sigmaClipRounds=sigmaClipRounds, sigmaLimit=sigmaLimit, cleanDispSol=cleanDispSol,cleanDispThresh = cleanDispThresh, waveTrimThresh=waveTrimThresh,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile,darkFile=darkFile,logfile=logfile,ask=False, obsCoords=obsCoords, waveSmooth=waveSmooth,winRng=waveWinRng,waveSolMP=waveSolMP, gain=gain, ron=RON, mxCcor=waveMxCcor,adjustFitWin=waveAdjustFitWin)
+        calWave.runCalWave(waveLst, flatLst, hband=hband, darkLst=darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM=BPM, distMapLimitsFile=distMapLimitsFile, plot=True, nChannel=nChannel, nRowsAvg=nRowsAvg, rowSplit=nRowSplitFlat, nlSplit=nlSplit, combSplit=nCombSplit, bpmCorRng=flatbpmCorRng, crReject=crReject, skipObsinfo=skipObsinfo, flatWinRng=flatWinRng,flatImgSmth=flatImgSmth, limitsPolyFitDegree=limitsPolyFitDegree, distMapFile=distMapFile, spatGridPropsFile=spatGridPropsFile, atlasFile=atlasFile, templateFile=waveTempFile, prevResultsFile=waveTempResultsFile,  sigmaClip=sigmaClip, sigmaClipRounds=sigmaClipRounds, sigmaLimit=sigmaLimit, cleanDispSol=cleanDispSol,cleanDispThresh = cleanDispThresh, waveTrimThresh=waveTrimThresh,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile,darkFile=darkFile,logfile=logfile,ask=False, obsCoords=obsCoords, waveSmooth=waveSmooth,winRng=waveWinRng,waveSolMP=waveSolMP, gain=gain, ron=RON, mxCcor=waveMxCcor,adjustFitWin=waveAdjustFitWin,centGuess=centGuess)
 
     print('Reading in wavelength mapping files')
     logfile.write('Using wavelength map from file:\n')
@@ -317,7 +315,7 @@ for i in range(len(obsLst)):
         contProc = True
     
     if (contProc):
-        obs, sigmaImg, satFrame, hdr = processRamp.auto(obsFolder, rootFolder,'processed/'+obsFolder+'_obs.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=crReject, bpmCorRng=bpmCorRng, nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=RON,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True, satSplit=nSatSplit)
+        obs, sigmaImg, satFrame, hdr = processRamp.auto(obsFolder, rootFolder,'processed/'+obsFolder+'_obs.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=crReject, bpmCorRng=bpmCorRng, nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=RON,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True, satSplit=nSatSplit)
             
     else:
         print('Reading science image')
@@ -339,7 +337,7 @@ for i in range(len(obsLst)):
         if not os.path.exists('processed/'+skyFolder+'_sky.fits'):
             print('Processing sky folder '+skyFolder)
             logfile.write('\nProcessing sky folder ' + skyFolder+'\n')
-            sky, skySigmaImg, skySatFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=crReject, bpmCorRng=bpmCorRng,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=RON,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True,satSplit=nSatSplit)
+            sky, skySigmaImg, skySatFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=crReject, bpmCorRng=bpmCorRng,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=RON,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True,satSplit=nSatSplit)
                 
         #subtract sky from data at this stage
         print('Reading sky data from ' + skyFolder)
