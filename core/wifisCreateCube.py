@@ -216,7 +216,7 @@ def collapseCube(cube):
 
     return out
 
-def mkCube(corSlices, ndiv=1, MP=True, ncpus=None):
+def mkCube(corSlices, ndiv=1, MP=True, ncpus=None, missing_left=False, missing_right=False):
     """
     Routine to create a complete image cube from a list of grided (for both spatial and wavelength) image slices
     Usage: outCube = mkCube(corSlices, ndiv=1, MP=True, ncpus=None)
@@ -228,28 +228,88 @@ def mkCube(corSlices, ndiv=1, MP=True, ncpus=None):
     
     #initialize output cube
 
-    tmpCube = np.empty((len(corSlices), corSlices[0].shape[0],corSlices[0].shape[1]))
+    tmpCube = np.empty((18, corSlices[0].shape[0],corSlices[0].shape[1]))
     tmpCube[:] = np.nan
 
-    #place slices in correct order!
-    tmpCube[0,:,:] = corSlices[16]
-    tmpCube[1,:,:] = corSlices[14]
-    tmpCube[2,:,:] = corSlices[12]
-    tmpCube[3,:,:] = corSlices[10] 
-    tmpCube[4,:,:] = corSlices[8] 
-    tmpCube[5,:,:] = corSlices[6]  
-    tmpCube[6,:,:] = corSlices[4] 
-    tmpCube[7,:,:] = corSlices[2]  
-    tmpCube[8,:,:] = corSlices[0]  
-    tmpCube[9,:,:] = corSlices[1] 
-    tmpCube[10,:,:] = corSlices[3]
-    tmpCube[11,:,:] = corSlices[5]
-    tmpCube[12,:,:] = corSlices[7]
-    tmpCube[13,:,:] = corSlices[9] 
-    tmpCube[14,:,:] = corSlices[11] 
-    tmpCube[15,:,:] = corSlices[13] 
-    tmpCube[16,:,:] = corSlices[15]   
-    tmpCube[17,:,:] = corSlices[17]   
+    #first check how many slices exist
+
+    print('Found ' + str(len(corSlices))+' number of slices to reconstruct cube')
+    if len(corSlices)==18:
+        #if all 18 slices present use the following
+        #place slices in correct order!
+        tmpCube[0,:,:] = corSlices[16]
+        tmpCube[1,:,:] = corSlices[14]
+        tmpCube[2,:,:] = corSlices[12]
+        tmpCube[3,:,:] = corSlices[10] 
+        tmpCube[4,:,:] = corSlices[8] 
+        tmpCube[5,:,:] = corSlices[6]  
+        tmpCube[6,:,:] = corSlices[4] 
+        tmpCube[7,:,:] = corSlices[2]  
+        tmpCube[8,:,:] = corSlices[0]  
+        tmpCube[9,:,:] = corSlices[1] 
+        tmpCube[10,:,:] = corSlices[3]
+        tmpCube[11,:,:] = corSlices[5]
+        tmpCube[12,:,:] = corSlices[7]
+        tmpCube[13,:,:] = corSlices[9] 
+        tmpCube[14,:,:] = corSlices[11] 
+        tmpCube[15,:,:] = corSlices[13] 
+        tmpCube[16,:,:] = corSlices[15]   
+        tmpCube[17,:,:] = corSlices[17]   
+
+    elif len(corSlices)==17:
+        #if only 17 slices present
+        #if the left-most (centre-field) slice is missing, replace it with NaNs
+
+        if missing_left:
+            tmpCube[0,:,:] = corSlices[15]
+            tmpCube[1,:,:] = corSlices[13]
+            tmpCube[2,:,:] = corSlices[11]
+            tmpCube[3,:,:] = corSlices[9] 
+            tmpCube[4,:,:] = corSlices[7] 
+            tmpCube[5,:,:] = corSlices[5]  
+            tmpCube[6,:,:] = corSlices[3] 
+            tmpCube[7,:,:] = corSlices[1]
+            tmpSlice = np.empty(corSlices[0].shape,dtype=corSlices[0].dtype)
+            tmpSlice[:] = np.nan
+            tmpCube[8,:,:] = tmpSlice  
+            tmpCube[9,:,:] = corSlices[0] 
+            tmpCube[10,:,:] = corSlices[2]
+            tmpCube[11,:,:] = corSlices[4]
+            tmpCube[12,:,:] = corSlices[6]
+            tmpCube[13,:,:] = corSlices[8] 
+            tmpCube[14,:,:] = corSlices[10] 
+            tmpCube[15,:,:] = corSlices[12] 
+            tmpCube[16,:,:] = corSlices[14]   
+            tmpCube[17,:,:] = corSlices[16]
+
+        elif missing_right:
+            #if only 17 slices present
+            #if the right-most (centre-field) slice is missing, replace it with NaNs
+            tmpSlice = np.empty(corSlices[0].shape,dtype=corSlices[0].dtype)
+            tmpSlice[:] = np.nan
+            tmpCube[0,:,:] = corSlices[16]
+            tmpCube[1,:,:] = corSlices[14]
+            tmpCube[2,:,:] = corSlices[12]
+            tmpCube[3,:,:] = corSlices[10] 
+            tmpCube[4,:,:] = corSlices[8] 
+            tmpCube[5,:,:] = corSlices[6]  
+            tmpCube[6,:,:] = corSlices[4] 
+            tmpCube[7,:,:] = corSlices[2]  
+            tmpCube[8,:,:] = corSlices[0]  
+            tmpCube[9,:,:] = corSlices[1] 
+            tmpCube[10,:,:] = corSlices[3]
+            tmpCube[11,:,:] = corSlices[5]
+            tmpCube[12,:,:] = corSlices[7]
+            tmpCube[13,:,:] = corSlices[9] 
+            tmpCube[14,:,:] = corSlices[11] 
+            tmpCube[15,:,:] = corSlices[13] 
+            tmpCube[16,:,:] = corSlices[15]   
+            tmpCube[17,:,:] = tmpSlice
+
+        else:
+            raise Warning('*** ONLY 17 SLICES DETECTED. THE MISSING SLICE MUST BE SPECIFIED USING THE CORRECT KEYWORD ***')
+    else:
+        raise Warning('*** MORE THAN 18 SLICES DETECTED. ONLY 18 SLICES EXPECTED ***')
 
     #interpolate cube onto different y-grid (x-grid already done in previous step)
     out = interpCube(tmpCube, ndiv=ndiv, ncpus=ncpus)

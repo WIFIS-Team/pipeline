@@ -236,9 +236,9 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                     finalLimits = polyLimits
                     shft = 0
 
-                if logfile is not None:
-                    logfile.write('*** WARNING:No slice limits provided for distortion map. Finding independent slice limits ***\n')
-                    logfile.write(distMapLimitsFile+'\n')
+                    if logfile is not None:
+                        logfile.write('*** WARNING:No slice limits provided for distortion map. Finding independent slice limits ***\n')
+                        logfile.write(distMapLimitsFile+'\n')
                             
                 
                 #write distMapLimits + shft to file

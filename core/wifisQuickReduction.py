@@ -301,7 +301,7 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
 
     #create cube
     print('Creating image')
-    dataCube = createCube.mkCube(dataGrid, ndiv=1)
+    dataCube = createCube.mkCube(dataGrid, ndiv=1, missing_left=missing_left_slice, missing_right=missing_right_slice)
 
     #create output image
     if pixRange is not None:
@@ -439,7 +439,8 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
         if (os.path.exists('quick_reduction/'+flatFolder+'_flat_limits.fits') and os.path.exists('quick_reduction/'+flatFolder+'_flat_slices.fits')):
             limits, limitsHdr = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_limits.fits')
             flatSlices,flatHdr = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_slices.fits')
-            flatSlices=flatSlices[:18]
+            nSlices = len(flatSlices)/3
+            flatSlices=flatSlices[:nSlices]
             shft = limitsHdr['LIMSHIFT']
         else:
             print('Processing flat file')
@@ -627,9 +628,11 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, var
     
     if (os.path.exists('quick_reduction/'+flatFolder+'_flat.fits') and os.path.exists('quick_reduction/'+flatFolder+'_flat_limits.fits') and os.path.exists('quick_reduction/'+flatFolder+'_flat_slices.fits') and os.path.exists('quick_reduction/'+flatFolder+'_flat_slices_norm.fits')):
         limits = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_limits.fits')[0]
-        flatSlices = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_slices.fits')[0][:18]
+        flatSlices = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_slices.fits')[0]
+        nSlices = len(flatSlices)
+        flatSlices =flatSlices[:nSlices]
         flatLst = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_slices_norm.fits')
-        flatNorm = flatLst[0][:18]
+        flatNorm = flatLst[0][:nSlices]
         flatHdr = flatLst[1]
     else:
         print('processing flat ' + flatFolder)

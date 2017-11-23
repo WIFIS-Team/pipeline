@@ -153,9 +153,10 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                 if (not cont.lower() == 'y'):
                     print('Reading image '+savename+'_wave_slices.fits instead')
                     waveSlicesLst = wifisIO.readImgsFromFile(savename+'_wave.fits')[0]
-                    waveSlices = waveSlicesLst[0:18]
-                    sigmaSlices = waveSlicesLst[18:36]
-                    satSlices = waveSlicesLst[36:]
+                    nSlices = len(waveSlicesLst)/3
+                    waveSlices = waveSlicesLst[:nSlices]
+                    sigmaSlices = waveSlicesLst[nSlices:2*nSlices]
+                    satSlices = waveSlicesLst[3*nSlices:]
                     contProc2 = False
                 else:
                     contProc2 = True
@@ -201,8 +202,9 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                 
                 #get flat fielded slices
                 flatNormLst = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_slices_norm.fits')[0]
-                flatNorm = flatNormLst[0:18]
-                flatSigmaNorm = flatNormLst[18:36]
+                nSlices = len(flatNormLst)/3
+                flatNorm = flatNormLst[:nSlices]
+                flatSigmaNorm = flatNormLst[nSlices:2*nSlices]
                
                 waveFlat = slices.ffCorrectAll(waveSlices, flatNorm)
                 sigmaFlat = wifisUncertainties.multiplySlices(waveSlices, sigmaSlices, flatNorm, flatSigmaNorm)
@@ -213,8 +215,9 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                 if (not cont.lower() == 'y'):
                     print('Reading in distortion corrected wave slices file '+savename+'_wave_distCor.fits instead')
                     waveSlicesLst= wifisIO.readImgsFromFile(savename+'_wave_distCor.fits')[0]
-                    waveCor =waveSlicesLst[:18]
-                    sigmaCor = waveSlicesLst[18:36]
+                    nSlices = len(waveSlicesLst)/2
+                    waveCor =waveSlicesLst[:nSlices]
+                    sigmaCor = waveSlicesLst[nSlices:2*nSlices]
                     
                     contProc2 = False
                 else:
@@ -344,7 +347,9 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                         print('Trimming wavelength map to useful range')
                         #now trim wavemap if needed
                         #read in unnormalized flat field data
-                        flatSlices = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_slices.fits')[0][0:18]
+                        flatSlices = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_slices.fits')[0]
+                        nSlices = len(flatSlices)/3
+                        flatSlices = flatSlices[:nSlices]
                         waveMapTrim = waveSol.trimWaveSliceAll(waveMap, flatSlices, waveTrimThresh)
                 
                         #get wave grid properties
