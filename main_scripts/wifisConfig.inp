@@ -122,10 +122,10 @@ flatCorFile = 'processed/flat_correction_slices.fits'
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
 
 #location of arc lamp template file
-waveTempFile = '/data/pipeline/external_data/waveTemplate.fits'
+waveTempFile = 'processed/waveTemplate.fits'
 
 #location of fitting results associated with arc lamp template file
-waveTempResultsFile = '/data/pipeline/external_data/waveTemplateFittingResults.pkl'
+waveTempResultsFile = 'processed/waveTemplateFittingResults.pkl'
 
 #distortion map file, associated limits, and spatial grid properties files
 
@@ -145,9 +145,9 @@ waveTempResultsFile = '/data/pipeline/external_data/waveTemplateFittingResults.p
 #spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707175840_ronchi_spatGridProps.dat'
 
 #august
-distMapFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831211259_ronchi_distMap.fits'
-distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831210255_flat_limits.fits'
-spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831211259_ronchi_spatGridProps.dat'
+#distMapFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831211259_ronchi_distMap.fits'
+#distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831210255_flat_limits.fits'
+#spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_august/tb/testing/processed/20170831211259_ronchi_spatGridProps.dat'
 
 # calibration files
 nlFile = '/home/jason/wifis/data/june_cals/processed/master_detLin_NLCoeff.fits'        
@@ -350,7 +350,22 @@ gain = 1.
 obsCoords = [-111.600444444,31.9629166667,2071]
 
 #*******************************************************************************************************************
+#slice information
 #initial guesses for the position of the slice edges
-#from third commissioning run, better alignment     
+#from third commissioning run, better alignment
+
+#if left-most slice is properly on the detector
 centGuess = [25, 138, 252, 366, 479, 594, 706, 820, 935, 1048, 1163, 1278, 1390, 1506, 1620, 1735, 1849, 1965, 2044]
+
+#if left-most slice is cutoff (might be pushed further to left, so adjust as necessary). Should have 1 less entry than if 18 slices present
+centGuess = [88, 202, 316, 429, 544, 656, 770, 885, 998, 1113, 1228, 1340, 1456, 1570, 1685, 1799, 1915, 2044]
+
+#keywords to specify how to process images with less than 18 slices
+
+#when the left-most slice is missing (i.e. centre-field slice)
+missing_left_slice = False
+
+#when the right-most slice is missing (i.e. edge-field slice)
+missing_right_slice = False
+
 #*******************************************************************************************************************
