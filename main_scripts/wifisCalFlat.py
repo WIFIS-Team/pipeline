@@ -110,6 +110,7 @@ else:
     RON = None
     logfile.write('*** WARNING: No RON file provided, or ' + str(ronFile) +' does not exist ***\n')
 
+    
 #read file list
 if os.path.exists(flatLstFile):
     flatLst= wifisIO.readAsciiList(flatLstFile)

@@ -313,8 +313,11 @@ if zpntLst is not None:
             zpntFlatImg = zpntFlatImg[0]
             
         flatNormLst = wifisIO.readImgsFromFile('processed/'+zpntFlatFolder+'_flat_slices_norm.fits')[0]
-        flatNorm = flatNormLst[:18]
-        flatSigma = flatNormLst[18:36]
+
+        #extract the proper slices
+        nSlices = len(flatNormLst)/3
+        flatNorm = flatNormLst[:nSlices]
+        flatSigma = flatNormLst[nSlices:2*nSlices]
                 
         if flatCor:
             if os.path.exists(flatCorFile):
@@ -325,9 +328,9 @@ if zpntLst is not None:
                 flatCorSlices = wifisIO.readImgsFromFile(flatCorFile)[0]
                 flatNorm = slices.ffCorrectAll(flatNorm, flatCorSlices)
 
-                if len(flatCorSlices)>18:
+                if len(flatCorSlices)>nSlices:
                     logfile.write('*** WARNING: Response correction does not include uncertainties ***\n')
-                    flatSigma = wifisUncertainties.multiplySlices(flatNorm,flatSigma,flatCorSlices[:18],flatCorSlices[18:36])
+                    flatSigma = wifisUncertainties.multiplySlices(flatNorm,flatSigma,flatCorSlices[:nSlices],flatCorSlices[nSlices:2*nSlices])
                 else:
                     print(colorama.Fore.RED+'*** WARNING: Flat field correction file does not exist, skipping ***'+colorama.Style.RESET_ALL)
                     logfile.write('*** WARNING: Flat field correction file does not exist, skipping ***\n')
@@ -397,10 +400,10 @@ if zpntLst is not None:
             for i in range(len(zpntSlices)):
 
                 #for hband in june
-                if i==17:
-                    xfit = np.where(np.isfinite(zpntTraces[i][:1050]))[0]
-                else:
-                    xfit = np.where(np.isfinite(zpntTraces[i]))[0]
+                #if i==17:
+                #    xfit = np.where(np.isfinite(zpntTraces[i][:1050]))[0]
+                #else:
+                xfit = np.where(np.isfinite(zpntTraces[i]))[0]
 
                 fig=plt.figure()
                 interval = ZScaleInterval()
@@ -482,8 +485,10 @@ if ronchiFolder is not None:
             
         flatSlicesLst = wifisIO.readImgsFromFile('processed/'+ronchiFlatFolder+'_flat_slices.fits')[0]
         flatNormLst = wifisIO.readImgsFromFile('processed/'+ronchiFlatFolder+'_flat_slices_norm.fits')[0]
-        flatSlices = flatSlicesLst[:18]
-        flatNorm = flatNormLst[:18]
+
+        nSlices = len(flatSlicesLst)/3
+        flatSlices = flatSlicesLst[:nSlices]
+        flatNorm = flatNormLst[:nSlices]
 
         if flatCor:
             if os.path.exists(flatCorFile):
@@ -702,14 +707,13 @@ if ronchiFolder is not None:
                 # else:
                
                 #for june hband
-
-                if i==15:
-                    goodReg = [[lim1,lim2],[lim1,900],[250,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[300,lim2],[lim1,lim2],[600,lim2],[300,1000]]
-                else:
-                    if hband:
-                        goodReg = [[lim1,lim2]]
-                    else:
-                        goodReg = [[0,2040]]
+                #if i==15:
+                #    goodReg = [[lim1,lim2],[lim1,900],[250,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[300,lim2],[lim1,lim2],[600,lim2],[300,1000]]
+                #else:
+                #    if hband:
+                #        goodReg = [[lim1,lim2]]
+                #    else:
+                #        goodReg = [[0,2040]]
                 
                 #for july
                 #if i==13:
@@ -726,6 +730,19 @@ if ronchiFolder is not None:
                 #        goodReg.append([0,1500])
                 #else:
                 #    goodReg=[[0,2040]]
+
+                #for october
+                if i==11:
+                    goodReg = []
+                    for j in range(13):
+                        goodReg.append([0,2040])
+                    goodReg.append([0,1600])
+                elif i==13:
+                    goodReg =[[0,2040],[0,2040],[750,2040],[0,2040],[0,2040],[0,2040],[0,2040],[0,2040],[0,2040],[0,2040],[0,2040],[0,2040],[0,2040],[0,2040]]
+                elif i==17:
+                    goodReg=[[0,2040],[0,2040],[0,2040],[0,1500],[0,2040],[0,2040],[0,2040],[0,1750],[0,2040],[0,1500],[0,1500],[0,2040]]
+                else:
+                    goodReg=[[0,2040]]
 
                 polyTrace = spatialCor.polyFitRonchiTrace(trace, goodReg, order=ronchiPolyOrder, sigmaClipRounds=ronchiSigmaClipRounds)
 
@@ -784,16 +801,17 @@ if ronchiFolder is not None:
 
 
                 #for june, hband
-                if i==15:
-                    polyTrace[3,:] = np.nan
-                    polyTrace[4,:] = np.nan
-                    polyTrace[6,:] = np.nan
-                    polyTrace = np.delete(polyTrace,4,axis=0)
-                    polyTrace = polyTrace[:-1,:]
-
-                elif i==16:
-                    polyTrace = polyTrace[:-1,:]
-                elif i==17:
+                #if i==15:
+                #    polyTrace[3,:] = np.nan
+                #    polyTrace[4,:] = np.nan
+                #    polyTrace[6,:] = np.nan
+                #    polyTrace = np.delete(polyTrace,4,axis=0)
+                #    polyTrace = polyTrace[:-1,:]
+                #
+                #elif i==16:
+                #    polyTrace = polyTrace[:-1,:]
+                #
+                if i==17:
                     polyTrace[np.logical_or(polyTrace<0, polyTrace>=ronchiSlices[17].shape[0])] = np.nan
                     polyTrace = polyTrace[:-1,:]
                     
@@ -834,8 +852,12 @@ if cont.lower()=='y':
 
         #write maps
         wifisIO.writeFits(distMap, 'processed/'+ronchiFolder+'_ronchi_distMap.fits', ask=False)
+
         #distortion correct the flat field
-        flatSlices = wifisIO.readImgsFromFile('processed/'+ronchiFlatFolder+'_flat_slices.fits')[0][:18]
+        flatSlices = wifisIO.readImgsFromFile('processed/'+ronchiFlatFolder+'_flat_slices.fits')[0]
+        nSlices = len(flatSlices)/3
+        flatSlices = flatSlices[:nSlices]
+        
         flatCor = createCube.distCorAll(flatSlices, distMap)
         with warnings.catch_warnings():
             warnings.simplefilter('ignore',RuntimeWarning)

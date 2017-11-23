@@ -253,8 +253,9 @@ for i in range(len(obsLst)):
     logfile.write('processed/'+flatFolder+'_flat_slices_norm.fits\n')
 
     flatNormLst = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_slices_norm.fits')[0]
-    flatNorm = flatNormLst[:18]
-    flatSigma = flatNormLst[18:36]
+    nSlices = len(flatNormLst)/3
+    flatNorm = flatNormLst[:nSlices]
+    flatSigma = flatNormLst[nSlices:2*nSlices]
 
     if flatCor:
         if os.path.exists(flatCorFile):
@@ -265,9 +266,9 @@ for i in range(len(obsLst)):
             flatCorSlices = wifisIO.readImgsFromFile(flatCorFile)[0]
             flatNorm = slices.ffCorrectAll(flatNorm, flatCorSlices)
 
-            if len(flatCorSlices)>18:
+            if len(flatCorSlices)>nSlices:
                 logfile.write('*** WARNING: Response correction does not include uncertainties ***\n')
-                flatSigma = wifisUncertainties.multiplySlices(flatNorm,flatSigma,flatCorSlices[:18],flatCorSlices[18:36])
+                flatSigma = wifisUncertainties.multiplySlices(flatNorm,flatSigma,flatCorSlices[:nSlices],flatCorSlices[nSlices:2*nSlices])
         else:
             print(colorama.Fore.RED+'*** WARNING: Flat field correction file does not exist, skipping ***'+colorama.Style.RESET_ALL)
     
@@ -487,9 +488,9 @@ for i in range(len(obsLst)):
                 logfile.write('processed/'+skyFolder+'_sky_slices.fits\n')
                 
                 skySlicesLst,skyHdr = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky_slices.fits')
-                skyFlat = skySlicesLst[0:18]
-                skySigmaSlices = skySlicesLst[18:36]
-                skySatSlices = skySlicesLst[36:]
+                skyFlat = skySlicesLst[:nSlices]
+                skySigmaSlices = skySlicesLst[nSlices:2*nSlices]
+                skySatSlices = skySlicesLst[3*nSlices:]
                 skyHdr =skyHdr[0]
                 del skySlicesLst
 
@@ -558,7 +559,9 @@ for i in range(len(obsLst)):
             tmpHdr.remove('COMMENT')
             skyHdr = tmpHdr[::-1]
             skyHdr.add_comment('File contains the flux data cube')
-            skyCube = createCube.mkCube(skyGrid, ndiv=ndiv).astype('float32')
+
+            
+            skyCube = createCube.mkCube(skyGrid, ndiv=ndiv, missing_left=missing_left_slice, missing_right=missing_right_slice).astype('float32')
             headers.getWCSCube(skyCube, skyHdr, xScale, yScale, waveGridProps)
 
             if getSkyCorRV:
@@ -772,7 +775,7 @@ for i in range(len(obsLst)):
     tmpHdr.remove('COMMENT')
     hdr = tmpHdr[::-1]
     
-    dataCube = createCube.mkCube(dataGrid, ndiv=ndiv).astype('float32')
+    dataCube = createCube.mkCube(dataGrid, ndiv=ndiv, missing_left=missing_left_slice, missing_right=missing_right_slice).astype('float32')
 
     if tellCor:
         #input code here to deal with telluric corrections
@@ -881,7 +884,7 @@ if len(obsLst) > 1:
     #now create cube from gridded data
     print('Creating median data cube')
     logfile.write('Creating median cube from gridded slices\n')
-    combCube = createCube.mkCube(combGrid, ndiv=ndiv)
+    combCube = createCube.mkCube(combGrid, ndiv=ndiv, missing_left = missing_left_slice, missing_right = missing_right_slice)
 
     #add additional header info here
     #compute total iTime
@@ -890,18 +893,26 @@ if len(obsLst) > 1:
     #compute total observation time, from start of first exposure to end of last exposure
     #convert UT into decimal representation
     t1Split = utTimeLst[0].split(':')
-    time1 = np.float(t1Split[0])*3600.+np.float(t1Split[1])*60.+np.float(t1Split[2])
-    #subtract first integration time
-    time1 -= iTimeLst[0]
+
+    #check if the contents make sense, if not, skip
+    #some of the headers are incorrect in early commissioning data
+    if len(t1Split)>2:
+        time1 = np.float(t1Split[0])*3600.+np.float(t1Split[1])*60.+np.float(t1Split[2])
+        #subtract first integration time
+        time1 -= iTimeLst[0]
+
     t2Split = utTimeLst[-1].split(':')
-    time2 = np.float(t2Split[0])*3600.+np.float(t2Split[1])*60.+np.float(t2Split[2])
-    deltaTime = time2-time1
+    if len(t2Split)>2:
+        time2 = np.float(t2Split[0])*3600.+np.float(t2Split[1])*60.+np.float(t2Split[2])
+
+    if len(t1Split)>2 and len(t2Split)>2:
+        deltaTime = time2-time1
     
-    if deltaTime < 0:
-        #account for possible changeover in day
-        deltaTime+=24.*3600.
+        if deltaTime < 0:
+            #account for possible changeover in day
+            deltaTime+=24.*3600.
         
-    combHdr.set('OBJTIME',np.float32(deltaTime),'Total time spent on target in seconds')
+        combHdr.set('OBJTIME',np.float32(deltaTime),'Total time spent on target in seconds')
     
     if getSkyCorRV:
         combHdr.add_history('RV offset between sky and template was determined for each observation')
