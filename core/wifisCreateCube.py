@@ -233,7 +233,6 @@ def mkCube(corSlices, ndiv=1, MP=True, ncpus=None, missing_left=False, missing_r
 
     #first check how many slices exist
 
-    print('Found ' + str(len(corSlices))+' number of slices to reconstruct cube')
     if len(corSlices)==18:
         #if all 18 slices present use the following
         #place slices in correct order!
@@ -259,6 +258,7 @@ def mkCube(corSlices, ndiv=1, MP=True, ncpus=None, missing_left=False, missing_r
     elif len(corSlices)==17:
         #if only 17 slices present
         #if the left-most (centre-field) slice is missing, replace it with NaNs
+        print('Found ' + str(len(corSlices))+' slices to reconstruct cube')
 
         if missing_left:
             tmpCube[0,:,:] = corSlices[15]

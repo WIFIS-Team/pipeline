@@ -1182,7 +1182,7 @@ def crossCorImageCL(img1, img2, regions=None, oversample=20, absorption=False, n
 
     return shiftOut
 
-def subScaledSkySlices2(waveMap, obsSlices, skySlices, waveGridProps,hdr,mxScale=0.5, regions=None, MP=True, ncpus=None,nContFit=50, fluxThresh=0.1,fitInd=False, saveFile='', logfile=None):
+def subScaledSkySlices2(waveMap, obsSlices, skySlices, waveGridProps,hdr,mxScale=0.5, regions=None, MP=True, ncpus=None,nContFit=50, fluxThresh=0.1,fitInd=False, saveFile='', logfile=None, missing_left_slice=False, missing_right_slice=False):
     """
     Routine used to scale sky lines and subtract from image slices.
     Usage: subSlices = subScaledSkySlices2(waveMap, obsSlices, skySlices, waveGridProps, hdr, mxScale=0.5,  regions=None, MP=True, ncpus=None,nContFit=50,fluxThresh=0.1,fitInd=False, saveFile='', logfile=None)
@@ -1210,8 +1210,8 @@ def subScaledSkySlices2(waveMap, obsSlices, skySlices, waveGridProps,hdr,mxScale
     skyTmpGrid = createCube.waveCorAll(skySlices, waveMap, waveGridProps=waveGridProps)
 
     #get temporary cubes
-    dataTmpCube = createCube.mkCube(dataTmpGrid, ndiv=0).astype('float32')
-    skyTmpCube = createCube.mkCube(skyTmpGrid, ndiv=0).astype('float32')
+    dataTmpCube = createCube.mkCube(dataTmpGrid, ndiv=0, missing_left=missing_left_slice, missing_right=missing_right_slice).astype('float32')
+    skyTmpCube = createCube.mkCube(skyTmpGrid, ndiv=0, missing_left=missing_left_slice, missing_right=missing_right_slice).astype('float32')
     hdrTmp = copy.copy(hdr[:])
     headers.getWCSCube(dataTmpCube, hdrTmp, 1, 1, waveGridProps)
             
@@ -1392,7 +1392,7 @@ def subScaledSkySlices2(waveMap, obsSlices, skySlices, waveGridProps,hdr,mxScale
         pool.close()
     else:
         subLst = []
-        for i in range(inpLst):
+        for i in range(len(inpLst)):
             subLst.append(subScaledSkySpec(inpLst[i]))
 
     #reconstruct output as slices
