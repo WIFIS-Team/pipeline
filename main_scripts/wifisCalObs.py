@@ -701,7 +701,7 @@ for i in range(len(obsLst)):
 
                 with warnings.catch_warnings():
                     warnings.simplefilter('ignore', RuntimeWarning)
-                    subSlices= postProcess.subScaledSkySlices2(waveShift, dataCor, skyCor, waveGridShift,skyHdr,regions=skyLineRegions, mxScale=skyMxScale, fluxThresh = skyFluxThresh, fitInd=skyFitIndLines, saveFile = 'quality_control/'+obsLst[i]+'_obs_'+skyLst[i]+'_sky')
+                    subSlices= postProcess.subScaledSkySlices2(waveShift, dataCor, skyCor, waveGridShift,skyHdr,regions=skyLineRegions, mxScale=skyMxScale, fluxThresh = skyFluxThresh, fitInd=skyFitIndLines, saveFile = 'quality_control/'+obsLst[i]+'_obs_'+skyLst[i]+'_sky',MP=True, missing_left_slice=missing_left_slice, missing_right_slice=missing_right_slice)
 
                 hdr.add_history('Subtracted scaled sky slices using sky obs:')
                 hdr.add_history(skyFolder)

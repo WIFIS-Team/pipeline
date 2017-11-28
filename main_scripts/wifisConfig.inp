@@ -122,10 +122,10 @@ flatCorFile = 'processed/flat_correction_slices.fits'
 rootFolder = '/data/WIFIS/H2RG-G17084-ASIC-08-319'
 
 #location of arc lamp template file
-waveTempFile = 'processed/waveTemplate.fits'
+waveTempFile = '/data/pipeline/external_data/waveTemplate.fits'
 
 #location of fitting results associated with arc lamp template file
-waveTempResultsFile = 'processed/waveTemplateFittingResults.pkl'
+waveTempResultsFile = '/data/pipeline/external_data/waveTemplateFittingResults.pkl'
 
 #distortion map file, associated limits, and spatial grid properties files
 
@@ -135,9 +135,9 @@ waveTempResultsFile = 'processed/waveTemplateFittingResults.pkl'
 #spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_may/testing/processed/20170511222022_ronchi_spatGridProps.dat'
 
 #june
-#distMapFile = '/home/jason/wifis/data/ronchi_map_june/testing/processed/20170611221759_ronchi_distMap.fits'
-#distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_june/testing/processed/20170611222844_flat_limits.fits'
-#spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_june/testing/processed/20170611221759_ronchi_spatGridProps.dat'
+distMapFile = '/home/jason/wifis/data/ronchi_map_june/testing/processed/20170611221759_ronchi_distMap.fits'
+distMapLimitsFile = '/home/jason/wifis/data/ronchi_map_june/testing/processed/20170611222844_flat_limits.fits'
+spatGridPropsFile = '/home/jason/wifis/data/ronchi_map_june/testing/processed/20170611221759_ronchi_spatGridProps.dat'
 
 #july
 #distMapFile = '/home/jason/wifis/data/ronchi_map_july/tb/processed/20170707175840_ronchi_distMap.fits'
@@ -358,7 +358,7 @@ obsCoords = [-111.600444444,31.9629166667,2071]
 centGuess = [25, 138, 252, 366, 479, 594, 706, 820, 935, 1048, 1163, 1278, 1390, 1506, 1620, 1735, 1849, 1965, 2044]
 
 #if left-most slice is cutoff (might be pushed further to left, so adjust as necessary). Should have 1 less entry than if 18 slices present
-centGuess = [88, 202, 316, 429, 544, 656, 770, 885, 998, 1113, 1228, 1340, 1456, 1570, 1685, 1799, 1915, 2044]
+#centGuess = [88, 202, 316, 429, 544, 656, 770, 885, 998, 1113, 1228, 1340, 1456, 1570, 1685, 1799, 1915, 2044]
 
 #keywords to specify how to process images with less than 18 slices
 
