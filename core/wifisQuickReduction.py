@@ -439,7 +439,13 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
         if (os.path.exists('quick_reduction/'+flatFolder+'_flat_limits.fits') and os.path.exists('quick_reduction/'+flatFolder+'_flat_slices.fits')):
             limits, limitsHdr = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_limits.fits')
             flatSlices,flatHdr = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_slices.fits')
-            nSlices = len(flatSlices)/3
+
+            #check if number of slices is consistent with quick reduction or full reduction (3x the number)
+            if len(flatSlices)>18:
+                nSlices = len(flatSlices)/3
+            else:
+                nSlices = len(flatSlices)
+                
             flatSlices=flatSlices[:nSlices]
             shft = limitsHdr['LIMSHIFT']
         else:
@@ -482,8 +488,6 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
             flatNorm = slices.getResponseAll(flatSlices, 0, 0.6)
         else:
             flatNorm = slices.getResponseAll(flatSlices, 0, 0.1)
-
-        waveNorm = slices.ffCorrectAll(waveSlices, flatNorm)
 
         print ('getting distortion corrected slices')
         waveCor = createCube.distCorAll(waveSlices, distMap, spatGridProps=spatGridProps)
