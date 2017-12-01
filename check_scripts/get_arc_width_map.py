@@ -26,5 +26,8 @@ if flatLst.ndim == 0:
     flatLst = np.asarray([flatLst])
 
 for i in range(len(waveLst)):
-    quickReduction.procArcData(waveLst[i], flatLst[i], colorbarLims=None, hband=hband, varFile=varFile)
-    
+    if len(waveLst)>1:
+        quickReduction.procArcData(waveLst[i], flatLst[i], colorbarLims=None, hband=hband, varFile=varFile, noPlot=True)
+    else:
+        quickReduction.procArcData(waveLst[i], flatLst[i], colorbarLims=None, hband=hband, varFile=varFile, noPlot=False)
+
