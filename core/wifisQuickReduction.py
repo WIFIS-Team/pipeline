@@ -374,7 +374,7 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
     plt.close('all')
     return
 
-def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFile=''):
+def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFile='', noPlot=False):
     """
     Routine to quickly process the raw data from an arc lamp/wavelength correction ramp and plot the resulting FWHM map across each slice
     Usage: procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFile='')
@@ -441,11 +441,7 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
             flatSlices,flatHdr = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_slices.fits')
 
             #check if number of slices is consistent with quick reduction or full reduction (3x the number)
-            if len(flatSlices)>18:
-                nSlices = len(flatSlices)/3
-            else:
-                nSlices = len(flatSlices)
-                
+            nSlices = len(flatSlices)
             flatSlices=flatSlices[:nSlices]
             shft = limitsHdr['LIMSHIFT']
         else:
@@ -568,8 +564,12 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
             strt += f.shape[0]
 
         #save results
-        wifisIO.writeFits(waveMap, 'quick_reduction/'+waveFolder+'_wave_wavelength_map.fits', ask=False)
-        wifisIO.writeFits(fwhmMap, 'quick_reduction/'+waveFolder+'_wave_fwhm_map.fits', ask=False)
+        hdr.set('QC_WMIN',waveMin,'Minimum median wavelength for middle slice')
+        hdr.set('QC_WMAX',waveMax,'Maximum median wavelength for middle slice')
+        hdr.set('QC_WFWHM', fwhmMed, 'Median FWHM of all slices')
+
+        wifisIO.writeFits(waveMap, 'quick_reduction/'+waveFolder+'_wave_wavelength_map.fits', ask=False,hdr=hdr)
+        wifisIO.writeFits(fwhmMap, 'quick_reduction/'+waveFolder+'_wave_fwhm_map.fits', ask=False,hdr=hdr)
 
         print('plotting results')
         fig = plt.figure()
@@ -585,12 +585,13 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
         plt.title('Median FWHM is '+'{:3.1f}'.format(fwhmMed) +', min wave is '+'{:6.1f}'.format(waveMin)+', max wave is '+'{:6.1f}'.format(waveMax))
         plt.tight_layout()
         plt.savefig('quick_reduction/'+waveFolder+'_wave_fwhm_map.png', dpi=300)
-        plt.show()
+        if not noPlot:
+            plt.show()
         plt.close()
 
     return
 
-def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, varFile='',noPlot=False):
+def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, varFile='',noPlot=False,noFlat=False):
     """
     Routine to quickly process a ramp containing a Ronchi mask observation and plot the map of the measured amplitudes
     Usage: procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, mxWidth=4, varFile='',noPlot=False)
@@ -692,8 +693,11 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, var
         print('Getting traces')
         with warnings.catch_warnings():
             warnings.simplefilter('ignore',RuntimeWarning)
-            ronchiTraces, ronchiAmps = spatialCor.traceRonchiAll(ronchiFlat, nbin=ronchiNbin, winRng=ronchiWinRng, mxWidth=ronchiMxWidth,smth=ronchiSmth, bright=ronchiBright, flatSlices=flatSlices, MP=True)
-            
+            if noFlat:
+                ronchiTraces, ronchiAmps = spatialCor.traceRonchiAll(ronchiSlices, nbin=ronchiNbin, winRng=ronchiWinRng, mxWidth=ronchiMxWidth,smth=ronchiSmth, bright=ronchiBright, flatSlices=None, MP=True)
+            else:
+                ronchiTraces, ronchiAmps = spatialCor.traceRonchiAll(ronchiFlat, nbin=ronchiNbin, winRng=ronchiWinRng, mxWidth=ronchiMxWidth,smth=ronchiSmth, bright=ronchiBright, flatSlices=flatSlices, MP=True)
+
         #get rid of bad traces
         for i in range(len(ronchiTraces)):
             r = ronchiTraces[i]
@@ -769,15 +773,16 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, var
         plt.colorbar()
         plt.tight_layout()
 
+        plt.savefig('quick_reduction/'+ronchiFolder+'_ronchi_amp_map.png',dpi=300)
         if not noPlot:
             plt.show()
-        plt.savefig('quick_reduction/'+ronchiFolder+'_ronchi_amp_map.png',dpi=300)
         plt.close()        
         
         print('saving results')
         #write results!
-        wifisIO.writeFits(ronchiTraces, 'quick_reduction/'+ronchiFolder+'_ronchi_traces.fits', ask=False)
-        wifisIO.writeFits(ampMap, 'quick_reduction/'+ronchiFolder+'_ronchi_amp_map.fits', ask=False)
+        hdr.set('QC_AMP',ampMed,'Median Ronchi amplitude of all slices')
+        wifisIO.writeFits(ronchiTraces, 'quick_reduction/'+ronchiFolder+'_ronchi_traces.fits', ask=False,hdr=hdr)
+        wifisIO.writeFits(ampMap, 'quick_reduction/'+ronchiFolder+'_ronchi_amp_map.fits', ask=False,hdr=hdr)
     else:
         print('Ronchi ' + ronchiFolder + ' already processed')
     return
