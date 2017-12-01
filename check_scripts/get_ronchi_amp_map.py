@@ -13,18 +13,19 @@ import wifisProcessRamp as processRamp
 import warnings
 import wifisQuickReduction as quickReduction
 
-os.environ['PYOPENCL_CTX'] = '1' # Used to specify which OpenCL device to target. Should be uncommented and pointed to correct device to avoid future interactive requests
-
 #****************************************************************************************
 #REQUIRED INPUT FILES
-ronchiLstFile = 'ronchi.lst'
-flatLstFile = 'flat.lst'
+varFile = 'wifisConfig.inp'
 
-hband = False
+varInp = wifisIO.readInputVariables(varFile)
+for var in varInp:
+    globals()[var[0]]=var[1]    
 
+#over-ride variables here
+noFlat = True
 #****************************************************************************************
 
-ronchiLst = wifisIO.readAsciiList(ronchiLstFile)
+ronchiLst = wifisIO.readAsciiList(ronchiFile)
 if ronchiLst.ndim==0:
     ronchiLst = np.asarray([ronchiLst])
 
@@ -32,7 +33,11 @@ flatLst = wifisIO.readAsciiList(flatLstFile)
 if flatLst.ndim == 0:
     flatLst = np.asarray([flatLst])
 
-quickReduction.initPaths()
-for fle in range(len(ronchiLst)):
-    quickReduction.procRonchiData(ronchiLst[fle], flatLst[fle], colorbarLims=None)
     
+for i in range(len(ronchiLst)):
+    if len(ronchiLst) > 1:
+        quickReduction.procRonchiData(ronchiLst[i], flatLst[i], colorbarLims=None, noPlot=True, varFile=varFile, noFlat=noFlat)
+    else:
+        quickReduction.procRonchiData(ronchiLst[i], flatLst[i], colorbarLims=None, noPlot=False, varFile=varFile, noFlat=noFlat)
+
+        
