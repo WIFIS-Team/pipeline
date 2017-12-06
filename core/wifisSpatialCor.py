@@ -964,19 +964,27 @@ def traceCentreFlatSlice(input):
             gKern = conv.Gaussian1DKernel(10)
             ysmth = conv.convolve(ytmp, gKern, boundary='extend',normalize_kernel=True)
             yout = ytmp/np.nanmax(ysmth)
-
+            
             whr = np.where(np.isfinite(yout))[0]
-            if len(whr) > 50:
-                x1 = xtmp[whr[:50]]
-                y1 = yout[whr[:50]]
-                x2 = xtmp[whr[-50:]]
-                y2 = yout[whr[-50:]]
-            else:
-                x1 = xtmp[whr]
-                x2 = xtmp[whr]
-                y1 = yout[whr]
-                y2 = yout[whr]
+            npts = whr.shape[0]
 
+            x1 = xtmp[whr[:int(npts/2)]]
+            y1 = yout[whr[:int(npts/2)]]
+            x2 = xtmp[whr[int(npts/2):]]
+            y2 = yout[whr[int(npts/2):]]
+            
+            #if len(whr) > 50:
+            #    x1 = xtmp[whr[:50]]
+            #    y1 = yout[whr[:50]]
+            #    x2 = xtmp[whr[-50:]]
+            #    y2 = yout[whr[-50:]]
+            #else:
+            #    x1 = xtmp[whr]
+            #    x2 = xtmp[whr]
+            #    y1 = yout[whr]
+            #    y2 = yout[whr]
+
+            
             whr1 = np.where(y1 < cutoff)[0]
             if (len(whr1)>0):
                 #good pixel is last bad pixel + 1
