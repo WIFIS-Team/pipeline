@@ -18,8 +18,8 @@ Produces:
 - The traces (or the polynomial fits to the traces) of the zero-point offset, for each slice
 """
 
-import matplotlib
-matplotlib.use('gtkagg')
+#import matplotlib
+#matplotlib.use('gtkagg')
 import wifisIO
 import wifisSlices as slices
 import wifisSpatialCor as spatialCor
