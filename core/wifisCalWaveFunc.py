@@ -317,7 +317,11 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                                     plt.close()
                 
                     dispSolLst = dispSolClean
-                    
+
+                    #Save cleaned results
+                    #results[0] = dispSolClean
+                    #wifisIO.writePickle(results, savename+'_wave_fitResultsClean.pkl')
+
                     print('Creating wavelength map')
                     #Create wavemap
 
