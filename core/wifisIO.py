@@ -244,15 +244,24 @@ def readRampFromFolder(folderName, rampNum=None,nSkip=0):
     if rampNum is None:
         #Make sure that only one set of ramps is present in folder
         lst = glob.glob(folderName+'/*N01.fits')
-
+        #if the list is empty, search for gzipped files
+        if len(lst)==0:
+            lst = glob.glob(folderName+'/*/N01.fits.gz')
+            
         if len(lst)>1:
             raise Warning('*** More than one set of ramps present in folder ' + folderName + '. You must specify which ramp to use. ***')
 
         else:
             lst = glob.glob(folderName+'/H2*fits*')
+            if len(lst)==0:
+                lst = glob.glob(folderName+'H2*fits.gz')
+
             lst = sorted_nicely(lst)
     else:
         lst = glob.glob(folderName+'/H2*'+'R'+'{:02d}'.format(rampNum)+'*.fits')
+        if len(lst)==0:
+            lst = glob.glob(folderName+'/H2*/'+'R'+'{:02d}'.format(rampNum)+'*.fits.gz')
+
         lst = sorted_nicely(lst)
 
     if nSkip>0:
