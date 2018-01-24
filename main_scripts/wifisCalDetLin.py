@@ -15,8 +15,10 @@ Produces:
 
 """
 
+#change the next two lines as needed
 import matplotlib
 matplotlib.use('gtkagg')
+
 import numpy as np
 import astropy.io.fits as fits
 import astropy.io.ascii as ascii
@@ -60,7 +62,7 @@ if len(pyCLCTX) >0:
 
 logfile.write('Root folder containing raw data: ' + str(rootFolder)+'\n')
 logfile.write('Detector gain of' + str(gain)+ ' in electrons/counts\n')
-logfile.write('Detector readout noise of' + str(ron) +' electrons per frame\n')
+#logfile.write('Detector readout noise of' + str(ron) +' electrons per frame\n')
 
 #read file list
 lst= wifisIO.readAsciiList(detLstFile)
