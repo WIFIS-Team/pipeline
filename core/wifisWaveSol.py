@@ -1317,7 +1317,7 @@ def cleanDispSol(result, plotFile=None, threshold=1.5):
                 
     return rmsClean, dispSolClean, pixSolClean
 
-def buildWaveMap2(dispSolLst, npts, fill_missing=True, extrapolate=False, MP=True, ncpus=None):
+def buildWaveMap2(dispSolLst, npts, fill_missing=True, extrapolate=False, MP=True, ncpus=None,offset=0.):
     """
     Routine to build a wavelength map from the provided dispersion solution list for each image slice
     Usage: waveMapLst = buildWaveMap2(dispSolLst, npts, fill_missing=True,extrapolate=False,MP=True, ncpus=None)
@@ -1337,7 +1337,7 @@ def buildWaveMap2(dispSolLst, npts, fill_missing=True, extrapolate=False, MP=Tru
     if MP:
         #build input list
         for i in range(len(dispSolLst)):
-            inpLst.append([dispSolLst[i], x, fill_missing, extrapolate])
+            inpLst.append([dispSolLst[i], x, fill_missing, extrapolate, offset])
 
         #setup multiprocessing routines
         if (ncpus == None):
@@ -1351,7 +1351,7 @@ def buildWaveMap2(dispSolLst, npts, fill_missing=True, extrapolate=False, MP=Tru
         waveMapLst = []
 
         for i in range(len(dispSolLst)):
-            waveMapLst.append(buildWaveMap2Slice([dispSolLst[i], x, fill_missing, extrapolate]))
+            waveMapLst.append(buildWaveMap2Slice([dispSolLst[i], x, fill_missing, extrapolate,offset]))
 
     return waveMapLst
 
@@ -1364,6 +1364,7 @@ def buildWaveMap2Slice(input):
     - a numpy array providing the pixel coordinates along the dispersion direction of the input slice
     - a boolean keyword to specify if rows with missing solutions should be filled by linear interpolation of the surrounding rows with good solutions
     - a boolean flag to indicate if rows with missing solutions that are not surrounded by good solutions should be filled by linear extrapolation
+    - an optional offset in pixels to apply to the solution
     waveMapOut is the output maps providing the wavelength at each pixel
     """
 
@@ -1372,6 +1373,7 @@ def buildWaveMap2Slice(input):
     npts = x.shape[0]
     fill_missing = input[2]
     extrapolate = input[3]
+    offset = input[4]
     
     #initialize wave map array
     waveMap = np.zeros((len(dispSol),npts),dtype='float32')
@@ -1381,7 +1383,7 @@ def buildWaveMap2Slice(input):
         wave = 0.
 
         for j in range(dispSol[i].shape[0]):
-            wave += dispSol[i][j]*x**j
+            wave += dispSol[i][j]*(x-offset)**j
                 
         waveMap[i,:] = wave
 
