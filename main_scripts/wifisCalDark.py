@@ -15,8 +15,10 @@ Produces:
 TODO: ADD LOGFILE WRITING
 """
 
+#change the next two lines as needed
 import matplotlib
 matplotlib.use('gtkagg')
+
 import numpy as np
 import time
 import matplotlib.pyplot as plt
@@ -33,7 +35,8 @@ import wifisBadPixels as badPixels
 from astropy.visualization import ZScaleInterval
 
 import colorama
-    
+colorama.init()
+ 
 t0 = time.time()
 
 #*****************************************************************************
@@ -331,7 +334,7 @@ if (contProc):
     plt.title('Median RON of ' + '{: e}'.format(medRon))
     plt.xlabel('Counts')
     plt.ylabel('# of pixels')
-    plt.savefig('quality_control/'+folder+'_ron_hist.png',dpi=300)
+    plt.savefig('quality_control/master_ron_hist.png',dpi=300)
     plt.close()
 
     hdr.set('QC_RON', medRon, 'Median readout noise, in counts')
