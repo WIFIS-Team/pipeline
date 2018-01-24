@@ -18,8 +18,10 @@ Produces:
 - The traces (or the polynomial fits to the traces) of the zero-point offset, for each slice
 """
 
-#import matplotlib
-#matplotlib.use('gtkagg')
+#change the next two lines as needed
+import matplotlib
+matplotlib.use('gtkagg')
+
 import wifisIO
 import wifisSlices as slices
 import wifisSpatialCor as spatialCor
@@ -38,6 +40,7 @@ import time
 import warnings
 from astropy.visualization import ZScaleInterval
 import wifisBadPixels as badPixels
+import shutil
 
 #*****************************************************************************
 #support function
@@ -65,7 +68,6 @@ colorama.init()
 
 #INPUT VARIABLE FILE NAME
 varFile = 'wifisConfig.inp'
-
 
 logfile = open('wifis_reduction_log.txt','a')
 logfile.write('********************\n')
@@ -109,14 +111,6 @@ else:
     print(colorama.Fore.RED+'*** WARNING: No saturation counts array provided and will not be taken into account ***'+colorama.Style.RESET_ALL)
 
     logfile.write('*** WARNING: No saturation counts file provided or file ' + str(satFile) +' does not exist ***\n')
-
-if (os.path.exists(bpmFile)):
-    BPM = wifisIO.readImgsFromFile(bpmFile)[0]
-else:
-    BPM = None
-
-satCounts = wifisIO.readImgsFromFile(satFile)[0]
-nlCoeff = wifisIO.readImgsFromFile(nlFile)[0]
 
 #deal with darks
 if darkFile is not None and os.path.exists(darkFile):
@@ -235,7 +229,7 @@ if zpntLst is not None:
                 print('Processing ' + zpntFolder)
                 logfile.write('Processing '+ zpntFolder+'\n')
 
-                zpntObs, zpntSigma, zptnSatFrame, zpntHdr = processRamp.auto(zpntFolder, rootFolder,'processed/'+zpntFolder+'_zpnt_obs.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=obsBpmCorRng,nlFile=nlFile,satFile=satFile,bpmFile='', gain=gain, ron=RON,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,saveAll=True, rampNum=None, avgAll=True)
+                zpntObs, zpntSigma, zptnSatFrame, zpntHdr = processRamp.auto(zpntFolder, rootFolder,'processed/'+zpntFolder+'_zpnt_obs.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=obsBpmCorRng,nlFile=nlFile,satFile=satFile,bpmFile='', gain=gain, ron=RON,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,saveAll=True, rampNum=None, avgAll=True)
                 
             else:
                 print('Processed data already exists for ' + zpntFolder + '. Reading data instead')
@@ -253,7 +247,7 @@ if zpntLst is not None:
                     print('Processing sky folder '+skyFolder)
                     logfile.write('\nProcessing sky folder ' + skyFolder+'\n')
 
-                    sky, skySigmaImg, skySatFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoeff, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=obsBpmCorRng, rampNum=None,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=RON,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True)
+                    sky, skySigmaImg, skySatFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=obsBpmCorRng, rampNum=None,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=RON,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True)
                 else:
                     print('Reading sky data from ' + skyFolder)
                     logfile.write('Reading processed sky image from:\n')
@@ -399,12 +393,47 @@ if zpntLst is not None:
         with PdfPages('quality_control/'+zpntLst[0]+'_zpnt_traces.pdf') as pdf:
             for i in range(len(zpntSlices)):
 
-                #for hband in june
-                #if i==17:
-                #    xfit = np.where(np.isfinite(zpntTraces[i][:1050]))[0]
-                #else:
+                #add specific details to deal with bad zpnt traces here
+                #comment out this line and replace the necessary fitting range in the corresponding slice below
                 xfit = np.where(np.isfinite(zpntTraces[i]))[0]
 
+                if i==0:
+                    pass
+                elif i==1:
+                    pass
+                elif i==2:
+                    pass
+                elif i==3:
+                    pass
+                elif i==4:
+                    pass
+                elif i==5:
+                    pass
+                elif i==6:
+                    pass
+                elif i==7:
+                    pass
+                elif i==8:
+                    pass
+                elif i==9:
+                    pass
+                elif i==10:
+                    pass
+                elif i==11:
+                    pass
+                elif i==12:
+                    pass
+                elif i==13:
+                    pass
+                elif i==14:
+                    pass
+                elif i==15:
+                    pass
+                elif i==16:
+                    pass
+                elif i==17:
+                    pass
+                
                 fig=plt.figure()
                 interval = ZScaleInterval()
                 lims=interval.get_limits(zpntFlat[i])
@@ -452,7 +481,7 @@ else:
 if ronchiFolder is not None:
     if not os.path.exists('processed/'+ronchiFolder+'_ronchi.fits'):
 
-        ronchi, sigmaImg, satFrame, ronchiHdr = processRamp.auto(ronchiFolder, rootFolder,'processed/'+ronchiFolder+'_ronchi.fits', satCounts, nlCoeff, BPM,nChannel=nChannel, rowSplit=nRowSplitFlat, satSplit=nSatSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=flatbpmCorRng, saveAll=True, ron=RON, gain=gain)
+        ronchi, sigmaImg, satFrame, ronchiHdr = processRamp.auto(ronchiFolder, rootFolder,'processed/'+ronchiFolder+'_ronchi.fits', satCounts, nlCoef, BPM,nChannel=nChannel, rowSplit=nRowSplitFlat, satSplit=nSatSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=flatbpmCorRng, saveAll=True, ron=RON, gain=gain, avgAll=True)
     else:
         ronchiLst, ronchiHdr = wifisIO.readImgsFromFile('processed/'+ronchiFolder+'_ronchi.fits')
         ronchi = ronchiLst[0]
@@ -504,21 +533,16 @@ if ronchiFolder is not None:
         wifisIO.writeFits(ronchiSlices, 'processed/'+ronchiFolder+'_ronchi_slices.fits',hdr=ronchiHdr, ask=False)
 
         #apply flat field correction
-        ronchiFlat = slices.ffCorrectAll(ronchiSlices, flatNorm)
-
+        if not noFlat:
+            ronchiFlat = slices.ffCorrectAll(ronchiSlices, flatNorm)
+        else:
+            ronchiFlat = ronchiSlices
+            
         print('Getting Ronchi traces')
         with warnings.catch_warnings():
             warnings.simplefilter('ignore',RuntimeWarning)
             ronchiTraces, ronchiAmps = spatialCor.traceRonchiAll(ronchiFlat, nbin=ronchiNbin, winRng=ronchiWinRng, mxWidth=ronchiMxWidth,smth=ronchiSmth, bright=ronchiBright, flatSlices=flatSlices, MP=True)
-
-            #if needed, address problematic fits here
-            #better for May and june
-            #ronchiTraces, ronchiAmps = spatialCor.traceRonchiAll(ronchiSlices, nbin=ronchiNbin, winRng=ronchiWinRng, mxWidth=ronchiMxWidth,smth=ronchiSmth, bright=ronchiBright, flatSlices=None, MP=True)
-
-            #needed for june
-            #ronchiTraces[4],ronchiAmps[4] = spatialCor.traceRonchiSlice([ronchiFlat[4],ronchiNbin,ronchiWinRng,2040, False,ronchiMxWidth,ronchiSmth,False,flatSlices[4],0.5])
-            #ronchiTraces[17],ronchiAmps[17] = spatialCor.traceRonchiSlice([ronchiFlat[17],ronchiNbin,ronchiWinRng,2040, False,ronchiMxWidth,ronchiSmth,False,flatSlices[17],0.5])
-            
+         
         print('Plotting amplitude map')
         #build resolution map
         ampMapLst = spatialCor.buildAmpMap(ronchiTraces, ronchiAmps, ronchiSlices)
@@ -610,217 +634,98 @@ if ronchiFolder is not None:
             for i in range(len(ronchiSlices)):
                 trace = ronchiTraces[i]
 
-                #add specific details to deal with bad traces
-                #for june
-               #if i==5:
-               #    goodReg = []
-               #    for j in range(10):
-               #        goodReg.append([0,2040])
-               #    goodReg.append([0,1000])
-               #    goodReg.append([0,2040])
-               #    goodReg.append([400,1500])
-               #    goodReg.append([0,2040])
-               #    goodReg.append([0,2040])
-               #    
-               #elif i==6:
-               #    goodReg = []
-               #    for j in range(10):
-               #        goodReg.append([0,2040])
-               #    goodReg.append([400,2040])
-               #    goodReg.append([0,2040])
-               #    goodReg.append([0,2040])
-               #    goodReg.append([0,2040])
-               #    goodReg.append([0,2040])
-               #elif i==7:
-               #    goodReg =[]
-               #    for j in range(10):
-               #        goodReg.append([0,2040])
-               #    goodReg.append([0,1500])
-               #    goodReg.append([0,2040])
-               #    goodReg.append([0,2040])
-               #    goodReg.append([0,2040])
-               #    goodReg.append([0,2040])
-               #elif i==15:
-               #    goodReg = []
-               #    for j in range(10):
-               #        goodReg.append([0,2040])
-               #    for j in range(5):
-               #        goodReg.append([0,1600])
-               #elif i==17:
-               #    #goodReg = [[0,2040]]
-               #    for j in range(11):
-               #        goodReg.append([0,2040])
-               #    goodReg.append([0,1000])
-               #    goodReg.append([0,2040])
+                #add specific details to deal with bad ronchi traces here
+                #use this section to modify the ranges used for the polynomial traces
                 
-                    #goodReg=[]
-                    #for j in range(9):
-                    #    goodReg.append([0,2040])
-                    #goodReg.append([0,500])
-                    #goodReg.append([300,900])
-                    #goodReg.append([300,1750])
-              #  else:
-              #      goodReg =[[0,2040]]
+                #comment the line below and modify the specific slice 
+                goodReg=[[0,2040]]
 
-                #for may
-                #if i==13:
-                #    goodReg=[]
-                #    for j in range(9):
-                #        goodReg.append([0,2040])
-                #    goodReg.append([0,1500])
-                #    for j in range(4):
-                #        goodReg.append([0,2040])
-                #    goodReg.append([0,1500])
-                #
-                #elif i==15:
-                #    goodReg = [[600,2040],[0,1250],[0,750],[0,500],[0,750],[0,1400],[0,1400],[0,1400],[0,1600],[0,1250],[0,900],[0,1250],[0,1250],[0,1500],[0,1250]]
-                #elif i==16:
-                #    goodReg=[]
-                #    for j in range(4):
-                #        goodReg.append([0,2040])
-                #    goodReg.append([0,1500])
-                #    for j in range(9):
-                #        goodReg.append([0,2040])
-                #elif i==17:
-                #    goodReg=[[0,1100],[0,2040],[0,1100],[0,2040],[0,2040],[0,1500],[0,2040],[0,2040],[0,2040],[0,2040],[0,1100],[750,1750],[0,1100]]
-                #else:
-                #    goodReg = [[0,2040]]
-                
-                #for august
-                #if i==17:
-                #    goodReg = []
-                #    for j in range(10):
-                #        goodReg.append([0,2040])
-                #    goodReg.append([0,1400])
-                #else:
-                #    goodReg = [[0,2040]]
-
-                #for october
-                #if i==13:
-                #    goodReg = [[0,2040],[0,2040],[800,2040]]
-                #    for i in range(11):
-                #        goodReg.append([0,2040])
-                    
-                #elif i==17:
-                #    goodReg = [[0,2040],[0,2040],[0,2040],[0,1400],[0,2040],[0,2040],[0,2040],[0,2040],[0,2040],[0,1550],[0,1500],[0,1100]]
-                  
-                # else:
-               
-                #for june hband
-                #if i==15:
-                #    goodReg = [[lim1,lim2],[lim1,900],[250,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[lim1,lim2],[300,lim2],[lim1,lim2],[600,lim2],[300,1000]]
-                #else:
-                #    if hband:
-                #        goodReg = [[lim1,lim2]]
-                #    else:
-                #        goodReg = [[0,2040]]
-                
-                #for july
-                #if i==13:
-                #    goodReg=[[0,1600]]
-                #elif i==15:
-                #    goodReg=[[0,2040],[0,2040],[0,2040],[0,2040],[0,750]]
-                #    for j in range(0,11):
-                #        goodReg.append([0,2040])
-                #elif i ==17:
-                #    goodReg= []
-                #    for j in range(10):
-                #        goodReg.append([0,2040])
-                #    for j in range(3):
-                #        goodReg.append([0,1500])
-                #else:
-                #    goodReg=[[0,2040]]
-
-                #for october
-                if i==11:
-                    goodReg = []
-                    for j in range(13):
-                        goodReg.append([0,2040])
-                    goodReg.append([0,1600])
+                if i==0:
+                    pass
+                elif i==1:
+                    pass
+                elif i==2:
+                     pass
+                elif i==3:
+                    pass
+                elif i==4:
+                    pass
+                elif i==5:
+                    pass
+                elif i==6:
+                    pass
+                elif i==7:
+                    pass
+                elif i==8:
+                    pass
+                elif i==9:
+                    pass
+                elif i==10:
+                     pass
+                elif i==11:
+                    pass
+                elif i==12:
+                    pass
                 elif i==13:
-                    goodReg =[[0,2040],[0,2040],[750,2040],[0,2040],[0,2040],[0,2040],[0,2040],[0,2040],[0,2040],[0,2040],[0,2040],[0,2040],[0,2040],[0,2040]]
+                    pass
+                elif i==14:
+                    pass
+                elif i==15:
+                    pass
+                elif i==16:
+                    pass
                 elif i==17:
-                    goodReg=[[0,2040],[0,2040],[0,2040],[0,1500],[0,2040],[0,2040],[0,2040],[0,1750],[0,2040],[0,1500],[0,1500],[0,2040]]
-                else:
-                    goodReg=[[0,2040]]
-
+                    pass
+                     
                 polyTrace = spatialCor.polyFitRonchiTrace(trace, goodReg, order=ronchiPolyOrder, sigmaClipRounds=ronchiSigmaClipRounds)
 
-                #more details to deal with bad/extra traces
-                #for june
-                #if i==5 or i==13:
-                #    polyTrace = polyTrace[:-1,:]
-                #if i==15:
-                #    polyTrace = polyTrace[1:,:]
-                #elif i==17:
-                #    polyTrace[np.logical_or(polyTrace<0, polyTrace>=ronchiSlices[17].shape[0])] = np.nan
-                #    #polyTrace[9,500:] = np.nan
-                #    polyTrace = np.delete(polyTrace,10,axis=0)
-                #    polyTrace[10,:]=np.nan
-                #    polyTrace[11,:] = np.nan
-                                
-                #for may
-                #if i==0 or i==14:
-                #    polyTrace=polyTrace[1:,:]
-                #elif i==7:
-                #    polyTrace=polyTrace[:-1,:]
-                #elif i==15:
-                #    polyTrace = np.delete(polyTrace,4,axis=0)
-                #    polyTrace[2,750:] = np.nan
-                #    polyTrace[3,600:] = np.nan
-                #    polyTrace[9,900:] = np.nan
-                #elif i==17:
-                #    polyTrace[np.logical_or(polyTrace<0, polyTrace>=ronchiSlices[17].shape[0])] = np.nan
+                #add specific details to deal with bad ronchi traces here
+                #use this section to remove bad or extra traces that are deminishing the quality of the distortion map
+                                if i==0:
+                    pass
+                elif i==1:
+                    pass
+                elif i==2:
+                     pass
+                elif i==3:
+                    pass
+                elif i==4:
+                    pass
+                elif i==5:
+                    pass
+                elif i==6:
+                    pass
+                elif i==7:
+                    pass
+                elif i==8:
+                    pass
+                elif i==9:
+                    pass
+                elif i==10:
+                     pass
+                elif i==11:
+                    pass
+                elif i==12:
+                    pass
+                elif i==13:
+                    pass
+                elif i==14:
+                    pass
+                elif i==15:
+                    pass
+                elif i==16:
+                    pass
+                elif i==17:
+                    pass
                     
-                
-                #for july
-                #if i==0:
-                #     polyTrace = polyTrace[2:,:]
-                #elif i==1:
-                #    polyTrace=polyTrace[1:,:]
-                #elif i==5:
-                #    polyTrace=polyTrace[:-1,:]
-                #elif i==8:
-                #    polyTrace=polyTrace[:-1,:]
-                #elif i ==14:
-                #    polyTrace = polyTrace[1:-1,:]
-                #elif i==15:
-                #    polyTrace[4,:] = np.nan
-                #    polyTrace = polyTrace[:-1,:]
-                #elif i==16:
-                #    polyTrace=polyTrace[:-2,:]
-                #    
-                #elif i==17:
-                #    polyTrace[np.logical_or(polyTrace<0, polyTrace>=ronchiSlices[17].shape[0])] = np.nan
-                #polyTrace = polyTrace[1:11]
-
-                #for october
-                #if i==17:
-                #    polyTrace[np.logical_or(polyTrace<0, polyTrace>=ronchiSlices[17].shape[0])] = np.nan
-                #    polyTrace[3,1450:] = np.nan
-
-
-                #for june, hband
-                #if i==15:
-                #    polyTrace[3,:] = np.nan
-                #    polyTrace[4,:] = np.nan
-                #    polyTrace[6,:] = np.nan
-                #    polyTrace = np.delete(polyTrace,4,axis=0)
-                #    polyTrace = polyTrace[:-1,:]
-                #
-                #elif i==16:
-                #    polyTrace = polyTrace[:-1,:]
-                #
-                if i==17:
-                    polyTrace[np.logical_or(polyTrace<0, polyTrace>=ronchiSlices[17].shape[0])] = np.nan
-                    polyTrace = polyTrace[:-1,:]
-                    
+                polyTrace[np.logical_or(polyTrace<0, polyTrace>=ronchiSlices[i].shape[0])] = np.nan
+                                        
                 ronchiPolyTraces.append(polyTrace)
                                     
                 plt.ioff()
                 fig = plt.figure()
                 lims = interval.get_limits(ronchiSlices[i])
-                plt.imshow(ronchiSlices[i], aspect='auto', origin='lower', cmap='jet', clim=lims)#clim=[0,np.nanmedian(ronchiSlices[i])*1.5])
+                plt.imshow(ronchiSlices[i], aspect='auto', origin='lower', cmap='jet', clim=lims)
                 plt.colorbar()
                 plt.title('slice number ' + str(i)+', # of dips: ' + str(len(trace)))
                 for j in range(trace.shape[0]):
@@ -853,6 +758,9 @@ if cont.lower()=='y':
         #write maps
         wifisIO.writeFits(distMap, 'processed/'+ronchiFolder+'_ronchi_distMap.fits', ask=False)
 
+        #copy flat field associated with distortion map to new file
+        shutil.copyfile('processed/'+ronchiFlatFolder+'_flat_limits.fits','processed/'+ronchiFolder+'_ronchi_distMap_limits.fits')
+                        
         #distortion correct the flat field
         flatSlices = wifisIO.readImgsFromFile('processed/'+ronchiFlatFolder+'_flat_slices.fits')[0]
         nSlices = len(flatSlices)/3

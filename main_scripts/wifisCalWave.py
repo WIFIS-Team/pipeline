@@ -19,8 +19,10 @@ Produces:
 
 """
 
+#change the next two lines as needed
 import matplotlib
 matplotlib.use('gtkagg')
+
 import numpy as np
 import time
 import matplotlib.pyplot as plt
