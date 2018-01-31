@@ -1182,3 +1182,107 @@ def extendTraceAll2(traceLst, extSlices, zeroTraces,space=1/15.,order=4,method='
 
     return interpLst
 
+def traceWireFrameSliceCOG(input):
+    """
+    Routine used to determine/trace zero-point image (e.g. wireframe) of a single slice
+    Usage: centSmth = traceZeroPointSlice(input), where input is a list containing: 
+    img - the zeropoint image slice
+    nbin - an integer used to specify the number of pixels used for binning each slice to improve the contrast of the zeropoint slices and reduce the computation time of the tracing
+    winRng - the maximum range from which to carry out the fitting
+    plot - a boolean used to indicate whether the results should be plotted - for debugging purposes only
+    smth - an integer specifying the width of the Gaussian kernel used for smoothing the trace
+    bright - a boolean used to indicate whether the feature used for tracing is brigher (True) or darker (False) then its surrounding
+    mxChange - a variable that indicates the maximum allowable change between pixels for the tracing, for quality control purposes
+    centSmth is the zero-point trace for the entire slice    
+    """
+
+    #rename variables
+    img = input[0]
+    nbin = input[1]
+    winRng= input[2]
+    winRng2 = int(winRng/2)
+    smth = input[3]
+    bright = input[4]
+    constRegion = input[5]
+    nPix = input[6]
+
+    tmp1 = img
+        
+    #first bin the image, if requested
+    if (nbin > 1):
+        
+        tmp = np.zeros((tmp1.shape[0], tmp1.shape[1]/nbin))
+
+        for i in range(tmp.shape[1]-1):
+            tmp[:,i] = np.nansum(tmp1[:,nbin*i:nbin*(i+1)],axis=1)
+    else:
+        tmp = tmp1
+
+    #get the coord of the middle pixel, along the spatial axis
+    orgMid = int(tmp.shape[0]/2.)
+
+    #find column with the maximum signal within the chosen search window for first zeropoint measurement
+    m1, m2 = np.unravel_index(np.nanargmax(tmp[orgMid-winRng2:orgMid+winRng2+1,:]), tmp[orgMid-winRng2:orgMid+winRng2+1,:].shape)
+    
+    #extract signal from this column
+    x=np.arange(tmp.shape[0])
+
+    #find feature in window range, and recentre on this feature
+    y = np.copy(tmp[:,m2])
+
+    cent = np.empty(tmp.shape[1])
+    cent[:] = np.nan
+
+    #find centre using COG measurement, limited to X pixels about the
+    cent[m2] = findCOG(x,y, int(nPix/2), bright)
+    
+    #now go through rest of pixels to find centre as well
+
+    if constRegion:
+        lim1 = constRegion[0]
+        lim2 = constRegion[1]
+    else:
+        lim1 = 0
+        lim2 = tmp.shape[1]
+        
+    #first work backwards from starting position
+    for i in range(m2-1,lim1,-1):
+        y = np.copy(tmp[:,i])
+        cent[i] = findCOG(x,y, int(nPix/2), bright)
+
+    #now work forwards
+    for i in range(m2+1,lim2):
+        y = tmp[:,i]
+        cent[i] = findCOG(x,y, int(nPix/2),bright)
+
+    xTrace = np.arange(cent.shape[0])*nbin
+       
+    centOut = np.empty(tmp1.shape[1])
+    centOut[:] = np.nan
+    centOut[xTrace] = cent
+
+    if (smth > 0):
+        gKern = conv.Gaussian1DKernel(smth)
+        centSmth = conv.convolve(centOut, gKern, boundary='extend',normalize_kernel=True)
+    else:
+        centSmth = centOut
+        
+    return centSmth
+
+def findCOG(x,y,nPix2,bright):
+    """
+    """
+
+
+    #first find peak
+    mxLoc = np.nanargmax(y)
+
+    if bright:
+        cent = np.sum(x[mxLoc-nPix2:mxLoc+nPix2+1]*y[mxLoc-nPix2:mxLoc+nPix2+1])/np.sum(y[mxLoc-nPix2:mxLoc+nPix2+1])
+    else:
+        #convert input spectrum to change absorption profile into emission profile
+        ytmp = np.nanmin(y)-y
+        ytmp += np.nanmin(ytmp)
+        cent = np.sum(x[mxLoc-nPix2:mxLoc+nPix2+1]*ytmp[mxLoc-nPix2:mxLoc+nPix2+1])/np.sum(ytmp[mxLoc-nPix2:mxLoc+nPix2+1])
+    return cent
+
