@@ -144,14 +144,14 @@ if os.path.exists(bpmFile):
 else:
     BPM = None
     
-if os.path.exists(ronchiFlatFile):
-    ronchiFlatFolder = wifisIO.readAsciiList(ronchiFlatFile).tostring() 
-else:
-    logfile.write('*** FAILURE: No provided flat field field input list associated with Ronchi data\n ***')
-    raise Warning('No provided flat field field input list associated with Ronchi data  ***')
-
 if os.path.exists(ronchiFile):
     ronchiFolder = wifisIO.readAsciiList(ronchiFile).tostring()
+
+    if os.path.exists(ronchiFlatFile):
+        ronchiFlatFolder = wifisIO.readAsciiList(ronchiFlatFile).tostring() 
+    else:
+        logfile.write('*** FAILURE: No provided flat field field input list associated with Ronchi data\n ***')
+        raise Warning('No provided flat field field input list associated with Ronchi data  ***')
 else:
     print(colorama.Fore.RED+'*** WARNING: No Ronchi input list provided. Skipping processing of Ronchi data ***'+colorama.Style.RESET_ALL)
 
@@ -188,10 +188,10 @@ else:
 #******************************************************************************************************
 #******************************************************************************************************
 #check if processed flat field already exists for Ronchi, if not process the flat
-
-if not os.path.exists('processed/'+ronchiFlatFolder+'_flat_limits.fits') or not os.path.exists('processed/'+ronchiFlatFolder+'_flat_slices_norm.fits'):
-    print('Processed flat field data does not exist for folder ' +ronchiFlatFolder +', processing flat folder')
-    calFlat.runCalFlat(np.asarray([ronchiFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile,satSplit=nSatSplit,logfile=logfile,centGuess=centGuess)
+if 'ronchiFlatFolder' in locals():
+    if not os.path.exists('processed/'+ronchiFlatFolder+'_flat_limits.fits') or not os.path.exists('processed/'+ronchiFlatFolder+'_flat_slices_norm.fits'):
+        print('Processed flat field data does not exist for folder ' +ronchiFlatFolder +', processing flat folder')
+        calFlat.runCalFlat(np.asarray([ronchiFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile,satSplit=nSatSplit,logfile=logfile,centGuess=centGuess)
 
 #******************************************************************************************************
 #******************************************************************************************************
@@ -201,7 +201,10 @@ if zpntFlatFolder is not None:
     if not os.path.exists('processed/'+zpntFlatFolder+'_flat_limits.fits') and not os.path.exists('processed/'+zpntFlatFolder+'_flat_slices_norm.fits'):
         print('Flat limits do not exist for folder ' +zpntFlatFolder +', processing flat folder')
 
-        calFlat.runCalFlat(np.asarray([zpntFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile, flatCutOff=zpntFlatCutOff,distMapLimitsFile='processed/'+ronchiFlatFolder+'_flat_limits.fits',logfile=logfile,centGuess=centGuess)
+        if 'ronchiFlatFolder' in locals():
+            calFlat.runCalFlat(np.asarray([zpntFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile, flatCutOff=zpntFlatCutOff,distMapLimitsFile='processed/'+ronchiFlatFolder+'_flat_limits.fits',logfile=logfile,centGuess=centGuess)
+        else:
+            calFlat.runCalFlat(np.asarray([zpntFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile, flatCutOff=zpntFlatCutOff,logfile=logfile,centGuess=centGuess)
 
 #******************************************************************************************************
 #******************************************************************************************************
@@ -371,11 +374,14 @@ if zpntLst is not None:
             zpntTraces = spatialCor.traceWireFrameAll(zpntFlat, nbin=zpntNbin, bright=zpntBright, MP=True, plot=False, smooth=zpntSmooth, winRng=zpntWinRng,mxChange=zpntMxChange,constRegion=[lim1,lim2])
         else:
             zpntTraces = spatialCor.traceWireFrameAll(zpntFlat, nbin=zpntNbin, bright=zpntBright, MP=True, plot=False, smooth=zpntSmooth, winRng=zpntWinRng,mxChange=zpntMxChange)
- 
+
 
         #optional section to address problematic slices
         #print('Fixing problematic traces')
-                
+        #use a COG/COL algorithm to define the trace instead
+        #zpntTraces[0] = spatialCor.traceWireFrameSliceCOG([zpntFlat[0], zpntNbin, zpntWinRng,zpntSmooth,zpntBright,None,5])
+        #zpntTraces[1] = spatialCor.traceWireFrameSliceCOG([zpntFlat[1], zpntNbin, zpntWinRng,zpntSmooth,zpntBright,None,5])
+        
         #now carry out polynomial fitting to further smooth the fits
         polyFitLst = []
 
@@ -681,7 +687,8 @@ if ronchiFolder is not None:
 
                 #add specific details to deal with bad ronchi traces here
                 #use this section to remove bad or extra traces that are deminishing the quality of the distortion map
-                                if i==0:
+                
+                if i==0:
                     pass
                 elif i==1:
                     pass
@@ -739,11 +746,14 @@ if ronchiFolder is not None:
         print('Saving Ronchi trace results')
         wifisIO.writeFits(ronchiPolyTraces, 'processed/'+ronchiFolder+'_ronchi_poly_traces.fits', ask=False)
 
-if os.path.exists('processed/'+ronchiFolder+'_ronchi_distMap.fits') and os.path.exists('processed/'+ronchiFolder+'_ronchi_spatGridProps.dat'):
-    cont = wifisIO.userInput('Distortion map files already exist, do you want to continue (y/n)')
+if 'ronchiFolder' in locals() and ronchiFolder is not None:
+    if os.path.exists('processed/'+ronchiFolder+'_ronchi_distMap.fits') and os.path.exists('processed/'+ronchiFolder+'_ronchi_spatGridProps.dat'):
+        cont = wifisIO.userInput('Distortion map files already exist, do you want to continue (y/n)')
+    else:
+        cont ='y'
 else:
-    cont ='y'
-
+    cont='n'
+    
 if cont.lower()=='y':
     if ronchiTraces is not None:
         print('Distortion correcting distortion map to get spatial limits')
