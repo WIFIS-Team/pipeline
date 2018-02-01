@@ -548,20 +548,34 @@ if ronchiFolder is not None:
         with warnings.catch_warnings():
             warnings.simplefilter('ignore',RuntimeWarning)
             ronchiTraces, ronchiAmps = spatialCor.traceRonchiAll(ronchiFlat, nbin=ronchiNbin, winRng=ronchiWinRng, mxWidth=ronchiMxWidth,smth=ronchiSmth, bright=ronchiBright, flatSlices=flatSlices, MP=True)
-         
+
+
         print('Plotting amplitude map')
         #build resolution map
         ampMapLst = spatialCor.buildAmpMap(ronchiTraces, ronchiAmps, ronchiSlices)
-
-        #get median FWHM
+                        
+        #get median amplitude/contrast measurement
         ampAll = []
-        for f in ronchiAmps:
-            for i in range(len(f)):
-                for j in range(len(f[i])):
-                    ampAll.append(f[i][j])
+
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore',RuntimeWarning)
+
+            for f in ronchiAmps:
+
+                #remove points from different traces that share same coordinates, to derive a more accurate average
+
+                for j in range(f.shape[0]-1):
+                    for k in range(j+1,f.shape[0]):
+                        whr = np.where(np.abs(f[j,:]-f[k,:])<0.5)[0]
+                        if len(whr)>0:
+                            f[k,whr]=np.nan
+
+                for i in range(f.shape[0]):
+                    for j in range(f.shape[1]):
+                        ampAll.append(f[i][j])
             
         ampMed = np.nanmedian(ampAll)
-        
+
         ntot = 0
         for r in ronchiSlices:
             ntot += r.shape[0]
