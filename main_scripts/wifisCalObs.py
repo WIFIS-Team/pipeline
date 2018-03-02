@@ -657,6 +657,56 @@ for i in range(len(obsLst)):
     #carry out additional sky correction tasks
 
     if skyLst is not None:
+        #check if pixel correction exists, if so update wave mapping to take correction into effect
+        if 'skyCorPix' in locals():
+            #waveShift = []
+            #if shift is velocity
+            #for j in range(len(waveMap)):
+            #    waveShift.append(waveMap[j]*(1. + rvSkyCor/2.99792458e5))
+            #waveGridShift = np.zeros(3,dtype='float32')
+            #waveGridShift[:] = waveGridProps
+            #waveGridShift[:1] = waveGridProps[:1]*(1. + rvSkyCor/2.99792458e5)
+
+            if not 'skyCor' in locals():
+                print('Reading distortion corrected sky slices for ' + skyFolder)
+                logfile.write('Reading sky slices from:\n')
+                logfile.write('processed/'+skyFolder+'_sky_slices_distCor.fits\n')
+                skyCor,skyHdr = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky_slices_distCor.fits')
+                skyHdr = skyHdr[0]
+            
+            #read in solution and recompute wavemap
+            print('*** Creating new shifted wavelength map ***')
+            waveFitResults = wifisIO.readPickle('processed/'+waveFolder+'_wave_fitResults.pkl')
+                    
+            #get rid of bad solutions
+            if cleanDispSol:
+                rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(waveFitResults, plotFile=None, threshold=cleanDispThresh)
+            else:
+                dispSolClean = waveFitResults[0]
+
+            #create new wavemap
+            waveMapLst = waveSol.buildWaveMap2(dispSolClean, skyCor[0].shape[1], extrapolate=True, fill_missing=True, offset=skyCorPix)
+            if waveSmooth>0:
+                waveShift = waveSol.smoothWaveMapAll(waveMapLst,smth=waveSmooth,MP=True )
+            else:
+                waveShift= waveMapLst
+                        
+            if waveTrimThresh > 0:
+                flatSlices = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_slices.fits')[0]
+                nSlices = len(flatSlices)/3
+                flatSlices = flatSlices[:nSlices]
+                waveMapTrim = waveSol.trimWaveSliceAll(waveMap, flatSlices, waveTrimThresh)
+                
+                #get wave grid properties
+                waveGridShift = createCube.compWaveGrid(waveMapTrim)
+            else:
+                waveGridShift = createCube.compWaveGrid(waveMap) 
+                
+            waveMapAll.append(waveShift)
+        else:
+            waveShift = waveMap
+            waveGridShift = waveGridProps
+        
         if skyScaleCor:
             if not 'skyCor' in locals():
                 print('Reading distortion corrected sky slices for ' + skyFolder)
@@ -683,51 +733,7 @@ for i in range(len(obsLst)):
                         logfile.write(str(reg[0]) + ' - ' + str(reg[1])+'\n')
                 logfile.write('mxScale: ' + str(skyMxScale)+'\n')
                 logfile.write('Fitting individual lines: '+str(skyFitIndLines)+'\n')
-
                 
-                #check if pixel correction exists, if so update wave mapping to take correction into effect
-                if 'skyCorPix' in locals():
-                    #waveShift = []
-                    #if shift is velocity
-                    #for j in range(len(waveMap)):
-                    #    waveShift.append(waveMap[j]*(1. + rvSkyCor/2.99792458e5))
-                    #waveGridShift = np.zeros(3,dtype='float32')
-                    #waveGridShift[:] = waveGridProps
-                    #waveGridShift[:1] = waveGridProps[:1]*(1. + rvSkyCor/2.99792458e5)
-
-                    #read in solution and recompute wavemap
-                    print('*** Creating new shifted wavelength map ***')
-                    waveFitResults = wifisIO.readPickle('processed/'+waveFolder+'_wave_fitResults.pkl')
-                    
-                    #get rid of bad solutions
-                    if cleanDispSol:
-                        rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(waveFitResults, plotFile=None, threshold=cleanDispThresh)
-                    else:
-                        dispSolClean = waveFitResults[0]
-
-                    #create new wavemap
-                    waveMapLst = waveSol.buildWaveMap2(dispSolClean, skyCor[0].shape[1], extrapolate=True, fill_missing=True, offset=skyCorPix)
-                    if waveSmooth>0:
-                        waveShift = waveSol.smoothWaveMapAll(waveMapLst,smth=waveSmooth,MP=True )
-                    else:
-                        waveShift= waveMapLst
-                        
-                    if waveTrimThresh > 0:
-                        flatSlices = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_slices.fits')[0]
-                        nSlices = len(flatSlices)/3
-                        flatSlices = flatSlices[:nSlices]
-                        waveMapTrim = waveSol.trimWaveSliceAll(waveMap, flatSlices, waveTrimThresh)
-                
-                        #get wave grid properties
-                        waveGridShift = createCube.compWaveGrid(waveMapTrim)
-                    else:
-                        waveGridShift = createCube.compWaveGrid(waveMap) 
-
-                    waveMapAll.append(waveShift)
-                else:
-                    waveShift = waveMap
-                    waveGridShift = waveGridProps
-
                 with warnings.catch_warnings():
                     warnings.simplefilter('ignore', RuntimeWarning)
                     subSlices= postProcess.subScaledSkySlices2(waveShift, dataCor, skyCor, waveGridShift,skyHdr,regions=skyLineRegions, mxScale=skyMxScale, fluxThresh = skyFluxThresh, fitInd=skyFitIndLines, saveFile = 'quality_control/'+obsLst[i]+'_obs_'+skyLst[i]+'_sky',MP=True, missing_left_slice=missing_left_slice, missing_right_slice=missing_right_slice)
@@ -866,9 +872,7 @@ if len(obsLst) > 1:
                 print('Correcting observation ' + obsLst[i] + ' for pixel offset of '+str(skyCorPix))
                 logfile.write('Correcting observation ' + obsLst[i] + ' for pixel offset of ' + str(skyCorPix)+'\n')
 
-                #waveShift = []
-                #for j in range(len(waveMap)):
-                #    waveShift.append(waveMap[j]*(1. + rvSkyCor/2.99792458e5))
+                #read shifted wavemap from list
                 waveShift = waveMapAll[i]
             else:
                 waveShift = waveMap
