@@ -576,14 +576,23 @@ def waveCorSlice1D(input):
         minWave = np.nanmin(waveSlc)
         maxWave = np.nanmax(waveSlc)
 
+    #get the parameters for the gridded data
     xout = np.linspace(minWave,maxWave, num=int(nWave))
+    dWave = (maxWave-minWave)/float(nWave-1.)
     out = np.empty((dataSlc.shape[0], xout.shape[0]),dtype=dataSlc.dtype)
     out[:] = np.nan
 
+    #determine gradient of coordinate map for converting flux to flux density
+    diffMap = np.abs(np.gradient(waveSlc,axis=1))
+ 
     for i in range(dataSlc.shape[0]):
         srt = np.argsort(waveSlc[i,:])
-        out[i,:] = np.interp(xout,waveSlc[i,srt],dataSlc[i,srt], right=np.nan,left=np.nan)
+        x = waveSlc[i,srt]
+        y = dataSlc[i,srt]/diffMap[i,srt]
 
+        #fInt = interpolate.Akima1DInterpolator(x[whr],y[whr])
+        out[i,:] = np.interp(xout,x,y, right=np.nan,left=np.nan)*dWave
+        #out[i,:] = fInt(xout)*dWave
     return out    
            
 
