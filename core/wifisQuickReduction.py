@@ -6,7 +6,7 @@ set of functions used to run a quick reduction of the WIFIS pipeline
 
 import matplotlib
 #*******************************************************************
-matplotlib.use('gtkagg') #default is tkagg, but using gtkagg can speed up window creation on some systems
+#matplotlib.use('gtkagg') #default is tkagg, but using gtkagg can speed up window creation on some systems
 #*******************************************************************
 
 import wifisIO
@@ -384,7 +384,7 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
     if (os.path.exists('quick_reduction/'+waveFolder+'_wave_fwhm_map.png') and os.path.exists('quick_reduction/'+waveFolder+'_wave_fwhm_map.fits') and os.path.exists('quick_reduction/'+waveFolder+'_wave_wavelength_map.fits')):
         print('*** ' + waveFolder + ' arc/wave data already processed, skipping ***')
     else:
-        wave, hdr,obsinfo = procRamp(waveFolder, satCounts=satCounts, bpm=bpm, saveName='quick_reduction/'+waveFolder+'_wave.fits')
+        wave, hdr,obsinfo = procRamp(waveFolder, satCounts=satCounts, bpm=bpm, saveName='quick_reduction/'+waveFolder+'_wave.fits',varFile=varFile)
     
         if (os.path.exists('quick_reduction/'+flatFolder+'_flat_limits.fits') and os.path.exists('quick_reduction/'+flatFolder+'_flat_slices.fits')):
             limits, limitsHdr = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_limits.fits')
@@ -392,7 +392,7 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
             shft = limitsHdr['LIMSHIFT']
         else:
             print('Processing flat file')
-            flat, flatHdr, obsinfo = procRamp(flatFolder, satCounts=satCounts, bpm=bpm, saveName='quick_reduction/'+flatFolder+'_flat.fits')
+            flat, flatHdr, obsinfo = procRamp(flatFolder, satCounts=satCounts, bpm=bpm, saveName='quick_reduction/'+flatFolder+'_flat.fits',varFile=varFile)
 
             print('Finding flat limits')
             limits = slices.findLimits(flat, dispAxis=0, winRng=51, imgSmth=5, limSmth=20,rmRef=True, centGuess=centGuess)
