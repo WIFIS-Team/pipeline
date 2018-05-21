@@ -44,13 +44,13 @@ def compSpatGrid(distTrimSlices):
     N = int((spatMax-spatMin)/dSpat)
     return([spatMin,spatMax,N])
 
-def distCorAll(dataSlices, distMapSlices, method='linear', ncpus=None, spatGridProps=None, MP=True,smooth=0,nMult=1):
+def distCorAll(dataSlices, distMapSlices, method='akima', ncpus=None, spatGridProps=None, MP=True,smooth=0,nMult=1, ):
     """
     Routine to distortion correct a list of slices.
     Usage: outLst = distCorAll(dataSlices, distMapSlices, method='linear', ncpus=None,spatGridProps=None, MP=True)
     dataSlices is the list of the data slices to be distortion corrected
     distMapSlices is the list of slices containing the distortion mapping
-    method is a keyword to control how the interpolation is carried out (default is using linear interpolation along the spatial axis)
+    method is a keyword to control how the interpolation is carried out (default is using akima interpolation along the spatial axis). Options are: 'linear', 'cubic', 'akima', or 'nearest'
     ncpus is a keyword that allows to control the number of multi-processesing processes
     spatGridProps  is the an optional keyword that provides the properties for the output spatial grid
     MP is a boolean keyword used to specify if multiprocessing should be used.
@@ -88,7 +88,7 @@ def distCorSlice1D(input):
     input is a list that contains:
     dataSlc - is the image slice of the input data to be distortion corrected,
     distSlc - is the distortion mapping for the specific slice
-    method - is a string indicating the interpolation method to use ("linear", "cubic", or "nearest"). Not used for anything other than compatability with older function.
+    method - is a string indicating the interpolation method to use ("linear", or "akima"). Not used for anything other than compatability with older function.
     spatGridProps - the final output properties of the spatial grid. If set to None, then the code automatically determines the grid properties for the slice
     Returned is the distortion corrected image slice placed on a grid.
     """
@@ -140,13 +140,17 @@ def distCorSlice1D(input):
         y /=d
         whr = np.where(~np.isnan(y))[0]
         whrNan = np.where(np.isnan(y))[0]
-        
-        fInt = interpolate.Akima1DInterpolator(x[whr],y[whr])
-        out[:,i] = fInt(xout)*dSpat
 
+        if str(method).lower() == 'akima':
+            fInt = interpolate.Akima1DInterpolator(x[whr],y[whr])
+            out[:,i] = fInt(xout)*dSpat
+        elif str(method).lower() == 'linear':
+            
         #the old method
-        #out[:,i] = np.interp(xout,x,y, right=np.nan,left=np.nan)*dSpat
-
+            out[:,i] = np.interp(xout,x,y, right=np.nan,left=np.nan)*dSpat
+        else:
+            raise Warning("*** INTERPOLATION METHOD MUST BE SET TO AKIMA OR LINEAR ***")
+            
         #************************************
         #NOW DEAL WTIH NANS
         #************************************
@@ -593,6 +597,7 @@ def waveCorSlice1D(input):
         #fInt = interpolate.Akima1DInterpolator(x[whr],y[whr])
         out[i,:] = np.interp(xout,x,y, right=np.nan,left=np.nan)*dWave
         #out[i,:] = fInt(xout)*dWave
+        
     return out    
            
 
