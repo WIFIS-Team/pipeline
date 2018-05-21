@@ -876,15 +876,16 @@ def buildAmpMap(traceLst, ampLst, slicesLst):
     for i in range(len(traceLst)):
 
         gX, gY = np.mgrid[:slicesLst[i].shape[0],:slicesLst[i].shape[1]]
-
+        
         points = []
         vals = []
-
+       
         for j in range(traceLst[i].shape[0]):
             for k in range(traceLst[i].shape[1]):
                 if (np.isfinite(traceLst[i][j,k]) and np.isfinite(ampLst[i][j,k])):
                     points.append([k,traceLst[i][j,k]])
                     vals.append(ampLst[i][j,k])
+                                          
         vals = np.array(vals)
         mapLst.append(griddata(points, vals, (gY, gX), method='linear'))
     return mapLst
