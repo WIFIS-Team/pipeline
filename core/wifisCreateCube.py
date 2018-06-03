@@ -76,7 +76,8 @@ def distCorAll(dataSlices, distMapSlices, method='akima', ncpus=None, spatGridPr
     else:
         outLst = []
 
-        for l in lst:
+        for i,l in enumerate(lst):
+            print('Working on slice ', i)
             outLst.append(distCorSlice1D(l))
             
     return outLst
@@ -93,9 +94,9 @@ def distCorSlice1D(input):
     Returned is the distortion corrected image slice placed on a grid.
     """
 
-    dataSlc = input[0]
-    distSlc = input[1]
-    method = input[2] #only needed to keep input consistent with distCorSlice function
+    dataSlc = np.copy(input[0])
+    distSlc = np.copy(input[1])
+    method = input[2] 
     spatGridProps = input[3]
     smooth = input[4]
     nMult = input[5]
@@ -121,7 +122,7 @@ def distCorSlice1D(input):
     out[:] = np.nan
 
     #determine gradient of coordinate map for converting flux to flux density
-    diffMap = np.gradient(distSlc,axis=0)
+    gradMap = np.gradient(distSlc,axis=0)
    
     if smooth>0:
         gKern = conv.Gaussian1DKernel(smooth)
@@ -134,7 +135,7 @@ def distCorSlice1D(input):
             
         #get input coordinates and coordinate span per pixel
         x = distSlc[:,i]
-        d = diffMap[:,i]
+        d = gradMap[:,i]
 
         #convert flux to flux density
         y /=d
@@ -142,8 +143,11 @@ def distCorSlice1D(input):
         whrNan = np.where(np.isnan(y))[0]
 
         if str(method).lower() == 'akima':
-            fInt = interpolate.Akima1DInterpolator(x[whr],y[whr])
-            out[:,i] = fInt(xout)*dSpat
+            try:
+                fInt = interpolate.Akima1DInterpolator(x[whr],y[whr])
+                out[:,i] = fInt(xout)*dSpat
+            except:
+                raise Warning('Akima interpolation method failed at column '+str(i))
         elif str(method).lower() == 'linear':
             
         #the old method
