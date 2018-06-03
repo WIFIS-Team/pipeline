@@ -264,7 +264,7 @@ getBadPixRON = True
 darkBpmCutoff = 1e-5
 
 #normalized PDF cutoff used for determining bad pixels based on read-out-noise
-ronBpmCutff = 1e-5
+ronBpmCutoff = 1e-5
 
 ######################################################
 #parameters for processing the detector linearity data
@@ -304,6 +304,7 @@ ronchiSigmaClipRounds=2
 
 #spatial grid parameters
 spatTrim = 0.5
+nSpatGridMult=5
 
 ######################################################
 #parameters used for processing of ramps
