@@ -9,6 +9,8 @@ import multiprocessing as mp
 import wifisIO
 import matplotlib.pyplot as plt
 from astropy.visualization import ZScaleInterval
+import colorama
+colorama.init()
 
 def corBadPixelsAll(data,dispAxis=0,mxRng=2,MP=True, ncpus=None, sigma=False):
     """
@@ -292,36 +294,40 @@ def getBadPixelsFromDark(dark,hdr,darkFile='',saveFile = '',cutoff=1e-5, BPM=Non
     cumsum/=cumsum.max()
 
     whr = np.where(cumsum <=cutoff)[0]
-    rng1 = histx[whr[-1]]
-    whr = np.where(cumsum >=1-cutoff)[0]
-    rng2 = histx[whr[0]]
+    if len(whr) == 0:
+        print(colorama.Fore.RED+'*** WARNING: NO PIXELS WITH DARK CURRENT <1 CNT/S. SKIPPING BAD PIXEL IDENTIFICATION DUE TO HIGH DARK CURRENT ***'+colorama.Style.RESET_ALL)
+        return BPM,hdr
+    else:
+        rng1 = histx[whr[-1]]
+        whr = np.where(cumsum >=1-cutoff)[0]
+        rng2 = histx[whr[0]]
     
-    plt.plot([rng2, rng2],[0,hist[0].max()])
-    plt.title('Histogram of dark current')
-    plt.xlabel('Dark value [counts/s]')
-    plt.savefig(saveFile+'_hist.png',dpi=300)
-    plt.close()
+        plt.plot([rng2, rng2],[0,hist[0].max()])
+        plt.title('Histogram of dark current')
+        plt.xlabel('Dark value [counts/s]')
+        plt.savefig(saveFile+'_hist.png',dpi=300)
+        plt.close()
 
-    if BPM is None:
-        BPM = np.zeros(dark.shape,dtype='uint8')
+        if BPM is None:
+            BPM = np.zeros(dark.shape,dtype='uint8')
 
-    bpmTmp = np.zeros(dark.shape,dtype='uint8')
-    BPM[dark>rng2] = 1
-    bpmTmp[dark>rng2] = 1
+        bpmTmp = np.zeros(dark.shape,dtype='uint8')
+        BPM[dark>rng2] = 1
+        bpmTmp[dark>rng2] = 1
     
-    refFrame=np.ones(dark.shape,dtype=bool)
-    refFrame[4:-4,4:-4]=False
-    BPM[refFrame] = 0
-    bpmTmp[refFrame] = 0
+        refFrame=np.ones(dark.shape,dtype=bool)
+        refFrame[4:-4,4:-4]=False
+        BPM[refFrame] = 0
+        bpmTmp[refFrame] = 0
     
-    hdr.add_history('Determined bad pix from dark frame:')
-    hdr.add_history(darkFile)
-    hdr.add_history('with normalized probability density of worse than ' + str(cutoff))
-    hdr.add_history('Dark level cutoff: ' + str(rng2))
-
-    hdr.set('QC_NBADD',len(np.where(bpmTmp ==1)[0]),'Number of bad pixels based on dark current')
-    hdr.set('QC_NBAD',len(np.where(BPM ==1)[0]),'Total number of bad pixels')
-
+        hdr.add_history('Determined bad pix from dark frame:')
+        hdr.add_history(darkFile)
+        hdr.add_history('with normalized probability density of worse than ' + str(cutoff))
+        hdr.add_history('Dark level cutoff: ' + str(rng2))
+        
+        hdr.set('QC_NBADD',len(np.where(bpmTmp ==1)[0]),'Number of bad pixels based on dark current')
+        hdr.set('QC_NBAD',len(np.where(BPM ==1)[0]),'Total number of bad pixels')
+        
 
     return BPM, hdr
 
