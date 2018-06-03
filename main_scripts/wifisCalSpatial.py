@@ -19,8 +19,8 @@ Produces:
 """
 
 #change the next two lines as needed
-import matplotlib
-matplotlib.use('gtkagg')
+#import matplotlib
+#matplotlib.use('gtk3agg')
 
 import wifisIO
 import wifisSlices as slices
@@ -377,10 +377,10 @@ if zpntLst is not None:
 
 
         #optional section to address problematic slices
-        #print('Fixing problematic traces')
+        print('Fixing problematic traces')
         #use a COG/COL algorithm to define the trace instead
-        #zpntTraces[0] = spatialCor.traceWireFrameSliceCOG([zpntFlat[0], zpntNbin, zpntWinRng,zpntSmooth,zpntBright,None,5])
-        #zpntTraces[1] = spatialCor.traceWireFrameSliceCOG([zpntFlat[1], zpntNbin, zpntWinRng,zpntSmooth,zpntBright,None,5])
+        zpntTraces[0] = spatialCor.traceWireFrameSliceCOG([zpntFlat[0], zpntNbin, zpntWinRng,zpntSmooth,zpntBright,None,5])
+        zpntTraces[1] = spatialCor.traceWireFrameSliceCOG([zpntFlat[1], zpntNbin, zpntWinRng,zpntSmooth,zpntBright,None,5])
         
         #now carry out polynomial fitting to further smooth the fits
         polyFitLst = []
@@ -391,7 +391,7 @@ if zpntLst is not None:
             #x = np.arange(lim1,lim2)
 
         else:
-            pord=3
+            pord=2
             #xfit = np.arange(2040)
         x = np.arange(zpntSlices[0].shape[1])
 
@@ -438,8 +438,9 @@ if zpntLst is not None:
                 elif i==16:
                     pass
                 elif i==17:
-                    pass
-                
+                    xfit = np.where(np.isfinite(zpntTraces[i]))[0]
+                    xfit = xfit[xfit >=250]
+
                 fig=plt.figure()
                 interval = ZScaleInterval()
                 lims=interval.get_limits(zpntFlat[i])
@@ -671,7 +672,10 @@ if ronchiFolder is not None:
                 elif i==4:
                     pass
                 elif i==5:
-                    pass
+                    goodReg = []
+                    for j in range(15):
+                        goodReg.append([0,2040])
+                    goodReg[-1] = [0,1000]
                 elif i==6:
                     pass
                 elif i==7:
@@ -691,12 +695,24 @@ if ronchiFolder is not None:
                 elif i==14:
                     pass
                 elif i==15:
-                    pass
+                    goodReg = []
+                    for j in range(15):
+                        goodReg.append([0,2040])
+                    goodReg[8] = [0,1500]
+                    goodReg[10] = [0,1500]
+    
                 elif i==16:
-                    pass
+                    goodReg = []
+                    for j in range(15):
+                        goodReg.append([0,2040])
+                    goodReg[-1] = [500,2040]
+
                 elif i==17:
-                    pass
-                     
+                    goodReg = []
+                    for j in range(12):
+                        goodReg.append([0,2040])
+                    goodReg[-1] = [0,1500]
+
                 polyTrace = spatialCor.polyFitRonchiTrace(trace, goodReg, order=ronchiPolyOrder, sigmaClipRounds=ronchiSigmaClipRounds)
 
                 #add specific details to deal with bad ronchi traces here
@@ -713,7 +729,7 @@ if ronchiFolder is not None:
                 elif i==4:
                     pass
                 elif i==5:
-                    pass
+                    polyTrace[-1, 1000:]=np.nan
                 elif i==6:
                     pass
                 elif i==7:
@@ -733,7 +749,8 @@ if ronchiFolder is not None:
                 elif i==14:
                     pass
                 elif i==15:
-                    pass
+                    polyTrace[8, 1500:]=np.nan
+                    polyTrace[10, 1500:]=np.nan
                 elif i==16:
                     pass
                 elif i==17:
@@ -776,8 +793,8 @@ if cont.lower()=='y':
         if zpntTraces is None:
             print(colorama.Fore.RED+'*** WARNING: No zero-point offset traces used to determine distortion map ***'+colorama.Style.RESET_ALL)
             logfile.write('*** WARNING: No zero-point offset traces used to determine distortion map ***\n')
-    
-        distMap = spatialCor.extendTraceAll2(ronchiPolyTraces, ronchiSlices, zpntTraces,order=3, MP=True, method='linear')
+
+        distMap = spatialCor.extendTraceAll2(ronchiPolyTraces, ronchiSlices, zpntTraces,order=1, MP=True, method='linear', mappingMethod='polyFit')
 
         #write maps
         wifisIO.writeFits(distMap, 'processed/'+ronchiFolder+'_ronchi_distMap.fits', ask=False)
@@ -789,15 +806,26 @@ if cont.lower()=='y':
         flatSlices = wifisIO.readImgsFromFile('processed/'+ronchiFlatFolder+'_flat_slices.fits')[0]
         nSlices = len(flatSlices)/3
         flatSlices = flatSlices[:nSlices]
-        
-        flatCor = createCube.distCorAll(flatSlices, distMap)
+
+        try:
+            flatCor = createCube.distCorAll(flatSlices, distMap, method='akima')
+        except:
+            print(colorama.Fore.RED+'*** WARNING: AKIMA INTERPOLATION FAILED, FALLING BACK TO LINEAR INTERPOLATION ***'+colorama.Style.RESET_ALL)
+            flatCor = createCube.distCorAll(flatSlices, distMap, method='linear')
+
         with warnings.catch_warnings():
             warnings.simplefilter('ignore',RuntimeWarning)
             trimLims = slices.getTrimLimsAll(flatCor, spatTrim)
-        distCor = createCube.distCorAll(distMap, distMap)
+
+        try:
+            distCor = createCube.distCorAll(distMap, distMap, method='akima', MP=True)
+        except:
+            print(colorama.Fore.RED+'*** WARNING: AKIMA INTERPOLATION FAILED, FALLING BACK TO LINEAR INTERPOLATION ***'+colorama.Style.RESET_ALL)
+            distCor = createCube.distCorAll(distMap, distMap, method='linear')
+
         distTrim = slices.trimSliceAll(distCor, trimLims)
         spatGridProps = createCube.compSpatGrid(distTrim)
-    
+            
         print('saving results')
         #write results
         wifisIO.writeTable(spatGridProps, 'processed/'+ronchiFolder+'_ronchi_spatGridProps.dat')
