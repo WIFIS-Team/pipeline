@@ -9,6 +9,7 @@ import multiprocessing as mp
 import wifisIO
 import time
 from scipy.interpolate import griddata
+from scipy import interpolate
 import astropy.convolution as conv
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
@@ -43,13 +44,13 @@ def compSpatGrid(distTrimSlices):
     N = int((spatMax-spatMin)/dSpat)
     return([spatMin,spatMax,N])
 
-def distCorAll(dataSlices, distMapSlices, method='linear', ncpus=None, spatGridProps=None, MP=True):
+def distCorAll(dataSlices, distMapSlices, method='akima', ncpus=None, spatGridProps=None, MP=True,smooth=0,nMult=1, ):
     """
     Routine to distortion correct a list of slices.
     Usage: outLst = distCorAll(dataSlices, distMapSlices, method='linear', ncpus=None,spatGridProps=None, MP=True)
     dataSlices is the list of the data slices to be distortion corrected
     distMapSlices is the list of slices containing the distortion mapping
-    method is a keyword to control how the interpolation is carried out (default is using linear interpolation along the spatial axis)
+    method is a keyword to control how the interpolation is carried out (default is using akima interpolation along the spatial axis). Options are: 'linear', 'cubic', 'akima', or 'nearest'
     ncpus is a keyword that allows to control the number of multi-processesing processes
     spatGridProps  is the an optional keyword that provides the properties for the output spatial grid
     MP is a boolean keyword used to specify if multiprocessing should be used.
@@ -59,7 +60,7 @@ def distCorAll(dataSlices, distMapSlices, method='linear', ncpus=None, spatGridP
     lst = []
     # setup input list
     for i in range(len(dataSlices)):
-        lst.append([dataSlices[i], distMapSlices[i],method,spatGridProps])
+        lst.append([dataSlices[i], distMapSlices[i],method,spatGridProps,smooth,nMult])
 
     if (MP):
         
@@ -75,7 +76,8 @@ def distCorAll(dataSlices, distMapSlices, method='linear', ncpus=None, spatGridP
     else:
         outLst = []
 
-        for l in lst:
+        for i,l in enumerate(lst):
+            print('Working on slice ', i)
             outLst.append(distCorSlice1D(l))
             
     return outLst
@@ -87,16 +89,18 @@ def distCorSlice1D(input):
     input is a list that contains:
     dataSlc - is the image slice of the input data to be distortion corrected,
     distSlc - is the distortion mapping for the specific slice
-    method - is a string indicating the interpolation method to use ("linear", "cubic", or "nearest"). Not used for anything other than compatability with older function.
+    method - is a string indicating the interpolation method to use ("linear", or "akima"). Not used for anything other than compatability with older function.
     spatGridProps - the final output properties of the spatial grid. If set to None, then the code automatically determines the grid properties for the slice
     Returned is the distortion corrected image slice placed on a grid.
     """
 
-    dataSlc = input[0]
-    distSlc = input[1]
-    method = input[2] #only needed to keep input consistent with distCorSlice function
+    dataSlc = np.copy(input[0])
+    distSlc = np.copy(input[1])
+    method = input[2] 
     spatGridProps = input[3]
-
+    smooth = input[4]
+    nMult = input[5]
+    
     #get spatial grid properties if not provided
     if (spatGridProps is not None):
         minSpat = float(spatGridProps[0])
@@ -107,14 +111,61 @@ def distCorSlice1D(input):
         minSpat = np.nanmin(distSlc)
         maxSpat = np.nanmax(distSlc)
 
-    xout = np.linspace(minSpat,maxSpat, num=int(nSpat))
+    #get output coordinate array
+    xout = np.linspace(minSpat,maxSpat, num=int(nSpat*nMult))
+
+    #get output density
+    dSpat = ((maxSpat-minSpat)/float(nSpat-1))
     
+    #initialize output distortion corrected map
     out = np.empty((xout.shape[0], dataSlc.shape[1]), dtype=dataSlc.dtype)
     out[:] = np.nan
 
+    #determine gradient of coordinate map for converting flux to flux density
+    gradMap = np.gradient(distSlc,axis=0)
+   
+    if smooth>0:
+        gKern = conv.Gaussian1DKernel(smooth)
+    
     for i in range(dataSlc.shape[1]):
-        out[:,i] = np.interp(xout,distSlc[:,i],dataSlc[:,i], right=np.nan,left=np.nan)
+        if smooth>0:
+            y = conv.convolve(dataSlc[:,i],gKern,normalize_kernel=True, boundary='extend')
+        else:
+            y = dataSlc[:,i]
+            
+        #get input coordinates and coordinate span per pixel
+        x = distSlc[:,i]
+        d = gradMap[:,i]
 
+        #convert flux to flux density
+        y /=d
+        whr = np.where(~np.isnan(y))[0]
+        whrNan = np.where(np.isnan(y))[0]
+
+        if str(method).lower() == 'akima':
+            try:
+                fInt = interpolate.Akima1DInterpolator(x[whr],y[whr])
+                out[:,i] = fInt(xout)*dSpat
+            except:
+                raise Warning('Akima interpolation method failed at column '+str(i))
+        elif str(method).lower() == 'linear':
+            
+        #the old method
+            out[:,i] = np.interp(xout,x,y, right=np.nan,left=np.nan)*dSpat
+        else:
+            raise Warning("*** INTERPOLATION METHOD MUST BE SET TO AKIMA OR LINEAR ***")
+            
+        #************************************
+        #NOW DEAL WTIH NANS
+        #************************************
+
+        if len(whrNan)>0:
+            for j in range(len(whrNan)):
+                rng = np.where(np.logical_and(xout>=x[whrNan[j]]-d[whrNan[j]]/2.,xout<=x[whrNan[j]]+d[whrNan[j]]/2.))[0]
+
+                out[rng,i] = np.nan
+                
+        
     return out    
 
 def distCorSlice(input):
@@ -228,7 +279,7 @@ def mkCube(corSlices, ndiv=1, MP=True, ncpus=None, missing_left=False, missing_r
     
     #initialize output cube
 
-    tmpCube = np.empty((18, corSlices[0].shape[0],corSlices[0].shape[1]))
+    tmpCube = np.empty((18, corSlices[0].shape[0],corSlices[0].shape[1]),dtype=corSlices[0].dtype)
     tmpCube[:] = np.nan
 
     #first check how many slices exist
@@ -533,14 +584,24 @@ def waveCorSlice1D(input):
         minWave = np.nanmin(waveSlc)
         maxWave = np.nanmax(waveSlc)
 
+    #get the parameters for the gridded data
     xout = np.linspace(minWave,maxWave, num=int(nWave))
+    dWave = (maxWave-minWave)/float(nWave-1.)
     out = np.empty((dataSlc.shape[0], xout.shape[0]),dtype=dataSlc.dtype)
     out[:] = np.nan
 
+    #determine gradient of coordinate map for converting flux to flux density
+    diffMap = np.abs(np.gradient(waveSlc,axis=1))
+ 
     for i in range(dataSlc.shape[0]):
         srt = np.argsort(waveSlc[i,:])
-        out[i,:] = np.interp(xout,waveSlc[i,srt],dataSlc[i,srt], right=np.nan,left=np.nan)
+        x = waveSlc[i,srt]
+        y = dataSlc[i,srt]/diffMap[i,srt]
 
+        #fInt = interpolate.Akima1DInterpolator(x[whr],y[whr])
+        out[i,:] = np.interp(xout,x,y, right=np.nan,left=np.nan)*dWave
+        #out[i,:] = fInt(xout)*dWave
+        
     return out    
            
 
