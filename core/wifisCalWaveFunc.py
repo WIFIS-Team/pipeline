@@ -268,7 +268,7 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                 with warnings.catch_warnings():
                     warnings.simplefilter('ignore', RuntimeWarning)
 
-                    results = waveSol.getWaveSol(waveCor, template, atlasFile, mxOrder, prevSol, winRng=winRng, mxCcor=mxCcor, weights=False, buildSol=False, sigmaClip=sigmaClip, allowLower=False, lngthConstraint=True, MP=waveSolMP, adjustFitWin=adjustFitWin, sigmaLimit=sigmaLimit, allowSearch=False, sigmaClipRounds=sigmaClipRounds,plot=waveSolPlot)
+                    results = waveSol.getWaveSol(waveCor, template, atlasFile, mxOrder, prevSol, winRng=winRng, mxCcor=mxCcor, weights=False, buildSol=False, sigmaClip=sigmaClip, allowLower=False, lngthConstraint=False, MP=waveSolMP, adjustFitWin=adjustFitWin, sigmaLimit=sigmaLimit, allowSearch=False, sigmaClipRounds=sigmaClipRounds,plot=waveSolPlot, nSearchRounds=1)
 
                 hdr.add_history('Used the following file as template for wavelength mapping:')
                 hdr.add_history(templateFile)
