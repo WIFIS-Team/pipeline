@@ -1098,7 +1098,13 @@ def extendTraceSlice2(input):
     zero = input[3]
     kind=input[4]
     order =input[5]
-
+    sliceNum = input[6]
+    mappingMethod = input[7]
+    
+    #first check that Ronchi traces are monotonically increasing along the spatial axis
+    if (np.all(np.gradient(trace,axis=0)) <= 0):
+        raise Warning ('Ronchi traces for slice number ' + str(sliceNum) + ' has bad trace. Trace positions are expected to increase monotonically along the spatial direction')
+    
     z = np.empty(slc.shape, dtype=slc.dtype)
     z[:] = np.nan
     
@@ -1108,12 +1114,40 @@ def extendTraceSlice2(input):
         whr = np.where(np.isfinite(x))[0]
         x=x[whr]
         y=y[whr]
-        if kind.lower() == 'linear' or kind.lower() =='nearest':
-            fInter = interp1d(x,y, kind=kind, bounds_error=False, fill_value='extrapolate')
-        else:
-            fInter = interp1d(x,y, kind=kind, bounds_error=False, fill_value=np.nan)
 
-        z[:,i] = fInter(np.arange(slc.shape[0]))
+        if mappingMethod.lower() == 'interpolate':
+            if kind.lower() == 'linear' or kind.lower() =='nearest':
+                fInter = interp1d(x,y, kind=kind, bounds_error=False, fill_value='extrapolate')
+            else:
+                fInter = interp1d(x,y, kind='linear', bounds_error=False, fill_value=np.nan)
+
+            #use simple linear polyfit to extrapolate and fill missing values
+            yInt = fInter(np.arange(slc.shape[0]))
+            whrGood = np.where(np.isfinite(yInt))[0]
+            whrBad = np.where(~np.isfinite(yInt))[0]
+
+            if whrBad.shape[0]>0:
+                pcof = np.polyfit(whrGood, yInt[whrGood],1)
+                poly = np.poly1d(pcof)
+                polyFill = poly(whrBad)
+                z[whrBad,i] = polyFill
+
+            #use simple polynomial fit to interpolated Ronchi grid to extrapolate outside of grid
+            z[whrGood,i] = yInt[whrGood]
+            
+        elif mappingMethod.lower() == 'polyfit':
+            
+            pcof = np.polyfit(x,y,order)
+            poly = np.poly1d(pcof)
+            polyFit= poly(np.arange(slc.shape[0]))
+            z[:,i] = polyFit
+        else:
+            raise Warning('mapping method must be either "interpolate" or "polyFit"')
+            
+        #plt.plot(x,y)
+        #plt.plot(z[:,i],'--')
+        #plt.show()
+        
         
     #check if the zero points are provided
     if (zero is not None):
@@ -1141,7 +1175,7 @@ def extendTraceSlice2(input):
 
     return z
 
-def extendTraceAll2(traceLst, extSlices, zeroTraces,space=1/15.,order=4,method='linear', ncpus=None, MP=True):
+def extendTraceAll2(traceLst, extSlices, zeroTraces,space=1/15.,order=1,method='linear', ncpus=None, MP=True,mappingMethod='polyFit' ):
     """
     Routine to interpolate the Ronchi traces onto the provided pixel grid and extrapolate the fit towards regions that fall outside the Ronchi traces for all slices
     Usage: interpLst = extendTraceAll(traceLst, extSlices, zeroTraces, space=5., method='linear', ncpus=None, MP=True)
@@ -1163,16 +1197,16 @@ def extendTraceAll2(traceLst, extSlices, zeroTraces,space=1/15.,order=4,method='
         for i in range(len(traceLst)):
 
             if (zeroTraces is None):
-                interpLst.append(extendTraceSlice2([traceLst[i], extSlices[i], space, None, method,order]))
+                interpLst.append(extendTraceSlice2([traceLst[i], extSlices[i], space, None, method,order, i, mappingMethod]))
             else:
-                interpLst.append(extendTraceSlice2([traceLst[i], extSlices[i], space, zeroTraces[i], method,order]))
+                interpLst.append(extendTraceSlice2([traceLst[i], extSlices[i], space, zeroTraces[i], method,order, i,mappingMethod]))
     else:
         lst = []
         for i in range(len(traceLst)):
             if (zeroTraces is None):
-                lst.append([traceLst[i], extSlices[i], space, None, method, order])
+                lst.append([traceLst[i], extSlices[i], space, None, method, order, i,mappingMethod])
             else:        
-                lst.append([traceLst[i], extSlices[i], space, zeroTraces[i],method,order])
+                lst.append([traceLst[i], extSlices[i], space, zeroTraces[i],method,order,i,mappingMethod])
 
         if (ncpus == None):
             ncpus =mp.cpu_count()
