@@ -29,10 +29,9 @@ For each sky observation:
 
 """
 
-
-
+#optional, remove/change to prefered rendering system
 import matplotlib
-matplotlib.use('gtkagg')
+matplotlib.use('gtk3agg')
 
 import wifisIO
 import wifisSlices as slices
@@ -56,7 +55,7 @@ from astropy import time as astrotime, coordinates as coord, units
 import astropy
 import colorama
 from matplotlib.backends.backend_pdf import PdfPages
-
+import wifisWaveSol as waveSol
 colorama.init()
 
 #INPUT VARIABLE FILE NAME
@@ -225,9 +224,11 @@ logfile.write('\n')
 #here begins the meat of the script
 #**************************************************************************************************
 
-#check to make sure that 
-for i in range(len(obsLst)):
+#create list to hold modified wavemaps
+if getSkyCorPix:
+    waveMapAll = []
 
+for i in range(len(obsLst)):
     print('\n*** Working on ' + obsLst[i] + ' ***')
     logfile.write('\n *** Working on ' + obsLst[i] + '***\n')
     #**************************************************************************************************
@@ -267,8 +268,9 @@ for i in range(len(obsLst)):
             flatNorm = slices.ffCorrectAll(flatNorm, flatCorSlices)
 
             if len(flatCorSlices)>nSlices:
-                logfile.write('*** WARNING: Response correction does not include uncertainties ***\n')
                 flatSigma = wifisUncertainties.multiplySlices(flatNorm,flatSigma,flatCorSlices[:nSlices],flatCorSlices[nSlices:2*nSlices])
+            else:
+                logfile.write('*** WARNING: Response correction does not include uncertainties ***\n')
         else:
             print(colorama.Fore.RED+'*** WARNING: Flat field correction file does not exist, skipping ***'+colorama.Style.RESET_ALL)
     
@@ -529,16 +531,17 @@ for i in range(len(obsLst)):
             wifisIO.writeFits(skyGrid, 'processed/'+skyFolder+'_sky_slices_fullGrid.fits', ask=False, hdr=skyHdr)
 
         #check if previous processing of sky exists and if sky RV measurement already carried out
-        if os.path.exists('processed/'+skyFolder+'_sky_cube.fits') and not reProcSky and getSkyCorRV:
-            print('Reading RVSKYCOR from FITS header')
-            logfile.write('Readings RVSKYCOR from ' + skyFolder + ' header instead\n')
+        if os.path.exists('processed/'+skyFolder+'_sky_cube.fits') and not reProcSky and getSkyCorPix:
+            print('Reading SKYCORPX from FITS header')
+            logfile.write('Reading SKYCORPX from ' + skyFolder + ' header instead\n')
             skyTmpHdr = fits.open('processed/'+skyFolder+'_sky_cube.fits')[0].header
-            if 'RVSKYCOR' in skyTmpHdr:
-                rvSkyCor = skyTmpHdr['RVSKYCOR']
-                hdr.set('RVSKYCOR',rvSkyCor,'RV offset between sky and template')
+            
+            if 'SKYCORPX' in skyTmpHdr:
+                skyCorPix = skyTmpHdr['SKYCORPX']
+                hdr.set('SKYCORPX',skyCorPix,'Pixel offset between sky and template')
             else:
-                print(colorama.Fore.RED+'*** WARNING: RVSKYCOR keyword not found in FITS header, reprocessing necessary ***'+colorama.Style.RESET_ALL)
-                logfile.write('*** WARNING:  RVSKYCOR keyword not found in FITS header, reprocessing necessary ***')
+                print(colorama.Fore.RED+'*** WARNING: SKYCORPX keyword not found in FITS header, reprocessing necessary ***'+colorama.Style.RESET_ALL)
+                logfile.write('*** WARNING:  SKYCORPX keyword not found in FITS header, reprocessing necessary ***')
                 reProcSky = True        
                 
         #create cube stage
@@ -560,11 +563,10 @@ for i in range(len(obsLst)):
             skyHdr = tmpHdr[::-1]
             skyHdr.add_comment('File contains the flux data cube')
 
-            
             skyCube = createCube.mkCube(skyGrid, ndiv=ndiv, missing_left=missing_left_slice, missing_right=missing_right_slice).astype('float32')
             headers.getWCSCube(skyCube, skyHdr, xScale, yScale, waveGridProps)
 
-            if getSkyCorRV:
+            if getSkyCorPix:
                 #compute RV difference between sky slices and some sky template spectrum
                 
                 print('Measuring RV difference between median sky spectrum and template')
@@ -584,12 +586,12 @@ for i in range(len(obsLst)):
                 #interpolate sky template onto observed wavelength grid
                 tempInterp = np.interp(waveArray, skyEmTemp[:,0],skyEmTemp[:,1])
 
-                rvSkyCor = postProcess.crossCorSpec(waveArray, avgSkySpec, tempInterp, plot=False, oversample=50, absorption=False, mode='idl', contFit1=True, contFit2=False,nContFit=50,contFitOrder=1, mxVel=1000, reject=0, velocity=True)
+                skyCorPix = postProcess.crossCorSpec(waveArray, avgSkySpec, tempInterp, plot=False, oversample=50, absorption=False, mode='idl', contFit1=True, contFit2=False,nContFit=50,contFitOrder=1, mxVel=20, reject=0, velocity=False)
 
-                skyHdr.set('RVSKYCOR',rvSkyCor,'RV offset between sky and template')
-                hdr.set('RVSKYCOR',rvSkyCor,'RV offset between sky and template')
-                print('Found RV offset between sky spectrum and template of ' + str(rvSkyCor))
-                logfile.write('Found RV offset between sky spectrum and template of ' + str(rvSkyCor)+'\n')
+                skyHdr.set('SKYCORPX',skyCorPix,'Pixel offset between sky and template')
+                hdr.set('SKYCORPX',skyCorPix,'Pixel offset between sky and template')
+                print('Found pixel offset between sky spectrum and template of ' + str(skyCorPix))
+                logfile.write('Found pixel offset between sky spectrum and template of ' + str(skyCorPix)+'\n')
 
             #write WCS to header
             wifisIO.writeFits(skyCube, 'processed/'+skyFolder+'_sky_cube.fits', hdr=skyHdr, ask=False)
@@ -652,9 +654,59 @@ for i in range(len(obsLst)):
     hdr = tmpHdr[::-1]
     hdr.add_comment('File contains the distortion-corrected flux slices as multi-extensions')
 
-    #carry out additional 
+    #carry out additional sky correction tasks
 
     if skyLst is not None:
+        #check if pixel correction exists, if so update wave mapping to take correction into effect
+        if 'skyCorPix' in locals():
+            #waveShift = []
+            #if shift is velocity
+            #for j in range(len(waveMap)):
+            #    waveShift.append(waveMap[j]*(1. + rvSkyCor/2.99792458e5))
+            #waveGridShift = np.zeros(3,dtype='float32')
+            #waveGridShift[:] = waveGridProps
+            #waveGridShift[:1] = waveGridProps[:1]*(1. + rvSkyCor/2.99792458e5)
+
+            if not 'skyCor' in locals():
+                print('Reading distortion corrected sky slices for ' + skyFolder)
+                logfile.write('Reading sky slices from:\n')
+                logfile.write('processed/'+skyFolder+'_sky_slices_distCor.fits\n')
+                skyCor,skyHdr = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky_slices_distCor.fits')
+                skyHdr = skyHdr[0]
+            
+            #read in solution and recompute wavemap
+            print('*** Creating new shifted wavelength map ***')
+            waveFitResults = wifisIO.readPickle('processed/'+waveFolder+'_wave_fitResults.pkl')
+                    
+            #get rid of bad solutions
+            if cleanDispSol:
+                rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(waveFitResults, plotFile=None, threshold=cleanDispThresh)
+            else:
+                dispSolClean = waveFitResults[0]
+
+            #create new wavemap
+            waveMapLst = waveSol.buildWaveMap2(dispSolClean, skyCor[0].shape[1], extrapolate=True, fill_missing=True, offset=skyCorPix)
+            if waveSmooth>0:
+                waveShift = waveSol.smoothWaveMapAll(waveMapLst,smth=waveSmooth,MP=True )
+            else:
+                waveShift= waveMapLst
+                        
+            if waveTrimThresh > 0:
+                flatSlices = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_slices.fits')[0]
+                nSlices = len(flatSlices)/3
+                flatSlices = flatSlices[:nSlices]
+                waveMapTrim = waveSol.trimWaveSliceAll(waveMap, flatSlices, waveTrimThresh)
+                
+                #get wave grid properties
+                waveGridShift = createCube.compWaveGrid(waveMapTrim)
+            else:
+                waveGridShift = createCube.compWaveGrid(waveMap) 
+                
+            waveMapAll.append(waveShift)
+        else:
+            waveShift = waveMap
+            waveGridShift = waveGridProps
+        
         if skyScaleCor:
             if not 'skyCor' in locals():
                 print('Reading distortion corrected sky slices for ' + skyFolder)
@@ -670,9 +722,7 @@ for i in range(len(obsLst)):
                 
                 hdr.add_history('Subtracted sky slices using sky obs:')
                 hdr.add_history(skyFolder)
-
             else:
-
                 print('Finding and correcting strength of sky emission lines to best match science observation')
                 logfile.write('Finding and correcting strength of sky emission lines to best match science observation\n')
                 logfile.write('Using the following parameters:\n')
@@ -683,26 +733,11 @@ for i in range(len(obsLst)):
                         logfile.write(str(reg[0]) + ' - ' + str(reg[1])+'\n')
                 logfile.write('mxScale: ' + str(skyMxScale)+'\n')
                 logfile.write('Fitting individual lines: '+str(skyFitIndLines)+'\n')
-
                 
-                #check if RV correction exists, if so update wave mapping to take correction into effect
-                if 'rvSkyCor' in locals():
-                    waveShift = []
-                    for j in range(len(waveMap)):
-                        waveShift.append(waveMap[j]*(1. + rvSkyCor/2.99792458e5))
-
-                    waveGridShift = np.zeros(3,dtype='float32')
-                    waveGridShift[:] = waveGridProps
-                    waveGridShift[:1] = waveGridProps[:1]*(1. + rvSkyCor/2.99792458e5)
- 
-                else:
-                    waveShift = waveMap
-                    waveGridShift = waveGridProps
-
                 with warnings.catch_warnings():
                     warnings.simplefilter('ignore', RuntimeWarning)
                     subSlices= postProcess.subScaledSkySlices2(waveShift, dataCor, skyCor, waveGridShift,skyHdr,regions=skyLineRegions, mxScale=skyMxScale, fluxThresh = skyFluxThresh, fitInd=skyFitIndLines, saveFile = 'quality_control/'+obsLst[i]+'_obs_'+skyLst[i]+'_sky',MP=True, missing_left_slice=missing_left_slice, missing_right_slice=missing_right_slice)
-
+                    
                 hdr.add_history('Subtracted scaled sky slices using sky obs:')
                 hdr.add_history(skyFolder)
                 if skyFitIndLines:
@@ -737,7 +772,7 @@ for i in range(len(obsLst)):
         logfile.write('*** WARNING: Only astropy version > 2 supports radial velocity correctsion, no correctsion computed ***')
         
     #compute galactic coordinates
-    print('Determining galactic coordiantes')
+    print('Determining galactic coordinates')
     logfile.write('Determining galactic coordinates\n')
 
     icrs_coords = coord.ICRS(ra=hdr['RA_DEG']*units.deg,dec=hdr['DEC_DEG']*units.deg)
@@ -831,15 +866,14 @@ if len(obsLst) > 1:
         waveMap = wifisIO.readImgsFromFile('processed/'+waveLst[i]+'_wave_waveMap.fits')[0]
 
         #check if rv corrections exist 
-        if 'RVSKYCOR' in hdr:
-            if hdr['RVSKYCOR']!=0:
-                rvSkyCor = hdr['RVSKYCOR']
-                print('Correcting observation ' + obsLst[i] + ' for RV offset of '+str(rvSkyCor))
-                logfile.write('Correcting observation ' + obsLst[i] + ' for RV offset of ' + str(rvSkyCor)+'\n')
+        if 'SKYCORPX' in hdr:
+            if hdr['SKYCORPX']!=0:
+                skyCorPix = hdr['SKYCORPX']
+                print('Correcting observation ' + obsLst[i] + ' for pixel offset of '+str(skyCorPix))
+                logfile.write('Correcting observation ' + obsLst[i] + ' for pixel offset of ' + str(skyCorPix)+'\n')
 
-                waveShift = []
-                for j in range(len(waveMap)):
-                    waveShift.append(waveMap[j]*(1. + rvSkyCor/2.99792458e5))
+                #read shifted wavemap from list
+                waveShift = waveMapAll[i]
             else:
                 waveShift = waveMap
         else:
@@ -868,7 +902,7 @@ if len(obsLst) > 1:
     #for i in range(obsLst.shape[0]):
     #    plt.plot(np.nanmedian(dataCombLst[i][0],axis=0))
     #plt.show()
-    
+
     with warnings.catch_warnings():
         warnings.simplefilter('ignore',RuntimeWarning)
         
@@ -880,7 +914,9 @@ if len(obsLst) > 1:
             combGrid.append(np.nanmedian(tmpLst,axis=0))
     del tmpLst
     del dataCombLst
-
+    if 'waveMapAll' in locals():
+        del waveMapAll
+        
     #now create cube from gridded data
     print('Creating median data cube')
     logfile.write('Creating median cube from gridded slices\n')
@@ -914,8 +950,8 @@ if len(obsLst) > 1:
         
         combHdr.set('OBJTIME',np.float32(deltaTime),'Total time spent on target in seconds')
     
-    if getSkyCorRV:
-        combHdr.add_history('RV offset between sky and template was determined for each observation')
+    if getSkyCorPix:
+        combHdr.add_history('Pixel offset between sky and template was determined for each observation')
     if skyShiftCor:
         combHdr.add_history('Corrected each observation for determined pixel shift between sky and target ramp image')
     if skyScaleCor:
