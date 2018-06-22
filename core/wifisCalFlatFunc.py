@@ -54,7 +54,7 @@ from astropy import time as astrotime, coordinates as coord, units
 import colorama
 from astropy.visualization import ZScaleInterval
 
-def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowsAvg=0,rowSplit=1,nlSplit=32, combSplit=32,bpmCorRng=100, crReject=False, skipObsinfo=False,winRng=51, polyFitDegree=3, imgSmth=5,nlFile='',bpmFile='', satFile='',darkFile='',flatCutOff=0.1,flatSmooth=0, logfile=None, gain=1., ron=None, dispAxis=0,limSmth=20, ask=True, obsCoords=None,satSplit=32, centGuess=None):
+def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCounts=None, BPM=None, distMapLimitsFile='', plot=True, nChannel=32, nRowsAvg=0,rowSplit=1,nlSplit=32, combSplit=32,bpmCorRng=100, crReject=False, skipObsinfo=False,winRng=51, polyFitDegree=3, imgSmth=5,nlFile='',bpmFile='', satFile='',darkFile='',flatCutOff=0.1,flatSmooth=0, logfile=None, gain=1., ron=None, dispAxis=0,limSmth=20, ask=True, obsCoords=None,satSplit=32, centGuess=None, flatCor=False, flatCorFile=''):
     
     """
     Flat calibration function which can be used/called from another script.
@@ -378,7 +378,29 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                 
                 if logfile is not None:
                     logfile.write('Computed uncertainties for normalized response function for each slice\n')
-                        
+
+                if flatCor:
+                    print('Correcting flat field response function')
+                    logfile.write('Correcting flat field response function using file:\n')
+                    logfile.write(flatCorFile+'\n')
+        
+                    flatCorSlices = wifisIO.readImgsFromFile(flatCorFile)[0]
+                    flatNorm = slices.ffCorrectAll(flatNorm, flatCorSlices)
+                    hdr.add_history('Corrected flat field response function using file:')
+                    hdr.add_history(flatCorFile)
+
+                    if len(flatCorSlices)>nSlices:
+                        hdr.add_history('Uncertainties include correction')
+                        sigmaNorm = wifisUncertainties.multiplySlices(flatNorm,sigmaNorm,flatCorSlices[:nSlices],flatCorSlices[nSlices:2*nSlices])
+
+                    else:
+                        hdr.add_history('Uncertainties do not include correction')
+                        logfile.write('*** WARNING: Response correction does not include uncertainties***\n')
+
+                else:
+                    print(colorama.Fore.RED+'*** WARNING: Flat field correction file does not exist, skipping ***'+colorama.Style.RESET_ALL)
+    
+                    logfile.write('*** WARNING: Flat field correction file does not exist, skipping ***\n')
                         
                 #write normalized images to file
                 wifisIO.writeFits(flatNorm + sigmaNorm + satSlices,savename+'_flat_slices_norm.fits',hdr=hdr, ask=False)

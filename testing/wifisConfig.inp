@@ -96,7 +96,7 @@ skyFluxThresh = 0.1
 #additional RV corrections relative to sky emission template
 
 #run routine with associated sky image?
-getSkyCorRV = True
+getSkyCorPix = True
 
 #define location of template file here
 skyEmTempFile = '/data/pipeline/external_data/sky_emission_template.dat'

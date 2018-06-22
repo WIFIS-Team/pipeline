@@ -244,15 +244,24 @@ def readRampFromFolder(folderName, rampNum=None,nSkip=0):
     if rampNum is None:
         #Make sure that only one set of ramps is present in folder
         lst = glob.glob(folderName+'/*N01.fits')
-
+        #if the list is empty, search for gzipped files
+        if len(lst)==0:
+            lst = glob.glob(folderName+'/*N01.fits.gz')
+            
         if len(lst)>1:
             raise Warning('*** More than one set of ramps present in folder ' + folderName + '. You must specify which ramp to use. ***')
 
         else:
             lst = glob.glob(folderName+'/H2*fits*')
+            if len(lst)==0:
+                lst = glob.glob(folderName+'/H2*fits.gz')
+
             lst = sorted_nicely(lst)
     else:
         lst = glob.glob(folderName+'/H2*'+'R'+'{:02d}'.format(rampNum)+'*.fits')
+        if len(lst)==0:
+            lst = glob.glob(folderName+'/H2*'+'R'+'{:02d}'.format(rampNum)+'*.fits.gz')
+
         lst = sorted_nicely(lst)
 
     if nSkip>0:
@@ -491,15 +500,29 @@ def getNumRamps(folder, rootFolder=''):
     if os.path.exists(rootFolder+'/CDSReference/'+folder):
         rampLst = glob.glob(rootFolder+'/CDSReference/'+folder+'/*N01.fits')
         nRamps = len(rampLst)
+
+        #check if list is empty and search for gzipped files instead
+        if nRamps == 0:
+            rampLst = glob.glob(rootFolder+'/CDSReference/'+folder+'/*N01.fits.gz')
+            nRamps = len(rampLst)
+
  
     #Fowler
     elif os.path.exists(rootFolder+'/FSRamp/'+folder):
         rampLst = glob.glob(rootFolder+'/FSRamp/'+folder+'/*N01.fits')
         nRamps = len(rampLst)
-        
+        if nRamps == 0:
+            rampLst = glob.glob(rootFolder+'/FSRamp/'+folder+'/*N01.fits.gz')
+            nRamps = len(rampLst)
+         
     elif os.path.exists(rootFolder + '/UpTheRamp/'+folder):
         rampLst = glob.glob(rootFolder+'/UpTheRamp/'+folder+'/*N01.fits')
         nRamps = len(rampLst)
+
+        if nRamps == 0:
+            rampLst = glob.glob(rootFolder+'/UpTheRamp/'+folder+'/*N01.fits.gz')
+            nRamps = len(rampLst)
+
     else:
         raise Warning('*** Folder ' + folder +' does not exist ***')
 

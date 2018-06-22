@@ -51,7 +51,12 @@ def getWCSCube(data, hdr, xScale, yScale, waveGridProps, useSesameCoords=False):
     #rotAngle of 180 corresponds to W-E alignment
     
     w.wcs.cdelt = [xScale/3600., yScale/3600., dWave]
-    w.wcs.crpix = [data.shape[1]/2., data.shape[0]/2., 1]
+
+    #central pixel along y-axis is always first slice
+    #w.wcs.crpix = [data.shape[1]/2., data.shape[0]/2., 1]
+    centSlice = (data.shape[0]-1.)/17.*8.
+    #w.wcs.crpix = [data.shape[1]/2., data.shape[0]/2., 1]
+    centSlice = [data.shape[1]/2.,centSlice, 1]
     w.wcs.crval=[telRA,telDEC, waveGridProps[0]]
     w.wcs.crota=[float(rotAngle), float(rotAngle),0.]
     w.wcs.ctype=["RA---TAN","DEC--TAN","WAVE"]
@@ -109,7 +114,9 @@ def getWCSImg(data, hdr, xScale, yScale, useSesameCoords=False):
     #convert input strings to degrees
     
     w.wcs.cdelt = [xScale/3600., yScale/3600.]
-    w.wcs.crpix = [data.shape[1]/2., data.shape[0]/2.]
+    centSlice = (data.shape[0]-1.)/17.*8.
+    #w.wcs.crpix = [data.shape[1]/2., data.shape[0]/2.]
+    w.wcs.crpix = [data.shape[1]/2., centSlice]
     w.wcs.crval=[telRA,telDEC]
     w.wcs.crota=[float(rotAngle), float(rotAngle)]
     w.wcs.ctype=["RA---TAN","DEC--TAN"]

@@ -141,7 +141,7 @@ else:
 #now process data
 print('Processing calibration flats')
 logfile.write('Processing calibration flats\n')
-calFlat.runCalFlat(np.asarray([flatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, distMapLimitsFile = distMapLimitsFile, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile,darkFile=darkFile, logfile=logfile, ask=False, obsCoords=obsCoords, limSmth=flatLimSmth, flatCutOff=flatCutOff, gain=gain, ron=RON, polyFitDegree=limitsPolyFitDegree)
+calFlat.runCalFlat(np.asarray([flatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, distMapLimitsFile = distMapLimitsFile, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile,darkFile=darkFile, logfile=logfile, ask=False, obsCoords=obsCoords, limSmth=flatLimSmth, flatCutOff=flatCutOff, gain=gain, ron=RON, polyFitDegree=limitsPolyFitDegree, centGuess=centGuess)
 
 flatLst, flatHdr = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat.fits')
 flat = flatLst[0]
@@ -164,7 +164,40 @@ if cont=='y':
     print('Processing dome flats')
     logfile.write('Processing dome flats\n')
 
+    #calFlat.runCalFlat(np.asarray([domeFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, distMapLimitsFile = distMapLimitsFile, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile,darkFile=darkFile, logfile=logfile, ask=False, obsCoords=obsCoords, limSmth=flatLimSmth, flatCutOff=flatCutOff, gain=gain, ron=RON, polyFitDegree=limitsPolyFitDegree, centGuess=centGuess) 
+
     dome, domeSig, domeSat, domeHdr =  processRamp.auto(domeFolder,rootFolder, 'processed/'+domeFolder+'_dome_flat.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=flatbpmCorRng,avgAll=True, ron=RON)
+
+    print('Plotting dome slice traces')
+    #plot quality control figure
+    pdfName = 'quality_control/'+domeFolder+'_dome_flat_slices_traces.pdf'
+    with PdfPages(pdfName) as pdf:
+        fig = plt.figure()
+        interval = ZScaleInterval()
+        lims = interval.get_limits(dome[4:-4,4:-4])
+        plt.imshow(dome[4:-4,4:-4], aspect='auto', cmap='jet', clim=lims, origin='lower')
+                        
+        plt.xlim=(0,2040)
+        plt.colorbar()
+        for l in range(limits.shape[0]):
+            if dispAxis==0:
+                plt.plot(limits[l], np.arange(limits.shape[1]),'k', linewidth=1) #drawn limits
+                plt.plot(np.clip(limits[l]+shft,0, dome[4:-4,4:-4].shape[0]-1), np.arange(limits.shape[1]),'r--', linewidth=1) #shifted ronchi limits, if provided, or polynomial fit
+            else:
+                plt.plot(np.arange(limits.shape[1]),limits[l],'k', linewidth=1) #drawn limits
+                plt.plot(np.arange(limits.shape[1]),np.clip(limits[l]+shft,0, dome[4:-4,4:-4].shape[0]-1),'r--', linewidth=1) #shifted ronchi limits
+                
+            if hband:
+                if dispAxis==0:
+                    plt.plot([0,dome[4:-4,4:-4].shape[1]-1],[lim1,lim1],'b:',linewidth=1)
+                    plt.plot([0,dome[4:-4,4:-4].shape[1]-1],[lim2,lim2],'b:',linewidth=1)
+                else:
+                    plt.plot([lim1,lim1],[0,dome[4:-4,4:-4].shape[1]-1],'b:',linewidth=1)
+                    plt.plot([lim2,lim2],[0,dome[4:-4,4:-4].shape[1]-1],'b:',linewidth=1)
+
+        plt.tight_layout()
+        pdf.savefig()
+        plt.close(fig)
 else:
     print('Reading processed dome flats from file ')
     logfile.write('Reading processed dome flats from file\n')
@@ -198,15 +231,30 @@ if 'backFolder' in locals():
         dome -= back
         domeSig = np.sqrt(domeSig**2 + backSig**2)
         domeHdr.add_history('Image was background subtracted')
-        
+
+
+print('Carrying out check to see if there is a shift between the calibration and dome flats')
+#get dome slice limits, to test if different
+domeLimits = slices.findLimits(dome, dispAxis=dispAxis, winRng=51, imgSmth=flatImgSmth, limSmth=flatLimSmth, rmRef=True,centGuess=centGuess)
+polyLimits = slices.polyFitLimits(domeLimits, degree=limitsPolyFitDegree, sigmaClipRounds=2)
+domeShft = int(np.nanmedian(polyLimits[1:-1,:] - distMapLimits[1:-1,:]))
+if domeShft != shft:
+    print(colorama.Fore.RED+'*** WARNING: dome flat field appears to be shifted relative to calibration flat. *** '+colorama.Style.RESET_ALL)
+    cont = wifisIO.userInput('Do you want to continue (y/n)?')
+    if cont.lower() == 'n':
+        raise Warning('*** Cannot continue, dome flats appear shifted relative to calibration flats ***')
+else:
+    print('No shift detected between dome and calibration flat')
+    
 print('Extracting slices')
 logfile.write('Extracting slices\n')
 flatSlices = slices.extSlices(flat[4:-4,4:-4],limits,shft=shft)
-domeSlices = slices.extSlices(dome[4:-4,4:-4], limits, shft=shft)
+
+domeSlices = slices.extSlices(dome[4:-4,4:-4], limits, shft=domeShft)
 
 print('Getting response functions from flats')
 logfile.write('Getting response functions from flats\n')
-domeNorm = slices.getResponseAll(domeSlices, 1., 0.1)
+domeNorm = slices.getResponseAll(domeSlices, 1., 0.01)
 calNorm = slices.getResponseAll(flatSlices, 0, 0.1)
 
 print('Getting correction function')
@@ -225,7 +273,7 @@ calCor = slices.ffCorrectAll(calNorm, respSNorm)
 print('Plotting quality control figures')
 
 with PdfPages('quality_control/flat_field_correction.pdf') as pdf:
-    for r in calCor:
+    for r in respSNorm:
         fig = plt.figure()
         clim = interval.get_limits(r)
         plt.imshow(r, aspect='auto',clim=clim)
@@ -233,7 +281,6 @@ with PdfPages('quality_control/flat_field_correction.pdf') as pdf:
         plt.tight_layout()
         pdf.savefig()
         plt.close()
-
 
 print('Saving correction function')
 logfile.write('Saving correction function\n')

@@ -61,6 +61,11 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
         
     #first determine number of ramps
     rampLst = glob.glob(folder+'/*N01.fits')
+
+    #check if gzipped files exist instead
+    if len(rampLst)==0:
+        rampLst = glob.glob(folder+'/*N01.fits.gz')
+    
     nRamps = len(rampLst)
     del rampLst
     

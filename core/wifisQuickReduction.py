@@ -4,7 +4,7 @@ set of functions used to run a quick reduction of the WIFIS pipeline
 
 """
 
-#import matplotlib
+import matplotlib
 #*******************************************************************
 #matplotlib.use('gtkagg') #default is tkagg, but using gtkagg can speed up window creation on some systems
 #*******************************************************************
@@ -100,7 +100,7 @@ def initPaths(hband=False):
     return
 #*******************************************************************************
 
-def procRamp(rampFolder, noProc=False, satCounts=None, bpm=None, saveName='', varFile=''):
+def procRamp(rampFolder, noProc=False, satCounts=None, bpm=None,nlCoef=None, saveName='', varFile='', bpmCorRng=0):
     """
     """
 
@@ -156,8 +156,7 @@ def procRamp(rampFolder, noProc=False, satCounts=None, bpm=None, saveName='', va
 
     if not noProc:
         print('Processing ramp')
-
-        fluxImg,sigImg,satFrame, hdr =processRamp.auto(rampFolder, rootFolder, saveName, satCounts, None, bpm, nRows=0, rowSplit=nRowSplit, satSplit=nSatSplit,nlSplit=nlSplit, combSplit=nCombSplit, bpmCorRng=bpmCorRng,saveAll=False,ignoreBPM=True,avgAll=True, bpmFile=bpmFile, satFile=satFile,nChannel=0)
+        fluxImg,sigImg,satFrame, hdr =processRamp.auto(rampFolder, rootFolder, saveName, satCounts, nlCoef, bpm, nRows=0,bpmCorRng=bpmCorRng,saveAll=False,ignoreBPM=True,avgAll=True, nChannel=0)
 
     if noProc:
         #get obsinfo file to fill in hdr info
@@ -385,7 +384,7 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
     if (os.path.exists('quick_reduction/'+waveFolder+'_wave_fwhm_map.png') and os.path.exists('quick_reduction/'+waveFolder+'_wave_fwhm_map.fits') and os.path.exists('quick_reduction/'+waveFolder+'_wave_wavelength_map.fits')):
         print('*** ' + waveFolder + ' arc/wave data already processed, skipping ***')
     else:
-        wave, hdr,obsinfo = procRamp(waveFolder, satCounts=satCounts, bpm=bpm, saveName='quick_reduction/'+waveFolder+'_wave.fits')
+        wave, hdr,obsinfo = procRamp(waveFolder, satCounts=satCounts, bpm=bpm, saveName='quick_reduction/'+waveFolder+'_wave.fits',varFile=varFile)
     
         if (os.path.exists('quick_reduction/'+flatFolder+'_flat_limits.fits') and os.path.exists('quick_reduction/'+flatFolder+'_flat_slices.fits')):
             limits, limitsHdr = wifisIO.readImgsFromFile('quick_reduction/'+flatFolder+'_flat_limits.fits')
@@ -393,7 +392,7 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
             shft = limitsHdr['LIMSHIFT']
         else:
             print('Processing flat file')
-            flat, flatHdr, obsinfo = procRamp(flatFolder, satCounts=satCounts, bpm=bpm, saveName='quick_reduction/'+flatFolder+'_flat.fits')
+            flat, flatHdr, obsinfo = procRamp(flatFolder, satCounts=satCounts, bpm=bpm, saveName='quick_reduction/'+flatFolder+'_flat.fits',varFile=varFile)
 
             print('Finding flat limits')
             limits = slices.findLimits(flat, dispAxis=0, winRng=51, imgSmth=5, limSmth=20,rmRef=True, centGuess=centGuess)
@@ -671,12 +670,26 @@ def procRonchiData(ronchiFolder, flatFolder, hband=False, colorbarLims=None, var
         #build resolution map
         ampMapLst = spatialCor.buildAmpMap(ronchiTraces, ronchiAmps, ronchiSlices)
 
-        #get median FWHM
+
+        #get median amplitude/contrast measurement
         ampAll = []
-        for f in ronchiAmps:
-            for i in range(len(f)):
-                for j in range(len(f[i])):
-                    ampAll.append(f[i][j])
+
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore',RuntimeWarning)
+            
+            for f in ronchiAmps:
+
+                #remove points from different traces that share same coordinates, to derive a more accurate average
+
+                for j in range(f.shape[0]-1):
+                    for k in range(j+1,f.shape[0]):
+                        whr = np.where(np.abs(f[j,:]-f[k,:])<0.5)[0]
+                        if len(whr)>0:
+                            f[k,whr]=np.nan
+                            
+                for i in range(f.shape[0]):
+                    for j in range(f.shape[1]):
+                        ampAll.append(f[i][j])
             
         ampMed = np.nanmedian(ampAll)
 
@@ -793,14 +806,13 @@ def gaussFit(x, y, guessWidth):
     params is a list containing the fitted parameters in the following order: amplitude, centre, width
     """
 
-    ytmp = y - np.min(y)
+    ytmp = y-y.min()
     #use scipy to do fitting
-    popt, pcov = curve_fit(gaussian, x, ytmp, p0=[np.max(ytmp), np.mean(x),guessWidth])
+    popt, pcov = curve_fit(gaussian, x, ytmp, p0=[ytmp.max(), np.mean(x),guessWidth])
 
     return popt
 
-
-def getPSFMap(rampFolder='',skyFolder=None,varFile='', guessWidth=8, sliceWidth=150, threshold=2., dispAxis=0, noPlot=False):
+def getPSFMap(rampFolder='',skyFolder=None,varFile='', guessWidth=8, threshold=2., nBest=5,dispAxis=0, noPlot=False, noProc=False, pixRng=None,nSlices=18, fracLev=0.25, nlCor=False):
     """
     Routine to estimate PSF along the dispersion axis of a continuum point source.
     Usage: getPSFMap(rampFolder='',skyFolder=None,varFile='', guessWidth=8, sliceWidth=150, threshold=2., dispAxis=0)
@@ -832,14 +844,19 @@ def getPSFMap(rampFolder='',skyFolder=None,varFile='', guessWidth=8, sliceWidth=
         bpm = wifisIO.readImgsFromFile(bpmFile)[0]
     else:
         bpm = None
-        
+
+    if os.path.exists(nlFile) and nlCor:
+        nlCoef = wifisIO.readImgsFromFile(nlFile)[0]
+    else:
+        nlCoef = None
+
     wifisIO.createDir('quick_reduction')
 
     #process science target data
-    fluxImg, hdr, obsinfo = procRamp(rampFolder, satCounts=satCounts, bpm=bpm, saveName='quick_reduction/'+rampFolder+'_obs.fits',varFile=varFile)
+    fluxImg, hdr, obsinfo = procRamp(rampFolder, satCounts=satCounts, bpm=bpm, saveName='quick_reduction/'+rampFolder+'_obs.fits',varFile=varFile, noProc=noProc,nlCoef=nlCoef)
     
     if (skyFolder is not None):
-        skyImg, skyHdr, obsinfo = procRamp(skyFolder, satCounts=satCounts, bpm=bpm, saveName='quick_reduction/'+rampFolder+'_sky.fits',varFile=varFile)
+        skyImg, skyHdr, obsinfo = procRamp(skyFolder, satCounts=satCounts, bpm=bpm, saveName='quick_reduction/'+rampFolder+'_sky.fits',varFile=varFile, noProc=noProc,nlCoef=nlCoef)
 
         #subtract
         with warnings.catch_warnings():
@@ -848,14 +865,26 @@ def getPSFMap(rampFolder='',skyFolder=None,varFile='', guessWidth=8, sliceWidth=
 
     obs = fluxImg[4:-4, 4:-4]
 
+    print('Finding locations of continuum sources')
     #get collapse of data to identify continuum regions
     if dispAxis==0:
         y = np.nansum(obs,axis=0).astype('float64')
     else:
         y = np.nansum(obs,axis=1).astype('float64')
 
+    if not pixRng is None:
+        y = y[pixRng[0]:pixRng[1]]
+        
+    #get a quick median averaging over 5-pixels to avoid bad/hot pixels
+    yClean = np.empty(y.shape)
+
+    for i in range(y.shape[0]):
+        xRng = np.arange(7)-3 + i
+        xRng = xRng[np.logical_and(xRng >=0, xRng <y.shape[0])]
+        yClean[i] = np.nanmedian(y[xRng])
+        
     #find noise level
-    tmp = np.copy(y)
+    tmp = np.copy(yClean)
 
     flr = np.nanmedian(tmp)
     xFlr = np.arange(y.shape[0])
@@ -867,33 +896,90 @@ def getPSFMap(rampFolder='',skyFolder=None,varFile='', guessWidth=8, sliceWidth=
         flr = np.nanmedian(tmp)
 
     #now find regions with flux > threshold times noise level
-    whr = np.where(y>=threshold*flr)[0]
+    whr = np.where(yClean>=threshold*flr)[0]
 
-    #now step through the different regions
+    #check to see if any part of image satisfies condition
+    #if not, quit
+    if len(whr) <1:
+        return np.nan
+        
+    #now step through and find the different continuum regions
     regs = []
-    remWhr = np.copy(whr)
     x = np.arange(y.shape[0])
 
-    while remWhr.shape[0] >guessWidth:
-        mxLoc = np.nanargmax(y[remWhr])
-        xFit = np.arange(sliceWidth)+x[remWhr[mxLoc]]- sliceWidth/2
-        xFit = xFit[xFit>=0]
-        xFit = xFit[xFit<y.shape[0]]
-        xFit = xFit[np.isfinite(y[xFit])]
-        yFit = y[xFit]
-        
-        gFit = gaussFit(xFit,yFit,guessWidth)
-        lim1 = gFit[1]-np.abs(gFit[2])*3.
-        if lim1 < 0:
-            lim1 = 0
-        lim2 = gFit[1] +np.abs(gFit[2])*3.
-        if lim2 > y.shape[0]:
-            lim2 = y.shape[0]
-        
-        regs.append([int(lim1),int(lim2)])
-        remWhr = remWhr[np.logical_or(x[remWhr]<lim1, x[remWhr]>lim2)]
+    #go through pixels that are above threshold and find local maxima
+    pos = x[whr[0]]
 
+    sliceWidth = y.shape[0]/nSlices
+    posNew =0
     
+    while pos < whr[-1]:
+        #find peak as location where pix value > 5 pixels before and 5 pixels after
+        xRng = np.arange(2*nBest+1)-nBest + pos
+        #xRng = xRng[np.logical_and(xRng>=0,xRng<y.shape[0])]
+        yRng = yClean[xRng]
+
+        #plt.plot(xRng, yRng, 'o')
+        #check if current
+        #print(xRng, np.all(yRng[nBest] >= yRng), yRng[nBest]>=yRng)
+        
+        if np.all(yRng[nBest] >= yRng):
+            #carry out fitting
+
+            xFit = np.arange(sliceWidth)+pos- sliceWidth/2
+            xFit = xFit[xFit>=0]
+            xFit = xFit[xFit<yClean.shape[0]]
+            if len(regs)>0:
+                xFit = xFit[xFit > np.max(regs)]
+            xFit = xFit[np.isfinite(yClean[xFit])]
+            yFit = yClean[xFit]
+            
+            try:
+                gFit = gaussFit(xFit,yFit,guessWidth)
+                
+                lim1 = gFit[1]-np.abs(gFit[2])*3.
+                if lim1 < 0:
+                    lim1 = 0
+                    
+                #make sure there is no overlap
+                if len(regs)>0:
+                    if lim1 < np.max(regs):
+                        lim1 = np.max(regs)
+                    
+                lim2 = gFit[1] +np.abs(gFit[2])*3.
+                if lim2 > y.shape[0]:
+                    lim2 = y.shape[0]
+
+                #print('lim1, lim2', lim1, lim2)
+                #make sure that separation makes sense
+                #should be less than slice width. but allow for some leeway
+                if lim2-lim1 > sliceWidth*1.5 or lim2-lim1 < nBest:
+                    lim2 = xFit[-1]
+                else:
+                    regs.append([int(lim1),int(lim2)])
+                    #plt.vlines(lim1, 0, y.max())
+                    #plt.vlines(lim2, 0, y.max())
+            except(RuntimeError):
+                lim2 = xFit[-1]
+
+            posNew = x[whr[np.where(x[whr] > lim2+nBest)]]
+            if len(posNew)>0:
+                pos = posNew[0]
+            else:
+                break
+        else:
+            #change position to pixel with maximum value in given range
+            posNew = xRng[np.nanargmax(yRng)]
+
+            if posNew <= pos:
+                posNew = x[whr[[np.where(x[whr] >= xRng[-1]+1)]]][0]
+                if len(posNew)>0:
+                    pos = posNew[0]
+                else:
+                    break
+            else:
+                pos = posNew
+                
     #now go through and get FWHM along each continuum region
     fwhmLst = []
     centLst = []
@@ -907,19 +993,28 @@ def getPSFMap(rampFolder='',skyFolder=None,varFile='', guessWidth=8, sliceWidth=
         centLst.append([])
         fwhmLst.append([])
 
-        
-        for i in range(npts):
-            xReg = np.arange(reg[0],reg[1]+1)
-            if dispAxis == 0:
-                centLst[-1].append(xReg[np.nanargmax(obs[i,xReg])])
-                mx = np.nanmax(obs[i,xReg])
-                whr = np.where(obs[i,xReg]>=0.5*mx)[0]
-            else:
-                centLst[-1].append(xReg[np.nanargmax(obs[xReg,i])])
-                mx = np.nanmax(obs[xReg,i])
-                whr = np.where(obs[xReg,i]>=0.5*mx)[0]
-
-            fwhmLst[-1].append(whr.shape[0])
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore',RuntimeWarning)
+            for i in range(npts):
+                xReg = np.arange(reg[0],reg[1])
+                if dispAxis == 0:
+                    #check to make sure the region is not all NaNs
+                    if np.all(~np.isfinite(obs[i,xReg])):
+                        fwhm = np.nan
+                    else:
+                        centLst[-1].append(xReg[np.nanargmax(obs[i,xReg])])
+                        mx = np.nanmax(obs[i,xReg])
+                        whr = np.where(obs[i,xReg]>=fracLev*mx)[0]
+                        fwhm = whr.shape[0]
+                else:
+                    if np.all(~np.isfinite(obs[i,xReg])):
+                        fwhm = np.nan
+                    else:
+                        centLst[-1].append(xReg[np.nanargmax(obs[xReg,i])])
+                        mx = np.nanmax(obs[xReg,i])
+                        whr = np.where(obs[xReg,i]>=fracLev*mx)[0]
+                        fwhm = whr.shape[0]
+                fwhmLst[-1].append(fwhm)
 
     #now build map
     mapOut = np.empty(obs.shape,dtype='float32')
@@ -928,20 +1023,30 @@ def getPSFMap(rampFolder='',skyFolder=None,varFile='', guessWidth=8, sliceWidth=
     for cents, fwhm in zip(centLst,fwhmLst):
         for i in range(len(cents)):
             if dispAxis ==0:
-                mapOut[i, int(cents[i]-4*fwhm[i]):int(cents[i]+4*fwhm[i])+1] = fwhm[i]
+                if np.isfinite(cents[i]) and np.isfinite(fwhm[i]):
+                    mapOut[i, int(cents[i]-2*(1/(1-fracLev))*fwhm[i]):int(cents[i]+2*(1/(1-fracLev))*fwhm[i])+1] = fwhm[i]
             else:
-                mapOut[int(cents[i]-4*fwhm[i]):int(cents[i]+4*fwhm[i])+1,i] = fwhm[i]
+                if np.isfinite(cents[i]) and np.isfinite(fwhm[i]):
+                    mapOut[int(cents[i]-2*(1/(1-fracLev))*fwhm[i]):int(cents[i]+2*(1/(1-fracLev))*fwhm[i])+1,i] = fwhm[i]
 
     #now plot and save data
+    print('Saving results')
     interval=ZScaleInterval()
     clim = interval.get_limits(fwhmLst)
 
     fig = plt.figure()
     plt.imshow(mapOut, aspect='auto', origin='lower', clim=clim)
     plt.colorbar()
-    plt.title('Median FWHM of PSF is: '+str(np.nanmedian(fwhmLst)))
+    medPSF = np.nanmedian(fwhmLst)
+    plt.title('Median FWHM of PSF is: '+str(medPSF))
     plt.tight_layout()
     plt.savefig('quick_reduction/'+rampFolder+'_obs_psf_map.png')
     if not noPlot:
         plt.show()
     plt.close()
+    hdr.set('PSF_LEV',fracLev,'Fractional level at which PSF width determined')
+    hdr.set('MED_PSF',medPSF,'Median width of PSF')
+    wifisIO.writeFits(mapOut, 'quick_reduction/'+rampFolder+'_obs_psf_map.fits',hdr=hdr)
+
+    return medPSF
+

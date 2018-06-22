@@ -175,6 +175,10 @@ def crossCorPixMP(input):
     else:
         y2tmp = np.empty(y2.shape,dtype=y2.dtype)
         np.copyto(y2tmp,y2)
+
+    #now get rid of NaNs
+    y1tmp[~np.isfinite(y1)] = 0.
+    y2tmp[~np.isfinite(y2)] = 0.
         
     #y1Tmp = np.zeros(y1tmp.shape)
     #y2Tmp = np.zeros(y2tmp.shape)
@@ -249,14 +253,14 @@ def crossCorSpec(wave, spec1, spec2, regions=None, oversample=20, absorption=Fal
     """
 
       
-    #compute velocity grid and interpolate velocity grid
-    v = (wave-wave[int(wave.shape[0]/2)])/wave[int(wave.shape[0]/2)]*2.99792458e5 # in km/s
-    vconst = np.linspace(v[0],v[-1],num=v.shape[0]*oversample)
-
     if velocity:
+        #compute velocity grid and interpolate velocity grid
+        v = (wave-wave[int(wave.shape[0]/2)])/wave[int(wave.shape[0]/2)]*2.99792458e5 # in km/s
+        vconst = np.linspace(v[0],v[-1],num=v.shape[0]*oversample)
+
         rvOut = crossCorVelMP([vconst, v, spec1, spec2, oversample, absorption, mode,contFit1,contFit2,nContFit,contFitOrder,mxVel, plot, reject,regions,wave])
     else:
-        rvOut = crossCorPixMP([spec1, spec2, oversample, absorption, mode,nContFit1,contFit2,contFitOrder,mxVel, plot, reject,regions,wave])
+        rvOut = crossCorPixMP([spec1, spec2, oversample, absorption, mode,contFit1,contFit2,nContFit,contFitOrder,mxVel, plot, reject,regions,wave])
 
     return rvOut
     
@@ -874,7 +878,7 @@ def buildfSlicesMap(fSlices):
 
     return outMap
 
-def shiftSlicesAll(inpSlices, pixShift, MP=False, ncpus=None):
+def shiftSlicesAll(inpSlices, pixShift, MP=False, ncpus=None,axis=0):
     """
     Routine to shift all slices by the indicated pixel shift.
     Usage outSlices = shiftSlicesAll(inpSlices, pixShift, MP=False, ncpus=None)
@@ -888,7 +892,7 @@ def shiftSlicesAll(inpSlices, pixShift, MP=False, ncpus=None):
     #create input list
     inpLst = []
     for slc in inpSlices:
-        inpLst.append([slc,pixShift])
+        inpLst.append([slc,pixShift,axis])
 
     if MP:
         if ncpus is None:
@@ -910,19 +914,28 @@ def shiftSlice(input):
     input is a list containing:
     slc - the input image slice
     pixShift - the shift to apply
+    axis - the axis along which to shift the image
     slcNew is the shifted image on the same coordinate system as the input
     """
 
     slc = input[0]
     pixShift = input[1]
-    
-    xOrg = np.arange(slc.shape[1]).astype(float)-pixShift
-    xNew = np.arange(slc.shape[1])
+    axis=input[2]
 
     slcNew = np.empty(slc.shape,dtype=slc.dtype)
-    
-    for i in range(slc.shape[0]):
-        slcNew[i,:] = np.interp(xNew,xOrg,slc[i,:])
+
+    if axis==1:
+        xOrg = np.arange(slc.shape[1]).astype(float)-pixShift
+        xNew = np.arange(slc.shape[1])
+
+        for i in range(slc.shape[0]):
+            slcNew[i,:] = np.interp(xNew,xOrg,slc[i,:])
+    else:
+        xOrg = np.arange(slc.shape[0]).astype(float)-pixShift
+        xNew = np.arange(slc.shape[0])
+
+        for i in range(slc.shape[1]):
+            slcNew[:,i] = np.interp(xNew,xOrg,slc[:,i])
 
     return slcNew
 

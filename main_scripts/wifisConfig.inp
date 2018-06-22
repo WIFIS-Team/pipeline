@@ -96,7 +96,7 @@ skyFluxThresh = 0.1
 #additional RV corrections relative to sky emission template
 
 #run routine with associated sky image?
-getSkyCorRV = True
+getSkyCorPix = True
 
 #define location of template file here
 skyEmTempFile = '/data/pipeline/external_data/sky_emission_template.dat'
@@ -114,6 +114,13 @@ flatCor = False
 
 #location of correction file
 flatCorFile = 'processed/flat_correction_slices.fits'
+
+#for determining flat field correction
+#name of file containing the observation folder for the Dome flat
+domeFile = 'dome.lst'
+
+#name of file containing the observation folder for the associated background image
+domeBackFile = 'domeBack.lst'
 
 ######################################################
 #specify location to calibration and raw files
@@ -245,18 +252,6 @@ flatCutOff = 0.1
 flatbpmCorRng=20
 
 ######################################################
-#flat field correction options
-
-#name of file containing the observation folder for the Dome flat
-domeFile = 'dome.lst'
-
-#name of file containing the observation folder for the associated background image
-domeBackFile = 'domeBack.lst'
-
-
-
-
-######################################################
 #parameters for processing darks
 
 #determine bad pixels from dark?
@@ -269,7 +264,7 @@ getBadPixRON = True
 darkBpmCutoff = 1e-5
 
 #normalized PDF cutoff used for determining bad pixels based on read-out-noise
-ronBpmCutff = 1e-5
+ronBpmCutoff = 1e-5
 
 ######################################################
 #parameters for processing the detector linearity data
@@ -309,6 +304,7 @@ ronchiSigmaClipRounds=2
 
 #spatial grid parameters
 spatTrim = 0.5
+nSpatGridMult=5
 
 ######################################################
 #parameters used for processing of ramps
