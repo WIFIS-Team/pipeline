@@ -15,6 +15,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib import gridspec
 from scipy.optimize import OptimizeWarning
 from scipy.interpolate import spline
+from scipy.interpolate import Akima1DInterpolator
 
 import warnings
 warnings.simplefilter('ignore', np.RankWarning)
@@ -55,6 +56,21 @@ def gaussian(x,amp,cen,wid):
     
     z = (x-cen)/wid    
     return amp*np.exp(-z**2/2.)
+
+def polyGaussian(x,amp1,cen1,wid1,a0,a1,a2):
+    """
+    Returns a Gaussian function of the form y = A*exp(-z^2/2), where z=(x-cen)/wid
+    Usage: output = gaussian(x, amp, cen, wid)
+    x is the input 1D array of coordinates
+    amp is the amplitude of the Gaussian
+    cen is the centre of the Gaussian
+    wid is the 1-sigma width of the Gaussian
+    returns an array with same size as x corresponding to the Gaussian solution
+    """
+    
+    z1 = (x-cen1)/wid1
+
+    return amp1*np.exp(-z1**2/2.) + a0+a1*x+a2*x**2
 
 def getWeightedCent(x,y):
     """
@@ -115,6 +131,66 @@ def gaussFit(x, y, guessWidth, plot=False,title=''):
         
     return popt
 
+def polyGaussFit(x, y, guessWidth, plot=False,title=''):
+    """
+    Routine to fit a Gaussian to provided x and y data points and return the fitted coefficients.
+    Usage: params = gaussFit(x, y, guessWidth, plot=True/False,title='')
+    x is the 1D numpy array of coordinates
+    y is the 1D numpy array of data values at the given coordinates
+    guessWidth is the initial guess for the width of the Gaussian
+    plot is a keyword to allow for plotting of the fit (for debug purposes)
+    title is an optional title to provide the plot
+    params is a list containing the fitted parameters in the following order: amplitude, centre, width
+    """
+
+    ytmp = y - np.min(y)
+    #use scipy to do fitting
+    popt, pcov = curve_fit(polyGaussian, x, ytmp, p0=[np.max(ytmp), np.mean(x),guessWidth, 0.,0.,0.])
+
+    if (plot):
+        plt.close('all')
+        plt.plot(x,ytmp)
+        plt.plot(x, ytmp, 'ro')
+        plt.plot(x, polyGaussian(x, popt[0], popt[1], popt[2],popt[3],popt[4],popt[5]))
+
+        plt.xlabel('Pixel')
+        plt.ylabel('Value')
+        plt.title(title)
+        plt.show()
+
+    #determine more accurate fwhm
+
+    #xtmp = np.linspace(x.min(),x.max(),x.shape[0]*10)
+    #yInt = np.interp(xtmp, x, ytmp)
+    #whr = np.where(yInt >= yInt.max()/2.)[0]
+    #popt[2]=xtmp[whr.max()]-xtmp[whr.min()]
+
+    return popt[:3]
+
+
+def splineFit(x,y, plot=False, title=None):
+    """
+    """
+
+    xInt = np.linspace(x.min(),x.max(),x.shape[0]*20.)
+    fInt = Akima1DInterpolator(x,y)
+    yInt = fInt(xInt)
+    whr = np.where(yInt >= yInt.max()/2.)[0]
+    fwhm = xInt[whr.max()]-xInt[whr.min()]
+
+    if plot:
+        plt.close('all')
+        plt.plot(x,y)
+        plt.plot(x, y, 'ro')
+        plt.vlines(xInt[np.argmax(yInt)],0,yInt.max())
+        plt.xlabel('Pixel')
+        plt.ylabel('Value')
+        plt.title(title)
+        plt.show()
+        
+    return [yInt.max(), xInt[np.argmax(yInt)], fwhm]
+
+
 def getSolQuick(input):
     """
     Determine dispersion solution for given dataset
@@ -173,7 +249,8 @@ def getSolQuick(input):
     #ySigma = input[19]
     #if ySigma is None:
     ySigma = np.sqrt(yRow)
-    
+
+    #for testing
     useQCWeights = False
     
     #first make sure that the yRow isn't all NaNs
@@ -381,7 +458,9 @@ def getSolQuick(input):
                         #print('Trying to fit line', bestPix[i])
                             try:
                                 winRngTmp = winRng
-                                amp,cent,wid = gaussFit(pixRng,yRng, winRng/3.,plot=plot,title=str(atlasPix[i]))
+                                #amp,cent,wid = splineFit(pixRng, yRng, plot=plot,title=str(atlasPix[i]))
+                                #amp,cent,wid = gaussFit(pixRng,yRng, winRng/3.,plot=plot,title=str(atlasPix[i]))
+                                amp,cent,wid = polyGaussFit(pixRng,yRng, winRng/3.,plot=plot,title=str(atlasPix[i]))
 
                                 #get weighted average as well
                                 #cent2 = getWeightedCent(pixRng,yRng)
@@ -407,7 +486,9 @@ def getSolQuick(input):
                                         sRng = ySigma[pixRng]
 
                                         winRngTmp = wid*4
-                                        amp,cent,wid = gaussFit(pixRng,yRng, winRngTmp/3.,plot=plot,title=str(atlasPix[i]))
+                                        #amp,cent,wid = splineFit(pixRng, yRng, plot=plot,title=str(atlasPix[i]))
+                                        #amp,cent,wid = gaussFit(pixRng,yRng, winRngTmp/3.,plot=plot,title=str(atlasPix[i]))
+                                        amp,cent,wid = polyGaussFit(pixRng,yRng, winRngTmp/3.,plot=plot,title=str(atlasPix[i]))
 
                                         #get weighted average as well
                                         #cent2 = getWeightedCent(pixRng,yRng)
@@ -489,27 +570,37 @@ def getSolQuick(input):
                 ax1 = fig.add_subplot(gs[0,0])
                 ax1.plot(centFit, atlasFit, 'bo')
                 
-            if (useWeights):        
-                fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
-            elif useQCWeights:
-                fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=1./np.sqrt(QCFit)) # returns polynomial coefficients in reverse order
-            else:
-                fitCoef = np.polyfit(centFit, atlasFit,mxorder) # returns polynomial coefficients in reverse order
-
             #exclude poorly fit lines based on deviation from best fit
+
+            if sigmaClipRounds ==0:
+                sigmaClipRounds =1
+                sigmaClip = 0.
+                
             for i in range(sigmaClipRounds):
+                if (useWeights):
+                    fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=1./widthFit**2)# returns polynomial coefficients in reverse order
+                    #fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
+                elif useQCWeights:
+                    fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=1./np.sqrt(QCFit)) # returns polynomial coefficients in reverse order
+                else:
+                    fitCoef = np.polyfit(centFit, atlasFit,mxorder) # returns polynomial coefficients in reverse order
+                    
                 poly = np.poly1d(fitCoef)
                 dev = atlasFit-poly(centFit)
-                whr = np.where(np.abs(dev) < sigmaClip*np.std(dev))
+                if sigmaClip >0:
+                    whr = np.where(np.abs(dev) < sigmaClip*np.std(dev))[0]
+                else:
+                    whr = np.arange(dev.shape[0])
+                    
                 if (plot):
                     print('std dev for round',i, 'is',np.std(dev), ' in wavelength')
                 
-                centFit = centFit[whr[0]]
-                atlasFit = atlasFit[whr[0]]
-                widthFit = widthFit[whr[0]]
-                ampFit = ampFit[whr[0]]
-                QCFit = QCFit[whr[0]]
-
+                centFit = centFit[whr]
+                atlasFit = atlasFit[whr]
+                widthFit = widthFit[whr]
+                ampFit = ampFit[whr]
+                QCFit = QCFit[whr]
+                
             if (len(centFit) > mxorder):
                 #constrain fit to a line if line separation is <1000
                 if (lngthConstraint):
@@ -520,7 +611,9 @@ def getSolQuick(input):
                             print('Forcing linear solution')
                             
                         if (useWeights):        
-                            fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
+                            #fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
+                            fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=1./widthFit**2) # returns polynomial coefficients in reverse order
+
                         elif useQCWeights:
                             fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=1./np.sqrt(QCFit)) # returns polynomial coefficients in reverse order
                         else:
@@ -538,14 +631,18 @@ def getSolQuick(input):
                         ampFit = ampFit[whr[0]]
                         QCFit = QCFit[whr[0]]
                 if (useWeights):
-                    fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
+                    #fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
+                    fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=1./widthFit**2) # returns polynomial coefficients in reverse order
+
                 else:
                     fitCoef = np.polyfit(centFit, atlasFit,mxorder) # returns polynomial coefficients in reverse order
                 goodFit = True
             
                 #compute RMS, in terms of pixels
                 if (useWeights):
-                    pixCoef = np.polyfit(atlasFit, centFit, mxorder, w=ampFit)
+                    #pixCoef = np.polyfit(atlasFit, centFit, mxorder, w=ampFit)
+                    pixCoef = np.polyfit(atlasFit, centFit, mxorder, w=1./widthFit**2)
+
                 else:
                     pixCoef = np.polyfit(atlasFit, centFit, mxorder)
 
@@ -586,6 +683,8 @@ def getSolQuick(input):
         
     
     if (goodFit):
+        #return(fitCoef[::-1],widthFit, centFit, atlasFit, np.abs(rms), pixCoef[::-1])
+
         return(fitCoef[::-1],widthFit*2.*np.sqrt(2.*np.log(2.)), centFit, atlasFit, np.abs(rms), pixCoef[::-1])
     else:
         return np.repeat(np.nan,mxorder+1), [],[], [],np.nan, np.repeat(np.nan,mxorder+1)
@@ -1311,7 +1410,7 @@ def cleanDispSol(result, plotFile=None, threshold=1.5):
                 plt.plot([0,len(rms[i])],[medLst[i]+threshold*stdLst[i],medLst[i]+threshold*stdLst[i]], 'r--')
                 plt.xlabel('Column #')
                 plt.ylabel('RMS in pixels')
-                plt.title('Slice: ' +str(i) + ', RMS Cutoff: '+'{:4.2f}'.format(medLst[i]+threshold*stdLst[i]))
+                plt.title('Slice: ' +str(i) + ', RMS Cutoff: '+'{:4.2f}'.format(medLst[i]+threshold*stdLst[i])+', Median RMS: ' + '{:4.2f}'.format(medLst[i]))
                 pdf.savefig(fig, dpi=300)
                 plt.close()
                 
