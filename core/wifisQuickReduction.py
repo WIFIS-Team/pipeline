@@ -365,7 +365,7 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
     prevResults = wifisIO.readPickle(waveTempResultsFile)
     prevSol = prevResults[5]
 
-    if os.path.exists(distMapFile) and os.path.exists(spatGridProps):
+    if os.path.exists(distMapFile) and os.path.exists(spatGridPropsFile):
         distMap = wifisIO.readImgsFromFile(distMapFile)[0]
         spatGridProps = wifisIO.readTable(spatGridPropsFile)
     else:
