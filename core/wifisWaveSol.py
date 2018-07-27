@@ -248,9 +248,9 @@ def getSolQuick(input):
     nSearchRounds = input[18]
     totPix = len(yRow)
 
-    #ySigma = input[19]
-    #if ySigma is None:
-    ySigma = np.sqrt(yRow)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore',RuntimeWarning)
+        ySigma = np.sqrt(yRow)
 
     #for testing
     useQCWeights = False
@@ -588,97 +588,98 @@ def getSolQuick(input):
             QCFit = np.asarray(QCFit)
 
             rms_poly_fit = []
-            
-            for mxorder in new_mx_order:
-                centFitTemp = np.copy(centFit)
-                atlasFitTemp = np.copy(atlasFit)
-                widthFitTemp = np.copy(widthFit)
-                ampFitTemp = np.copy(ampFit)
-                QCFitTemp = np.copy(QCFit)
+
+            #
+            centFitTemp = np.copy(centFit)
+            atlasFitTemp = np.copy(atlasFit)
+            widthFitTemp = np.copy(widthFit)
+            ampFitTemp = np.copy(ampFit)
+            QCFitTemp = np.copy(QCFit)
+                    
+            if (plot):
+                fig = plt.figure(figsize=(10,5))
+                #ax = fig.add_subplot(211)
+                gs = gridspec.GridSpec(2,2)
+                gs.update(left=0.1,right = 0.98)
+                ax1 = fig.add_subplot(gs[0,0])
+                ax1.plot(centFitTemp, atlasFit, 'bo')
+                
+            #exclude poorly fit lines based on deviation from best fit
+                
+            if sigmaClipRounds ==0:
+                sigmaClipRounds =1
+                sigmaClip = 0.
+
+            #carry out first rounds
+            for i in range(sigmaClipRounds):
+                try:
+                    if (useWeights):
+                        fitCoef = np.polyfit(centFitTemp, atlasFitTemp,mxorder, w=1./widthFit**2)# returns polynomial coefficients in reverse order
+                        #fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
+                    elif useQCWeights:
+                        fitCoef = np.polyfit(centFitTemp, atlasFitTemp,mxorder, w=1./np.sqrt(QCFit)) # returns polynomial coefficients in reverse order
+                    else:
+                        fitCoef = np.polyfit(centFitTemp, atlasFitTemp,mxorder) # returns polynomial coefficients in reverse order
+                except:
+                    fitCoef = np.empty(mxorder)
+                    fitCoef[:] = np.nan
+                        
+                poly = np.poly1d(fitCoef)
+                dev = atlasFitTemp-poly(centFitTemp)
+                    
+                if sigmaClip >0:
+                    whr = np.where(np.abs(dev) < sigmaClip*np.std(dev))[0]
+                else:
+                    whr = np.arange(dev.shape[0])
                     
                 if (plot):
-                    fig = plt.figure(figsize=(10,5))
-                    #ax = fig.add_subplot(211)
-                    gs = gridspec.GridSpec(2,2)
-                    gs.update(left=0.1,right = 0.98)
-                    ax1 = fig.add_subplot(gs[0,0])
-                    ax1.plot(centFitTemp, atlasFit, 'bo')
+                    print('std dev for round',i, 'is',np.std(dev), ' in wavelength')
+                        
+                centFitTemp = centFitTemp[whr]
+                atlasFitTemp = atlasFitTemp[whr]
+                widthFitTemp = widthFitTemp[whr]
+                ampFitTemp = ampFitTemp[whr]
+                QCFitTemp = QCFitTemp[whr]
+
+            #check if any lines remaining and get final fit
+            if (len(centFitTemp) > mxorder or (lngthConstraint and len(centFit)>0)):
+
+                #constrain fit to a line if line separation is <1000
+                if (lngthConstraint):
+                    if ((np.nanmax(centFitTemp)-np.nanmin(centFitTemp)) < 1000):
+                        mxorder=1
+
+                        if (plot):
+                            print('Forcing linear solution')
+
+                        #carry out one more stage of rejection since we've moved to a new model
+                        try:
+                            if (useWeights):        
+                                #fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
+                                fitCoef = np.polyfit(centFitTemp, atlasFitTemp,mxorder, w=1./widthFit**2) # returns polynomial coefficients in reverse order
+                        
+                            elif useQCWeights:
+                                fitCoef = np.polyfit(centFitTemp, atlasFitTemp,mxorder, w=1./np.sqrt(QCFit)) # returns polynomial coefficients in reverse order
+                            else:
+                                fitCoef = np.polyfit(centFitTemp, atlasFitTemp,mxorder) # returns polynomial coefficients in reverse order
+                        except:
+                            fitCoef = np.empty(mxorder)
+                            fitCoef[:]= np.nan
+
+                        poly = np.poly1d(fitCoef)
+                        dev = atlasFit-poly(centFitTemp)
+                        whr = np.where(np.abs(dev) < sigmaClip*np.std(dev))
+                        
+                        if (plot):
+                            print('std dev for round',i, 'is',np.std(dev), ' in wavelength')
                 
-                #exclude poorly fit lines based on deviation from best fit
-                
-                if sigmaClipRounds ==0:
-                    sigmaClipRounds =1
-                    sigmaClip = 0.
+                        centFitTemp = centFitTemp[whr[0]]
+                        atlasFitTemp = atlasFitTemp[whr[0]]
+                        widthFitTemp = widthFitTemp[whr[0]]
+                        ampFitTemp = ampFitTemp[whr[0]]
+                        QCFitTemp = QCFitTemp[whr[0]]
 
-                #carry out first rounds
-                for i in range(sigmaClipRounds):
-                    try:
-                        if (useWeights):
-                            fitCoef = np.polyfit(centFitTemp, atlasFitTemp,mxorder, w=1./widthFit**2)# returns polynomial coefficients in reverse order
-                            #fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
-                        elif useQCWeights:
-                            fitCoef = np.polyfit(centFitTemp, atlasFitTemp,mxorder, w=1./np.sqrt(QCFit)) # returns polynomial coefficients in reverse order
-                        else:
-                            fitCoef = np.polyfit(centFitTemp, atlasFitTemp,mxorder) # returns polynomial coefficients in reverse order
-                    except:
-                        fitCoef = np.empty(mxorder)
-                        fitCoef[:] = np.nan
-                        
-                    poly = np.poly1d(fitCoef)
-                    dev = atlasFitTemp-poly(centFitTemp)
-                    
-                    if sigmaClip >0:
-                        whr = np.where(np.abs(dev) < sigmaClip*np.std(dev))[0]
-                    else:
-                        whr = np.arange(dev.shape[0])
-                    
-                    if (plot):
-                        print('std dev for round',i, 'is',np.std(dev), ' in wavelength')
-                        
-                    centFitTemp = centFitTemp[whr]
-                    atlasFitTemp = atlasFitTemp[whr]
-                    widthFitTemp = widthFitTemp[whr]
-                    ampFitTemp = ampFitTemp[whr]
-                    QCFitTemp = QCFitTemp[whr]
-
-                #check if any lines remaining and get final fit
-                if (len(centFitTemp) > mxorder or (lngthConstraint and len(centFit)>0)):
-
-                    #constrain fit to a line if line separation is <1000
-                    if (lngthConstraint):
-                        if ((np.nanmax(centFitTemp)-np.nanmin(centFitTemp)) < 1000):
-                            mxorder=1
-
-                            if (plot):
-                                print('Forcing linear solution')
-
-                            #carry out one more stage of rejection since we've moved to a new model
-                            try:
-                                if (useWeights):        
-                                    #fitCoef = np.polyfit(centFit, atlasFit,mxorder, w=ampFit) # returns polynomial coefficients in reverse order
-                                    fitCoef = np.polyfit(centFitTemp, atlasFitTemp,mxorder, w=1./widthFit**2) # returns polynomial coefficients in reverse order
-                        
-                                elif useQCWeights:
-                                    fitCoef = np.polyfit(centFitTemp, atlasFitTemp,mxorder, w=1./np.sqrt(QCFit)) # returns polynomial coefficients in reverse order
-                                else:
-                                    fitCoef = np.polyfit(centFitTemp, atlasFitTemp,mxorder) # returns polynomial coefficients in reverse order
-                            except:
-                                fitCoef = np.empty(mxorder)
-                                fitCoef[:]= np.nan
-
-                            poly = np.poly1d(fitCoef)
-                            dev = atlasFit-poly(centFitTemp)
-                            whr = np.where(np.abs(dev) < sigmaClip*np.std(dev))
-                        
-                            if (plot):
-                                print('std dev for round',i, 'is',np.std(dev), ' in wavelength')
-                
-                            centFitTemp = centFitTemp[whr[0]]
-                            atlasFitTemp = atlasFitTemp[whr[0]]
-                            widthFitTemp = widthFitTemp[whr[0]]
-                            ampFitTemp = ampFitTemp[whr[0]]
-                            QCFitTemp = QCFitTemp[whr[0]]
-
+                for mxOrder in new_mx_order:
                     #now get final polynomial fit
                     try:
                         if (useWeights):
@@ -878,11 +879,11 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
                         tmpSol = prevSol[i][j]
                         tmpTemp = tmpLst[i][j,:]
 
-                lst.append([dataLst[i][j,:],tmpTemp, bestLines, mxorder,tmpSol,winRng, mxCcor,weights, plot, buildSol,allowLower,sigmaClip,lngthConstraint, adjustFitWin, sigmaLimit, allowSearch, sigmaClipRounds,nPixContFit,nSearchRounds])
+                lst.append([dataLst[i][j,:],tmpTemp, bestLines, mxorder,tmpSol,winRng, mxCcor,weights, plot, buildSol,allowLower,sigmaClip,lngthConstraint, adjustFitWin, sigmaLimit, allowSearch, int(sigmaClipRounds),nPixContFit,nSearchRounds])
                     
         else:
             for j in range(dataLst[i].shape[0]):
-                lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, plot, buildSol, allowLower, sigmaClip,lngthConstraint, adjustFitWin,sigmaLimit, allowSearch,sigmaClipRounds,nPixContFit,nSearchRounds])
+                lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, plot, buildSol, allowLower, sigmaClip,lngthConstraint, adjustFitWin,sigmaLimit, allowSearch,int(sigmaClipRounds),nPixContFit,nSearchRounds])
                 
 
     if (MP):
@@ -1719,15 +1720,16 @@ def polyFitWaveMapAll(waveMapLst, degree=3, MP=True, ncpus=None):
 
     return waveMapOut
                             
-def polyCleanDispSol(result, plotFile=None, threshold=1.5):
+def polyCleanDispSol(result, plotFile=None, threshold=1.5, returnFit=False):
     """
     """
 
-    #get solutions
     dispSolLst = result[0]
     rms = result[4]
     pixSolLst = result[5]
-    
+    threshold = 1.5
+    plotFile = 'test.pdf'
+
     cleanSolLst = []
     polyLst = []
     for dispSol in dispSolLst:
@@ -1736,10 +1738,9 @@ def polyCleanDispSol(result, plotFile=None, threshold=1.5):
         cleanSol[:] = np.nan
         polySol = np.empty(d.shape)
         polySol[:] = np.nan
-        
+    
         for i in range(d.shape[1]):
             whrGood = np.where(np.isfinite(d[:,i]))[0]
-            polyLst.append([])
             if whrGood.shape[0] > 0:
                 for j in range(3):
                     fitCoef = np.polyfit(whrGood,d[whrGood,i],2)
@@ -1756,13 +1757,14 @@ def polyCleanDispSol(result, plotFile=None, threshold=1.5):
                 dev = np.abs(poly(whrGood)-d[whrGood,i])
                 d[whrGood[dev > threshold*np.nanstd(dev)+np.nanmedian(dev)],i] = np.nan
                 whrBad = np.where(~np.isfinite(d[:,i]))[0]
-            
+        
+            polySol[:,i] = poly(np.arange(d.shape[0]))
             cleanSol[:,i] = np.asarray(dispSol)[:,i]
             cleanSol[whrBad,i] = poly(whrBad)
-            cleanSolLst.append(cleanSol)
-            polySol[:,i] = poly(np.arange(d.shape[0]))
-            polyLst.append(polySol)
-            
+
+        cleanSolLst.append(cleanSol)
+        polyLst.append(polySol)
+        
     #print quality control stuff
     if plotFile is not None:
         print('Plotting quality control')
@@ -1773,19 +1775,25 @@ def polyCleanDispSol(result, plotFile=None, threshold=1.5):
                 d = np.asarray(dispSolLst[j])
                 c = cleanSolLst[j]
                 p = polyLst[j]
-                
+            
                 fig = plt.figure()
+                #plt.title('Slice: ' +str(j))
+                                
                 for i in range(d.shape[1]):
                     locals()['ax'+str(i)] = fig.add_subplot(4,1, i+1)
-                    plt.plot(d[:,i],'ro')
                     plt.plot(c[:,i], 'bo')
-                    plt.plot(p[:,i])
-                plt.xlabel('Column #')
-                #plt.title('Slice: ' +str(i))
-                #plt.show()
+                    plt.plot(d[:,i],'ro')
+                    plt.plot(p[:,i],'k')
+                    plt.xticks(plt.xticks()[0], np.repeat('',plt.xticks()[0].shape[0]))
+                plt.xticks(plt.xticks()[0], plt.xticks()[0])
+                plt.xlabel('Slice # ' + str(j) + ', Column #')
                 pdf.savefig(fig, dpi=300)
                 plt.close()
 
+
     
-    
-    return [np.nan,cleanSolLst,np.nan]
+    #need to add pixSolClean
+    if returnFit:
+        return [np.nan,polyLst,np.nan]
+    else:
+        return [np.nan,cleanSolLst,np.nan]
