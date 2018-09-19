@@ -765,7 +765,8 @@ if ronchiFolder is not None:
                 lims = interval.get_limits(ronchiSlices[i])
                 plt.imshow(ronchiSlices[i], aspect='auto', origin='lower', cmap='jet', clim=lims)
                 plt.colorbar()
-                plt.title('slice number ' + str(i)+', # of dips: ' + str(len(trace)))
+                plt.title('slice number ' + str(i)+', # of traces found: ' + str(len(trace))+', # of traces used: '+str(len(polyTrace)))
+
                 for j in range(trace.shape[0]):
                     plt.plot(np.arange(trace.shape[1]),trace[j,:],'k', linewidth=2)
                 for j in range(polyTrace.shape[0]):
