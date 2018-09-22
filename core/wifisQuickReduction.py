@@ -436,7 +436,7 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
         with warnings.catch_warnings():
             warnings.simplefilter('ignore',RuntimeWarning)
             
-            result = waveSol.getWaveSol(waveCor, template, atlasFile,mxOrder, prevSol, winRng=waveWinRng, mxCcor=waveMxCcor, weights=False, buildSol=False, sigmaClip=sigmaClip, allowLower=False, lngthConstraint=True, MP=True, adjustFitWin=True, sigmaLimit=sigmaLimit, allowSearch=False, sigmaClipRounds=sigmaClipRounds)        
+            result = waveSol.getWaveSol(waveCor, template, atlasFile,mxOrder, prevSol, winRng=waveWinRng, mxCcor=waveMxCcor, weights=False, buildSol=False, sigmaClip=sigmaClip, allowLower=False, lngthConstraint=False, MP=True, adjustFitWin=True, sigmaLimit=sigmaLimit, allowSearch=False, sigmaClipRounds=sigmaClipRounds)        
        
         print('Extracting solution results')
         dispSolLst = result[0]
