@@ -667,7 +667,8 @@ def getSolQuick(input):
                             fitCoef[:]= np.nan
 
                         poly = np.poly1d(fitCoef)
-                        dev = atlasFit-poly(centFitTemp)
+                        #print(len(centFitTemp), len(atlasFitTemp))
+                        dev = atlasFitTemp-poly(centFitTemp)
                         whr = np.where(np.abs(dev) < sigmaClip*np.std(dev))
                         
                         if (plot):
