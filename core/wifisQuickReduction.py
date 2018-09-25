@@ -1050,3 +1050,138 @@ def getPSFMap(rampFolder='',skyFolder=None,varFile='', guessWidth=8, threshold=2
 
     return medPSF
 
+def getFocusMeas(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pixRange=None, varFile='',scaling='zscale', colorbar=False, limLevel=0.05):
+    """
+    
+    """
+
+    #initialize variables using configuration file
+    varInp = wifisIO.readInputVariables(varFile)
+    for var in varInp:
+        globals()[var[0]]=var[1]    
+
+    #execute pyOpenCL section here
+    os.environ['PYOPENCL_COMPILER_OUTPUT'] = pyCLCompOut
+
+    if len(pyCLCTX)>0:
+        os.environ['PYOPENCL_CTX'] = pyCLCTX 
+
+    if os.path.exists(satFile):
+        satCounts = wifisIO.readImgsFromFile(satFile)[0]
+    else:
+        satCounts = None
+
+    if os.path.exists(bpmFile):
+        bpm = wifisIO.readImgsFromFile(bpmFile)[0]
+    else:
+        bpm = None
+        
+    wifisIO.createDir('quick_reduction')
+
+    #process science data
+    if noProc:
+        print('Attempting to process science and sky (if exists) ramps without usual processing')
+
+    fluxImg, hdr, obsinfoFile = procRamp(rampFolder, noProc=noProc, satCounts=satCounts, bpm=bpm, saveName='quick_reduction/'+rampFolder+'_obs.fits',varFile=varFile)
+
+    #now process sky, if it exists
+       
+    if (skyFolder is not None):
+        skyImg, hdrSky, skyobsinfo = procRamp(skyFolder,noProc=noProc, satCounts=satCounts, bpm=bpm, saveName='quick_reduction/'+skyFolder+'_sky.fits',varFile=varFile)
+        
+        #subtract
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore',RuntimeWarning)
+            fluxImg -= skyImg
+
+    fluxImg = fluxImg[4:-4, 4:-4]
+
+    #first check if limits already exists
+    if os.path.exists('quick_reduction/'+flatFolder+'_limits.fits'):
+        limitsFile = 'quick_reduction/'+flatFolder+'_limits.fits'
+        limits = wifisIO.readImgsFromFile(limitsFile)[0]
+    else:
+        flat, hdrFlat, hdrobsinfo = procRamp(flatFolder, noProc=False, satCounts=satCounts, bpm=bpm, saveName='quick_reduction/'+flatFolder+'_flat.fits',varFile=varFile)
+        
+        print('Getting slice limits')
+        limits = slices.findLimits(flat, dispAxis=0, rmRef=True,centGuess=centGuess)
+        wifisIO.writeFits(limits, 'quick_reduction/'+flatFolder+'_limits.fits', ask=False)
+
+    if os.path.exists(distMapLimitsFile):
+        #get ronchi slice limits
+        distLimits = wifisIO.readImgsFromFile(distMapLimitsFile)[0]
+
+        #determine shift
+        shft = np.median(limits[1:-1, :] - distLimits[1:-1,:])
+    else:
+        print(colorama.Fore.RED+'*** WARNING: NO DISTORTION MAP LIMITS PROVIDED. LIMITS ARE DETERMINED ENTIRELY FROM THE FLAT FIELD DATA ***'+colorama.Style.RESET_ALL)
+        shft = 0
+        distLimits = limits
+        
+    print('Extracting slices')
+    dataSlices = slices.extSlices(fluxImg, distLimits, dispAxis=0, shft=shft)
+
+    print('Finding locations of continuum source')
+    #get collapse of data to identify continuum regions
+    #and slice with maximum flux
+    
+    yCol = []
+    mx  = []
+    for slc in dataSlices:
+        yCol.append(np.nansum(slc,axis=1).astype('float64'))
+        mx.append(np.nanmax(yCol[-1]))
+        
+    #get slice with maximum flux
+    mxSlc = dataSlices[np.nanargmax(mx)]
+    
+    #compute average line profile across the spatial axis at 5 different locations
+    pixLoc = [100,500,900, 1300,1800]
+
+    widthList = []
+    limsList = []
+    yList = []
+    centList = []
+    
+    for cent in pixLoc:
+        #compute average profile over small window about centre
+        y = np.nanmedian(mxSlc[:,cent-3:cent+4], axis=1)
+        
+        #find noise level
+        tmp = np.copy(y)
+
+        flr = np.nanmedian(tmp)
+        xFlr = np.arange(y.shape[0])
+
+        for i in range(10):
+            whr = np.where((tmp-flr) < 3.*np.nanstd(tmp))
+            tmp = tmp[whr[0]]
+            xFlr = xFlr[whr[0]]
+            flr = np.nanmedian(tmp)
+
+        #now subtract noise level from profile
+        y-= flr
+
+        #now find limits where flux reaches limLevel% of maximum flux
+        y/=np.nanmax(y)
+        centList.append(np.nanargmax(y))
+
+        lims = np.where(y>=limLevel)[0]
+        limsList.append([lims[0], lims[-1]])
+        widthList.append(lims[-1]-lims[0])
+        yList.append(y)
+
+    #now plot and print results
+    fig, (ax1, ax2, ax3, ax4,ax5) = plt.subplots(1,5, sharey=True, figsize=(15,5))
+
+    for i in range(len(centList)):
+        locals()['ax'+str(i+1)].plot(np.arange(-20,21),yList[i][centList[i]-20:centList[i]+21])
+        locals()['ax'+str(i+1)].vlines(np.array(limsList[i])-centList[i], 0,1, 'r', linestyle='--')
+        locals()['ax'+str(i+1)].set_title('Pixel '+ str(pixLoc[i])+ ', width '+str(widthList[i]))
+        #plt.title('Width = ' + str(widthList[i]))
+        
+    plt.tight_layout()
+    plt.savefig('quick_reduction/PSF_cross_section.png')
+    plt.show()
+        
+        
+    return
