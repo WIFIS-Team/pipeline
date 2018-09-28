@@ -1165,7 +1165,12 @@ def getFocusMeas(rampFolder='', flatFolder='', noProc=False, skyFolder=None, pix
         y/=np.nanmax(y)
         centList.append(np.nanargmax(y))
 
-        lims = np.where(y>=limLevel)[0]
+        #interpolate onto finer grid to determine more accurate limits
+        x = np.arange(len(y))
+        xInt = np.linspace(0,len(y)-1,10*len(y))
+        yInt = np.interp(xInt, x, y)
+
+        lims = np.where(yInt>=limLevel)[0]
         limsList.append([lims[0], lims[-1]])
         widthList.append(lims[-1]-lims[0])
         yList.append(y)
