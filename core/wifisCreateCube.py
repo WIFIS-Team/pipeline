@@ -150,7 +150,7 @@ def distCorSlice1D(input):
                 raise Warning('Akima interpolation method failed at column '+str(i))
         elif str(method).lower() == 'linear':
             
-        #the old method
+            #the old method
             out[:,i] = np.interp(xout,x,y, right=np.nan,left=np.nan)*dSpat
         else:
             raise Warning("*** INTERPOLATION METHOD MUST BE SET TO AKIMA OR LINEAR ***")
@@ -653,3 +653,68 @@ def waveCorSlice(input):
     out = griddata(points, vals, (gX, gY), method=method)
 
     return out
+
+def distCorSlice1D_LC(input):
+    """
+    Routine to distortion correct individual slices.
+    Usage out = distCorSlice1D(input)
+    input is a list that contains:
+    dataSlc - is the image slice of the input data to be distortion corrected,
+    distSlc - is the distortion mapping for the specific slice
+    method - is a string indicating the interpolation method to use ("linear", or "akima"). Not used for anything other than compatability with older function.
+    spatGridProps - the final output properties of the spatial grid. If set to None, then the code automatically determines the grid properties for the slice
+    Returned is the distortion corrected image slice placed on a grid.
+    """
+    
+    #data
+    dataSlc = np.copy(input[0])
+
+    #distortion map
+    distSlc = np.copy(input[1])
+    
+    method = input[2]
+
+    #grid properties
+    spatGridProps = input[3]
+    smooth = input[4]
+    nMult = input[5]
+    
+    #get spatial grid properties if not provided
+    if (spatGridProps is not None):
+        minSpat = float(spatGridProps[0])
+        maxSpat = float(spatGridProps[1])
+        nSpat = float(spatGridProps[2])
+    else:
+        nSpat = dataSlc.shape[0]
+        minSpat = np.nanmin(distSlc)
+        maxSpat = np.nanmax(distSlc)
+
+    #get output coordinate array
+    xout = np.linspace(minSpat,maxSpat, num=int(nSpat*nMult))
+
+    #get output density
+    dSpat = ((maxSpat-minSpat)/float(nSpat-1))
+    
+    #initialize output distortion corrected map
+    out = np.zeros((xout.shape[0], dataSlc.shape[1]), dtype=dataSlc.dtype)
+
+    #determine gradient of coordinate map for converting flux to flux density
+    gradMap = np.gradient(distSlc,axis=0)
+
+    #now go through all output pixels and find which input pixels overlap and by how much
+    for i in range(dataSlc.shape[1]):    
+        for k in range(len(xout)):
+            #find all input pixels that overlap with output pixels
+
+            #left-edge of output pixel is between bounds of input pixel
+            whr = np.where(np.logical_and(distSlc[:,i]-gradMap[:,i]/2. <= xout[k]+dSpat/2., xout[k]-dSpat/2.<= distSlc[:,i]+gradMap[:,i]/2.))[0]
+        
+            for j in whr:
+                #find fraction of input pixel overlapping output pixels
+
+                w=(np.min([distSlc[j,i]+gradMap[j,i]/2.,xout[k]+dSpat/2.])-np.max([distSlc[j,i]-gradMap[j,i]/2.,xout[k]-dSpat/2.]))/gradMap[j,i]
+            
+                if np.isfinite(dataSlc[j,i]):
+                    out[k,i]+= w*dataSlc[j,i]
+        
+    return out    
