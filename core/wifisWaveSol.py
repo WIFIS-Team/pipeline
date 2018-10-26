@@ -755,12 +755,12 @@ def getSolQuick(input):
                 yRng = yRow[pixRng]
                 try:
                     a,c,wid = gaussFit(pixRng,yRng, winRng/3.,plot=plot,title=str(atlasPix[i]))
-                    widthFit2[i] = np.nan
+                    widthFit2[i] = wid
                 except:
                     widthFit2[i] = widthFit[i]
 
             
-        return(fitCoef[::-1],widthFit*2.*np.sqrt(2.*np.log(2.)), centFit, atlasFit, np.abs(rms), pixCoef[::-1])
+        return(fitCoef[::-1],widthFit2*2.*np.sqrt(2.*np.log(2.)), centFit, atlasFit, np.abs(rms), pixCoef[::-1])
     else:
         return np.repeat(np.nan,mxorder+1), [],[], [],np.nan, np.repeat(np.nan,mxorder+1)
     
@@ -1729,7 +1729,7 @@ def polyCleanDispSol(result, plotFile=None, threshold=1.5, returnFit=False):
     rms = result[4]
     pixSolLst = result[5]
     threshold = 1.5
-    plotFile = 'test.pdf'
+    #plotFile = 'test.pdf'
 
     cleanSolLst = []
     polyLst = []
@@ -1782,12 +1782,14 @@ def polyCleanDispSol(result, plotFile=None, threshold=1.5, returnFit=False):
                                 
                 for i in range(d.shape[1]):
                     locals()['ax'+str(i)] = fig.add_subplot(4,1, i+1)
-                    plt.plot(c[:,i], 'bo')
-                    plt.plot(d[:,i],'ro')
-                    plt.plot(p[:,i],'k')
+                    plt.plot(c[:,i], 'bo',markersize=2, label='Good pixels')
+                    plt.plot(d[:,i],'ro', markersize=2, label='Bad pixels')
+                    plt.plot(p[:,i],'k',label='Polynomial fit')
                     plt.xticks(plt.xticks()[0], np.repeat('',plt.xticks()[0].shape[0]))
                 plt.xticks(plt.xticks()[0], plt.xticks()[0])
                 plt.xlabel('Slice # ' + str(j) + ', Column #')
+                plt.legend()
+                plt.tight_layout()
                 pdf.savefig(fig, dpi=300)
                 plt.close()
 
