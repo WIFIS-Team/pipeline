@@ -71,14 +71,14 @@ def distCorAll(dataSlices, distMapSlices, method='akima', ncpus=None, spatGridPr
         pool = mp.Pool(ncpus)
     
         #run multiprocessing of the code
-        outLst = pool.map(distCorSlice1D, lst)
+        outLst = pool.map(distCorSlice1D_LC, lst)
         pool.close()
     else:
         outLst = []
 
         for i,l in enumerate(lst):
             print('Working on slice ', i)
-            outLst.append(distCorSlice1D(l))
+            outLst.append(distCorSlice1D_LC(l))
             
     return outLst
 
