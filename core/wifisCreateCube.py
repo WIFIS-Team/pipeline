@@ -13,6 +13,11 @@ from scipy import interpolate
 import astropy.convolution as conv
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
+import pyopencl as cl
+import os
+
+path = os.path.dirname(__file__)
+clCodePath = path+'/opencl_code'
 
 def compSpatGrid(distTrimSlices):
     """
@@ -795,3 +800,77 @@ def distCorSlice1D_LC_sigmas(input):
                 out[k,i]=np.nan
 
     return np.sqrt(out)
+
+def distCorSlice1D_LC_CL(dataSlc, distSlc, spatGridProps=None, ):
+    """
+    Routine to distortion correct individual slices.
+    Usage out = distCorSlice1D(input)
+    input is a list that contains:
+    dataSlc - is the image slice of the input data to be distortion corrected,
+    distSlc - is the distortion mapping for the specific slice
+    method - is a string indicating the interpolation method to use ("linear", or "akima"). Not used for anything other than compatability with older function.
+    spatGridProps - the final output properties of the spatial grid. If set to None, then the code automatically determines the grid properties for the slice
+    Returned is the distortion corrected image slice placed on a grid.
+    """
+    
+    #get spatial grid properties if not provided
+    if (spatGridProps is not None):
+        minSpat = float(spatGridProps[0])
+        maxSpat = float(spatGridProps[1])
+        nSpat = float(spatGridProps[2])
+    else:
+        nSpat = sigSlc.shape[0]
+        minSpat = np.nanmin(distSlc)
+        maxSpat = np.nanmax(distSlc)
+
+    #get output coordinate array
+    xout = np.linspace(minSpat,maxSpat, num=int(nSpat*nMult))
+
+    #get output density
+    dSpat = ((maxSpat-minSpat)/float(nSpat-1))
+    
+    #initialize output distortion corrected map
+    out = np.empty((xout.shape[0], sigSlc.shape[1]), dtype=sigSlc.dtype)
+    out[:] = np.nan
+
+    #determine gradient of coordinate map for converting flux to flux density
+    gradMap = np.gradient(distSlc,axis=0)
+
+    #get OpenCL context object, can set to fixed value if wanted
+    ctx = cl.create_some_context(interactive=True)
+    queue = cl.CommandQueue(ctx)
+
+    #get data array dimensions
+    ny = dataSlc.shape[0] #spatial length of input
+    nx = dataSlc.shape[1] #wavelength length of input/output
+    nk = out.shape[0] #spatial length of output
+    
+    #read OpenCL kernel code
+    filename = clCodePath+'/lc_interp.cl'
+    f = open(filename, 'r')
+    fstr = "".join(f.readlines())
+
+    #Compile OpenCL code
+    program = cl.Program(ctx, fstr).build()
+
+    #Get memory flags
+    mf = cl.mem_flags
+
+    #Indicate which arrays are scalars
+    program.getmaxval.set_scalar_arg_dtypes([np.uint32, np.uint32,None, None, None, None, np.float32,None])
+
+    #create OpenCL buffers
+    data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=dataSlc)
+    dist_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=distSlc)
+    grad_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=gradMap)
+    xout_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=xout)
+    out_buf = satCounts_buf = cl.Buffer(ctx, mf.WRITE_ONLY, out.nbytes)
+
+    #Now run code
+    program.distcor(queue, (nk,nx), None, np.unint32(nk), np.unint32(nx), data_buf, dist_buf, grad_buf,xout_buf, np.float32(dSpat),out_buf)
+
+    cl.enqueue_read_buffer(queue, out_buf, out).wait()
+    
+    return out
+
+                                            
