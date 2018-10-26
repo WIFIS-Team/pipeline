@@ -89,7 +89,7 @@ def distCorSlice1D(input):
     input is a list that contains:
     dataSlc - is the image slice of the input data to be distortion corrected,
     distSlc - is the distortion mapping for the specific slice
-    method - is a string indicating the interpolation method to use ("linear", or "akima"). Not used for anything other than compatability with older function.
+    method - is a string indicating the interpolation method to use ("linear", or "akima").
     spatGridProps - the final output properties of the spatial grid. If set to None, then the code automatically determines the grid properties for the slice
     Returned is the distortion corrected image slice placed on a grid.
     """
@@ -704,17 +704,94 @@ def distCorSlice1D_LC(input):
     #now go through all output pixels and find which input pixels overlap and by how much
     for i in range(dataSlc.shape[1]):    
         for k in range(len(xout)):
+
             #find all input pixels that overlap with output pixels
-
-            #left-edge of output pixel is between bounds of input pixel
             whr = np.where(np.logical_and(distSlc[:,i]-gradMap[:,i]/2. <= xout[k]+dSpat/2., xout[k]-dSpat/2.<= distSlc[:,i]+gradMap[:,i]/2.))[0]
-        
-            for j in whr:
-                #find fraction of input pixel overlapping output pixels
 
-                w=(np.min([distSlc[j,i]+gradMap[j,i]/2.,xout[k]+dSpat/2.])-np.max([distSlc[j,i]-gradMap[j,i]/2.,xout[k]-dSpat/2.]))/gradMap[j,i]
+            if len(whr)>0:
+                for j in whr:
+                    #find fraction of input pixel overlapping output pixels
+                    w=(np.min([distSlc[j,i]+gradMap[j,i]/2.,xout[k]+dSpat/2.])-np.max([distSlc[j,i]-gradMap[j,i]/2.,xout[k]-dSpat/2.]))/gradMap[j,i]
             
-                if np.isfinite(dataSlc[j,i]):
-                    out[k,i]+= w*dataSlc[j,i]
-        
+                    if np.isfinite(dataSlc[j,i]):
+                        out[k,i]+= w*dataSlc[j,i]
+
+                #if all the overlapping pixels are bad, then set value to nan
+                if np.alltrue(~np.isfinite(dataSlc[whr,i])):
+                    out[k,i] = np.nan
+            else:
+                #if no overlapping pixels, set pixel value to nan
+                out[k,i]=np.nan
+                
     return out    
+
+def distCorSlice1D_LC_sigmas(input):
+    """
+    Routine to distortion correct individual slices.
+    Usage out = distCorSlice1D(input)
+    input is a list that contains:
+    dataSlc - is the image slice of the input data to be distortion corrected,
+    distSlc - is the distortion mapping for the specific slice
+    method - is a string indicating the interpolation method to use ("linear", or "akima"). Not used for anything other than compatability with older function.
+    spatGridProps - the final output properties of the spatial grid. If set to None, then the code automatically determines the grid properties for the slice
+    Returned is the distortion corrected image slice placed on a grid.
+    """
+    
+    #data
+    sigSlc = np.copy(input[0])
+
+    #distortion map
+    distSlc = np.copy(input[1])
+    
+    method = input[2]
+
+    #grid properties
+    spatGridProps = input[3]
+    smooth = input[4]
+    nMult = input[5]
+    
+    #get spatial grid properties if not provided
+    if (spatGridProps is not None):
+        minSpat = float(spatGridProps[0])
+        maxSpat = float(spatGridProps[1])
+        nSpat = float(spatGridProps[2])
+    else:
+        nSpat = sigSlc.shape[0]
+        minSpat = np.nanmin(distSlc)
+        maxSpat = np.nanmax(distSlc)
+
+    #get output coordinate array
+    xout = np.linspace(minSpat,maxSpat, num=int(nSpat*nMult))
+
+    #get output density
+    dSpat = ((maxSpat-minSpat)/float(nSpat-1))
+    
+    #initialize output distortion corrected map
+    out = np.zeros((xout.shape[0], sigSlc.shape[1]), dtype=sigSlc.dtype)
+
+    #determine gradient of coordinate map for converting flux to flux density
+    gradMap = np.gradient(distSlc,axis=0)
+
+    #now go through all output pixels and find which input pixels overlap and by how much
+    for i in range(sigSlc.shape[1]):    
+        for k in range(len(xout)):
+
+            #find all input pixels that overlap with output pixels
+            whr = np.where(np.logical_and(distSlc[:,i]-gradMap[:,i]/2. <= xout[k]+dSpat/2., xout[k]-dSpat/2.<= distSlc[:,i]+gradMap[:,i]/2.))[0]
+
+            if len(whr)>0:
+                for j in whr:
+                    #find fraction of input pixel overlapping output pixels
+                    w=(np.min([distSlc[j,i]+gradMap[j,i]/2.,xout[k]+dSpat/2.])-np.max([distSlc[j,i]-gradMap[j,i]/2.,xout[k]-dSpat/2.]))/gradMap[j,i]
+            
+                    if np.isfinite(sigSlc[j,i]):
+                        out[k,i]+= (w*sigSlc[j,i])**2
+
+                #if all the overlapping pixels are bad, then set value to nan
+                if np.alltrue(~np.isfinite(sigSlc[whr,i])):
+                    out[k,i] = np.nan
+            else:
+                #if no overlapping pixels, set pixel value to nan
+                out[k,i]=np.nan
+
+    return np.sqrt(out)
