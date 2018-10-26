@@ -304,9 +304,11 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                     
                     if plot:
                         #rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(results, plotFile='quality_control/'+waveFolder+'_wave_waveFit_RMS.pdf', threshold=cleanDispThresh)
-                        rmsClean, dispSolClean, pixSolClean = waveSol.polyCleanDispSol(results, plotFile='quality_control/'+waveFolder+'_wave_waveFit_RMS.pdf', threshold=cleanDispThresh)
+                        rmsClean, dispSolClean, pixSolClean = waveSol.polyCleanDispSol(results, plotFile='quality_control/'+waveFolder+'_wave_waveFit_polyClean.pdf', threshold=cleanDispThresh)
                     else:
-                        rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(results, plotFile=None, threshold=cleanDispThresh)
+                        #rmsClean, dispSolClean, pixSolClean = waveSol.cleanDispSol(results, plotFile=None, threshold=cleanDispThresh)
+                        rmsClean, dispSolClean, pixSolClean = waveSol.polyCleanDispSol(results, plotFile=None, threshold=cleanDispThresh)
+
                 else:
                     dispSolClean = results[0]
                     
