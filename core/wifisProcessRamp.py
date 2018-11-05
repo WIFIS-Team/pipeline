@@ -201,6 +201,9 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
         if(BPM is not None):
             #assumes BPM is same dimensions as raw image file
             fluxImg[BPM.astype(bool)] = np.nan
+
+            if sigmaImg is not None:
+                sigmaImg[BPM.astype(bool)] = np.nan
         else:
             if not ignoreBPM:
                 cont = wifisIO.userInput('*** WARNING: No bad pixel mask provided. Do you want to continue? *** (y/n)?')
