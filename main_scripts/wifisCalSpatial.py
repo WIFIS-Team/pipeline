@@ -22,6 +22,8 @@ Produces:
 #import matplotlib
 #matplotlib.use('gtk3agg')
 
+useRonchiMethod=True
+
 import wifisIO
 import wifisSlices as slices
 import wifisSpatialCor as spatialCor
@@ -193,295 +195,10 @@ if 'ronchiFlatFolder' in locals():
         print('Processed flat field data does not exist for folder ' +ronchiFlatFolder +', processing flat folder')
         calFlat.runCalFlat(np.asarray([ronchiFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile,satSplit=nSatSplit,logfile=logfile,centGuess=centGuess)
 
-#******************************************************************************************************
-#******************************************************************************************************
-#check if processed flat field already exists for zero-point data, if not process the flat folder
-
-if zpntFlatFolder is not None:
-    if not os.path.exists('processed/'+zpntFlatFolder+'_flat_limits.fits') and not os.path.exists('processed/'+zpntFlatFolder+'_flat_slices_norm.fits'):
-        print('Flat limits do not exist for folder ' +zpntFlatFolder +', processing flat folder')
-
-        if 'ronchiFlatFolder' in locals():
-            calFlat.runCalFlat(np.asarray([zpntFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile, flatCutOff=zpntFlatCutOff,distMapLimitsFile='processed/'+ronchiFlatFolder+'_flat_limits.fits',logfile=logfile,centGuess=centGuess)
-        else:
-            calFlat.runCalFlat(np.asarray([zpntFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile, flatCutOff=zpntFlatCutOff,logfile=logfile,centGuess=centGuess)
 
 #******************************************************************************************************
 #******************************************************************************************************
-#now process the zero-point data. If it is a list, then co-add all ramp images
-if zpntLst is not None:
-    if os.path.exists('processed/'+zpntLst[0]+'_zpnt_obs_comb.fits'):
-        cont = wifisIO.userInput('Combined zero-point offset observation already exists, do you want to reprocess (y/n)?')
-        if not cont.lower() == 'y':
-            print('Reading combined zero-point data from file '+'processed/'+zpntLst[0]+'_zpnt_obs_comb.fits')
-            logfile.write('Reading combined zero-point data from file'+'processed/'+zpntLst[0]+'_zpnt_obs_comb.fits\n')
-            zpntComb = wifisIO.readImgsFromFile('processed/'+zpntLst[0]+'_zpnt_obs_comb.fits')[0]
-    else:
-        cont='y'
-
-    if cont.lower()=='y':
-        obsAll = []
-
-        print('Processing and combining all zero-point observations')
-        logfile.write('Processing and combinging all zero-point observations\n')
-
-        for i in range(len(zpntLst)):
-            zpntFolder = zpntLst[i]
-                
-            if not os.path.exists('processed/'+zpntFolder+'_zpnt_obs.fits'):
-                print('Processing ' + zpntFolder)
-                logfile.write('Processing '+ zpntFolder+'\n')
-
-                zpntObs, zpntSigma, zptnSatFrame, zpntHdr = processRamp.auto(zpntFolder, rootFolder,'processed/'+zpntFolder+'_zpnt_obs.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=obsBpmCorRng,nlFile=nlFile,satFile=satFile,bpmFile='', gain=gain, ron=RON,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,saveAll=True, rampNum=None, avgAll=True)
-                
-            else:
-                print('Processed data already exists for ' + zpntFolder + '. Reading data instead')
-                logfile.write('Processed data already exists for ' + zpntFolder + '. Reading data instead\n')
-
-                zpntObsLst, zpntHdr = wifisIO.readImgsFromFile('processed/'+zpntFolder+'_zpnt_obs.fits')
-                zpntObs = zpntObsLst[0]
-                zpntHdr = zpntHdr[0]
-                
-            #carry out sky subtraction
-            if zpntSkyLst is not None:
-                skyFolder = zpntSkyLst[i]
-        
-                if not os.path.exists('processed/'+skyFolder+'_sky.fits'):
-                    print('Processing sky folder '+skyFolder)
-                    logfile.write('\nProcessing sky folder ' + skyFolder+'\n')
-
-                    sky, skySigmaImg, skySatFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=obsBpmCorRng, rampNum=None,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=RON,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True)
-                else:
-                    print('Reading sky data from ' + skyFolder)
-                    logfile.write('Reading processed sky image from:\n')
-                    logfile.write('processed/'+skyFolder+'_sky.fits\n')
-                        
-                    skyDataLst,skyHdr = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky.fits')
-                    sky = skyDataLst[0]
-                    skySigmaImg = skyDataLst[1]
-                    skySatFrame = skyDataLst[2]
-                    skyHdr = skyHdr[0]
-                    del skyDataLst
-            
-                print('Subtracting sky from obs')
-                logfile.write('Subtracting sky flux from zero-point image flux\n')
-                zpntObs -= sky
-                zpntHdr.add_history('Subtracted sky flux image using:')
-                zpntHdr.add_history(skyFolder)
-            
-            obsAll.append(zpntObs)
-                
-        print('Co-adding all zero-point data into a single image')
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore', RuntimeWarning)
-            zpntComb = np.sum(np.asarray(obsAll),axis=0)
-
-        wifisIO.writeFits(zpntComb,'processed/'+zpntLst[0]+'_zpnt_obs_comb.fits', ask=False)
-
-    #now trace the data 
-    if os.path.exists('processed/'+zpntLst[0]+'_zpnt_traces.fits'):
-        cont = wifisIO.userInput('Zero-point traces already exist, do you want to re-trace (y/n)?')
-        if not cont.lower() == 'y':
-            zpntTraces = wifisIO.readImgExtFromFile('processed/'+zpntLst[0]+'_zpnt_traces.fits')[0]
-    else:
-        cont='y'
-
-    if cont.lower()=='y':
-        if zpntFlatFolder is not None:
-                print('Reading slice limits')
-                logfile.write('Reading slice limits from file:\n')
-                logfile.write('processed/'+zpntFlatFolder+'_flat_limits.fits\n')
-        else:
-            print(colorama.Fore.RED+'*** WARNING: No flat field associated with zero-point observations. Using Ronchi flat instead ***'+colorama.Style.RESET_ALL)
-            logfile.write('*** WARNING: No flat field associated with zero-point observations. Using Ronchi flat instead ***\n')
-            logfile.write('Reading slice limits from file:\n')
-            logfile.write('processed/'+ronchiFlatFolder+'_flat_limits.fits\n')
-            zpntFlatFolder = ronchiFlatFolder
-            
-        limits, limitsHdr = wifisIO.readImgsFromFile('processed/'+zpntFlatFolder+'_flat_limits.fits')
-        shft = limitsHdr['LIMSHIFT']
-
-        print('Reading flat field response function')
-        logfile.write('Reading flat field response function from file:\n')
-        logfile.write('processed/'+zpntFlatFolder+'_flat_slices_norm.fits\n')
-
-        zpntFlatImg = wifisIO.readImgsFromFile('processed/'+zpntFlatFolder+'_flat.fits')[0]
-        if len(zpntFlatImg)<4:
-            zpntFlatImg = zpntFlatImg[0]
-            
-        flatNormLst = wifisIO.readImgsFromFile('processed/'+zpntFlatFolder+'_flat_slices_norm.fits')[0]
-
-        #extract the proper slices
-        nSlices = len(flatNormLst)/3
-        flatNorm = flatNormLst[:nSlices]
-        flatSigma = flatNormLst[nSlices:2*nSlices]
-                
-        if flatCor:
-            if os.path.exists(flatCorFile):
-                print('Correcting flat field response function')
-                logfile.write('Correcting flat field response function using file:\n')
-                logfile.write(flatCorFile+'\n')
-        
-                flatCorSlices = wifisIO.readImgsFromFile(flatCorFile)[0]
-                flatNorm = slices.ffCorrectAll(flatNorm, flatCorSlices)
-
-                if len(flatCorSlices)>nSlices:
-                    logfile.write('*** WARNING: Response correction does not include uncertainties ***\n')
-                    flatSigma = wifisUncertainties.multiplySlices(flatNorm,flatSigma,flatCorSlices[:nSlices],flatCorSlices[nSlices:2*nSlices])
-                else:
-                    print(colorama.Fore.RED+'*** WARNING: Flat field correction file does not exist, skipping ***'+colorama.Style.RESET_ALL)
-                    logfile.write('*** WARNING: Flat field correction file does not exist, skipping ***\n')
-                        
-        #extract slices
-        print('Extracting slices')
-        logfile.write('Extracting slices\n')
-        zpntSlices = slices.extSlices(zpntComb[4:-4,4:-4], limits, shft=shft, dispAxis=dispAxis)
-        wifisIO.writeFits(zpntSlices, 'processed/'+zpntLst[0]+'_zpnt_obs_comb_slices.fits',ask=False)
-
-        #correct remaining bad pixels using linear interpolation across the spatial axis
-        zpntSlices = fixSatPixelsAll(zpntSlices)
-        
-        #apply flat field
-        print('Applying flat field corrections')
-        logfile.write('Applying flat field corrections\n')
-        zpntFlat = slices.ffCorrectAll(zpntSlices, flatNorm)
-            
-        #now find traces
-        print('Tracing zero-point offset slices')
-        logfile.write('Tracing zero-point offset slices\n')
-
-        if hband:
-            #read in flat field file and use it to determine limits
-            print('Using suitable region of detector to determine zero-point traces')
-            if logfile is not None:
-                logfile.write('Using suitable region of detector to determine zero-point traces:\n')
-                
-            #only use region with suitable flux
-            if dispAxis == 0:
-                flatImgMed = np.nanmedian(zpntFlatImg[4:-4,4:-4], axis=1)
-            else:
-                flatImgMed = np.nanmedian(zpntFlatImg[4:-4,4:-4], axis=0)
-                            
-            flatImgMedGrad = np.gradient(flatImgMed)
-            medMax = np.nanargmax(flatImgMed)
-            lim1 = np.nanargmax(flatImgMedGrad[:medMax])
-            lim2 = np.nanargmin(flatImgMedGrad[medMax:])+medMax
-                
-            if logfile is not None:
-                logfile.write('Using following detector limits for tracing:\n')
-                logfile.write(str(lim1)+ ' ' + str(lim2)+'\n')
- 
-            zpntTraces = spatialCor.traceWireFrameAll(zpntFlat, nbin=zpntNbin, bright=zpntBright, MP=True, plot=False, smooth=zpntSmooth, winRng=zpntWinRng,mxChange=zpntMxChange,constRegion=[lim1,lim2])
-        else:
-            zpntTraces = spatialCor.traceWireFrameAll(zpntFlat, nbin=zpntNbin, bright=zpntBright, MP=True, plot=False, smooth=zpntSmooth, winRng=zpntWinRng,mxChange=zpntMxChange)
-
-
-        #optional section to address problematic slices
-        print('Fixing problematic traces')
-        #use a COG/COL algorithm to define the trace instead
-        zpntTraces[0] = spatialCor.traceWireFrameSliceCOG([zpntFlat[0], zpntNbin, zpntWinRng,zpntSmooth,zpntBright,None,5])
-        zpntTraces[1] = spatialCor.traceWireFrameSliceCOG([zpntFlat[1], zpntNbin, zpntWinRng,zpntSmooth,zpntBright,None,5])
-        
-        #now carry out polynomial fitting to further smooth the fits
-        polyFitLst = []
-
-        if hband:
-            pord=2
-            #xfit = np.arange(lim1,lim2)
-            #x = np.arange(lim1,lim2)
-
-        else:
-            pord=2
-            #xfit = np.arange(2040)
-        x = np.arange(zpntSlices[0].shape[1])
-
-        print('plotting results')
-        with PdfPages('quality_control/'+zpntLst[0]+'_zpnt_traces.pdf') as pdf:
-            for i in range(len(zpntSlices)):
-
-                #add specific details to deal with bad zpnt traces here
-                #comment out this line and replace the necessary fitting range in the corresponding slice below
-                xfit = np.where(np.isfinite(zpntTraces[i]))[0]
-
-                if i==0:
-                    pass
-                elif i==1:
-                    pass
-                elif i==2:
-                    pass
-                elif i==3:
-                    pass
-                elif i==4:
-                    pass
-                elif i==5:
-                    pass
-                elif i==6:
-                    pass
-                elif i==7:
-                    pass
-                elif i==8:
-                    pass
-                elif i==9:
-                    pass
-                elif i==10:
-                    pass
-                elif i==11:
-                    pass
-                elif i==12:
-                    pass
-                elif i==13:
-                    pass
-                elif i==14:
-                    pass
-                elif i==15:
-                    pass
-                elif i==16:
-                    pass
-                elif i==17:
-                    xfit = np.where(np.isfinite(zpntTraces[i]))[0]
-                    xfit = xfit[xfit >=250]
-
-                fig=plt.figure()
-                interval = ZScaleInterval()
-                lims=interval.get_limits(zpntFlat[i])
-                plt.imshow(zpntFlat[i], aspect='auto', interpolation='nearest',cmap='jet', clim=lims, origin='lower')
-                plt.colorbar()
-                plt.plot(x,zpntTraces[i], 'k', linewidth=2)
-
-                #carry out 1 iterations of sigma-clipping
-                for j in range(2):
-                    pcof = np.polyfit(xfit, zpntTraces[i][xfit],pord)
-                    poly = np.poly1d(pcof)
-
-                    res = (zpntTraces[i][xfit]-poly(xfit))
-                    med = np.nanmedian(res)
-                    std = np.nanstd(res)
-                    with warnings.catch_warnings():
-                        warnings.simplefilter('ignore',RuntimeWarning)
-                        xfit = x[np.where(np.abs(res+med)<2.*std)[0]]
-                        xfit =xfit[np.where(np.isfinite(zpntTraces[i][xfit]))]
-                        
-                pcof = np.polyfit(xfit, zpntTraces[i][xfit],pord)
-                poly = np.poly1d(pcof)
-         
-                plt.plot(x,poly(x), 'r--')
-                polyFitLst.append(np.clip(poly(x),0,zpntFlat[i].shape[0]-1))
-                plt.title('Slice ' + str(i))
-                plt.tight_layout()
-
-                pdf.savefig(dpi=300)
-                plt.close()
-
-        wifisIO.writeFits(polyFitLst, 'processed/'+zpntLst[0]+'_zpnt_traces.fits',ask=False)
-        zpntTraces = polyFitLst
-    else:
-        zpntTraces = wifisIO.readImgExtFromFile('processed/'+zpntLst[0]+'_zpnt_traces.fits')[0]
-else:
-    zpntTraces = None
-
-#******************************************************************************************************
-#******************************************************************************************************
-#now deal with the Ronchi data
+#start with the Ronchi data
 
 #process Ronchi data first
 
@@ -661,7 +378,7 @@ if ronchiFolder is not None:
                 #comment the line below and modify the specific slice 
                 goodReg=[[0,2040]]
 
-                if i==0:
+                                if i==0:
                     pass
                 elif i==1:
                     pass
@@ -702,26 +419,19 @@ if ronchiFolder is not None:
                     goodReg[10] = [0,1500]
     
                 elif i==16:
-                    goodReg = []
-                    for j in range(15):
-                        goodReg.append([0,2040])
-                    goodReg[-1] = [500,2040]
-
+                    pass
                 elif i==17:
-                    goodReg = []
-                    for j in range(12):
-                        goodReg.append([0,2040])
-                    goodReg[-1] = [0,1500]
+                    pass
 
                 polyTrace = spatialCor.polyFitRonchiTrace(trace, goodReg, order=ronchiPolyOrder, sigmaClipRounds=ronchiSigmaClipRounds)
 
                 #add specific details to deal with bad ronchi traces here
                 #use this section to remove bad or extra traces that are deminishing the quality of the distortion map
-                
+
                 if i==0:
-                    pass
+                    polyTrace=polyTrace[:-1,:]
                 elif i==1:
-                    pass
+                    polyTrace = polyTrace[:-1,:]
                 elif i==2:
                      pass
                 elif i==3:
@@ -747,14 +457,14 @@ if ronchiFolder is not None:
                 elif i==13:
                     pass
                 elif i==14:
-                    pass
+                    polyTrace[1,:750]=np.nan
                 elif i==15:
-                    polyTrace[8, 1500:]=np.nan
-                    polyTrace[10, 1500:]=np.nan
+                    polyTrace[-1, :1000]=np.nan
+                    #polyTrace[10, 1500:]=np.nan
                 elif i==16:
-                    pass
+                    polyTrace[-1,1000:]=np.nan
                 elif i==17:
-                    pass
+                    polyTrace[-1,:]=np.nan
                     
                 polyTrace[np.logical_or(polyTrace<0, polyTrace>=ronchiSlices[i].shape[0])] = np.nan
                                         
@@ -785,7 +495,330 @@ if 'ronchiFolder' in locals() and ronchiFolder is not None:
         cont ='y'
 else:
     cont='n'
-    
+
+
+#******************************************************************************************************
+#******************************************************************************************************
+#check if processed flat field already exists for zero-point data, if not process the flat folder
+
+if zpntFlatFolder is not None:
+    if not os.path.exists('processed/'+zpntFlatFolder+'_flat_limits.fits') and not os.path.exists('processed/'+zpntFlatFolder+'_flat_slices_norm.fits'):
+        print('Flat limits do not exist for folder ' +zpntFlatFolder +', processing flat folder')
+
+        if 'ronchiFlatFolder' in locals():
+            calFlat.runCalFlat(np.asarray([zpntFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile, flatCutOff=zpntFlatCutOff,distMapLimitsFile='processed/'+ronchiFlatFolder+'_flat_limits.fits',logfile=logfile,centGuess=centGuess)
+        else:
+            calFlat.runCalFlat(np.asarray([zpntFlatFolder]), hband=hband, darkLst = darkLst, rootFolder=rootFolder, nlCoef=nlCoef, satCounts=satCounts, BPM = BPM, plot=True, nChannel = nChannel, nRowsAvg=nRowsAvg,rowSplit=nRowSplitFlat,nlSplit=nlSplit, combSplit=nCombSplit,bpmCorRng=flatbpmCorRng, crReject=False, skipObsinfo=False,nlFile=nlFile, bpmFile=bpmFile, satFile=satFile, darkFile=darkFile, flatCutOff=zpntFlatCutOff,logfile=logfile,centGuess=centGuess)
+
+#******************************************************************************************************
+#******************************************************************************************************
+#now process the zero-point data. If it is a list, then co-add all ramp images
+if zpntLst is not None:
+    if os.path.exists('processed/'+zpntLst[0]+'_zpnt_obs_comb.fits'):
+        cont = wifisIO.userInput('Combined zero-point offset observation already exists, do you want to reprocess (y/n)?')
+        if not cont.lower() == 'y':
+            print('Reading combined zero-point data from file '+'processed/'+zpntLst[0]+'_zpnt_obs_comb.fits')
+            logfile.write('Reading combined zero-point data from file'+'processed/'+zpntLst[0]+'_zpnt_obs_comb.fits\n')
+            zpntComb = wifisIO.readImgsFromFile('processed/'+zpntLst[0]+'_zpnt_obs_comb.fits')[0]
+    else:
+        cont='y'
+
+    if cont.lower()=='y':
+        obsAll = []
+
+        print('Processing and combining all zero-point observations')
+        logfile.write('Processing and combinging all zero-point observations\n')
+
+        for i in range(len(zpntLst)):
+            zpntFolder = zpntLst[i]
+                
+            if not os.path.exists('processed/'+zpntFolder+'_zpnt_obs.fits'):
+                print('Processing ' + zpntFolder)
+                logfile.write('Processing '+ zpntFolder+'\n')
+
+                zpntObs, zpntSigma, zptnSatFrame, zpntHdr = processRamp.auto(zpntFolder, rootFolder,'processed/'+zpntFolder+'_zpnt_obs.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=obsBpmCorRng,nlFile=nlFile,satFile=satFile,bpmFile='', gain=gain, ron=RON,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,saveAll=True, rampNum=None, avgAll=True)
+                
+            else:
+                print('Processed data already exists for ' + zpntFolder + '. Reading data instead')
+                logfile.write('Processed data already exists for ' + zpntFolder + '. Reading data instead\n')
+
+                zpntObsLst, zpntHdr = wifisIO.readImgsFromFile('processed/'+zpntFolder+'_zpnt_obs.fits')
+                zpntObs = zpntObsLst[0]
+                zpntHdr = zpntHdr[0]
+                
+            #carry out sky subtraction
+            if zpntSkyLst is not None:
+                skyFolder = zpntSkyLst[i]
+        
+                if not os.path.exists('processed/'+skyFolder+'_sky.fits'):
+                    print('Processing sky folder '+skyFolder)
+                    logfile.write('\nProcessing sky folder ' + skyFolder+'\n')
+
+                    sky, skySigmaImg, skySatFrame, skyHdr = processRamp.auto(skyFolder, rootFolder,'processed/'+skyFolder+'_sky.fits', satCounts, nlCoef, BPM, nChannel=nChannel, rowSplit=nRowSplit, nlSplit=nlSplit, combSplit=nCombSplit, crReject=False, bpmCorRng=obsBpmCorRng, rampNum=None,nlFile=nlFile,satFile=satFile,bpmFile=bpmFile, gain=gain, ron=RON,logfile=logfile,nRows=nRowsAvg, obsCoords=obsCoords,avgAll=True)
+                else:
+                    print('Reading sky data from ' + skyFolder)
+                    logfile.write('Reading processed sky image from:\n')
+                    logfile.write('processed/'+skyFolder+'_sky.fits\n')
+                        
+                    skyDataLst,skyHdr = wifisIO.readImgsFromFile('processed/'+skyFolder+'_sky.fits')
+                    sky = skyDataLst[0]
+                    skySigmaImg = skyDataLst[1]
+                    skySatFrame = skyDataLst[2]
+                    skyHdr = skyHdr[0]
+                    del skyDataLst
+            
+                print('Subtracting sky from obs')
+                logfile.write('Subtracting sky flux from zero-point image flux\n')
+                zpntObs -= sky
+                zpntHdr.add_history('Subtracted sky flux image using:')
+                zpntHdr.add_history(skyFolder)
+            
+            obsAll.append(zpntObs)
+                
+        print('Co-adding all zero-point data into a single image')
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', RuntimeWarning)
+            zpntComb = np.sum(np.asarray(obsAll),axis=0)
+
+        wifisIO.writeFits(zpntComb,'processed/'+zpntLst[0]+'_zpnt_obs_comb.fits', ask=False)
+
+    #now trace the data 
+    if os.path.exists('processed/'+zpntLst[0]+'_zpnt_traces.fits'):
+        cont = wifisIO.userInput('Zero-point traces already exist, do you want to re-trace (y/n)?')
+        if not cont.lower() == 'y':
+            zpntTraces = wifisIO.readImgExtFromFile('processed/'+zpntLst[0]+'_zpnt_traces.fits')[0]
+    else:
+        cont='y'
+
+    if cont.lower()=='y':
+        if zpntFlatFolder is not None:
+                print('Reading slice limits')
+                logfile.write('Reading slice limits from file:\n')
+                logfile.write('processed/'+zpntFlatFolder+'_flat_limits.fits\n')
+        else:
+            print(colorama.Fore.RED+'*** WARNING: No flat field associated with zero-point observations. Using Ronchi flat instead ***'+colorama.Style.RESET_ALL)
+            logfile.write('*** WARNING: No flat field associated with zero-point observations. Using Ronchi flat instead ***\n')
+            logfile.write('Reading slice limits from file:\n')
+            logfile.write('processed/'+ronchiFlatFolder+'_flat_limits.fits\n')
+            zpntFlatFolder = ronchiFlatFolder
+            
+        limits, limitsHdr = wifisIO.readImgsFromFile('processed/'+zpntFlatFolder+'_flat_limits.fits')
+        shft = limitsHdr['LIMSHIFT']
+
+        print('Reading flat field response function')
+        logfile.write('Reading flat field response function from file:\n')
+        logfile.write('processed/'+zpntFlatFolder+'_flat_slices_norm.fits\n')
+
+        zpntFlatImg = wifisIO.readImgsFromFile('processed/'+zpntFlatFolder+'_flat.fits')[0]
+        if len(zpntFlatImg)<4:
+            zpntFlatImg = zpntFlatImg[0]
+            
+        flatNormLst = wifisIO.readImgsFromFile('processed/'+zpntFlatFolder+'_flat_slices_norm.fits')[0]
+
+        #extract the proper slices
+        nSlices = len(flatNormLst)/3
+        flatNorm = flatNormLst[:nSlices]
+        flatSigma = flatNormLst[nSlices:2*nSlices]
+                
+        if flatCor:
+            if os.path.exists(flatCorFile):
+                print('Correcting flat field response function')
+                logfile.write('Correcting flat field response function using file:\n')
+                logfile.write(flatCorFile+'\n')
+        
+                flatCorSlices = wifisIO.readImgsFromFile(flatCorFile)[0]
+                flatNorm = slices.ffCorrectAll(flatNorm, flatCorSlices)
+
+                if len(flatCorSlices)>nSlices:
+                    logfile.write('*** WARNING: Response correction does not include uncertainties ***\n')
+                    flatSigma = wifisUncertainties.multiplySlices(flatNorm,flatSigma,flatCorSlices[:nSlices],flatCorSlices[nSlices:2*nSlices])
+                else:
+                    print(colorama.Fore.RED+'*** WARNING: Flat field correction file does not exist, skipping ***'+colorama.Style.RESET_ALL)
+                    logfile.write('*** WARNING: Flat field correction file does not exist, skipping ***\n')
+                        
+        #extract slices
+        print('Extracting slices')
+        logfile.write('Extracting slices\n')
+        zpntSlices = slices.extSlices(zpntComb[4:-4,4:-4], limits, shft=shft, dispAxis=dispAxis)
+        wifisIO.writeFits(zpntSlices, 'processed/'+zpntLst[0]+'_zpnt_obs_comb_slices.fits',ask=False)
+
+        #correct remaining bad pixels using linear interpolation across the spatial axis
+        zpntSlices = fixSatPixelsAll(zpntSlices)
+        
+        #apply flat field
+        print('Applying flat field corrections')
+        logfile.write('Applying flat field corrections\n')
+        zpntFlat = slices.ffCorrectAll(zpntSlices, flatNorm)
+            
+        #now find traces
+        print('Tracing zero-point offset slices')
+        logfile.write('Tracing zero-point offset slices\n')
+
+        if useRonchiMethod:
+
+            print ('Interpolating from Ronch Slices')
+            #iterate through each slice, find the position of the zero-point observation in the middle of the detector
+            #then use the two closest ronchi traces to create a zero-point trace
+
+            zpntTraces = []
+
+            for zpntSlc, ronchiSlc in zip(zpntFlat, ronchiPolyTraces):
+
+                #get average profile of middle 10 pixels
+                mid = int(len(zpntSlc)/2.)
+                rng = np.round(np.array([mid-5, mid+5])).astype(int)
+                prof = np.sum(zpntSlc[:,rng],axis=1)
+
+                #now get gaussian fit to profile to find middle
+                finite_rng = np.where(np.isfinite(prof))[0]
+                x = np.arange(prof.shape[0])
+                fit = spatialCor.gaussFit(x[finite_rng],prof[finite_rng], plot=True)
+
+                #find nearest two traces
+                low = np.where(ronchiSlc[:,mid]<=fit[2])[0][-1]
+                high = np.where(ronchiSlc[:,mid]>=fit[2])[0][0]
+
+                diff = ronchiSlc[high, mid] - ronchiTraces[0][low,mid]
+                w1 = fit[2]-ronchiTraces[0][low,mid]
+                w2 = ronchiTraces[0][high,mid]-fit[2]
+                zpntTrace.append(w2/diff*ronchiSlc[low,:] + w1/diff*ronchiSlc[high,:])
+                
+            
+        else:
+            print ('tracing from full zero-point observation')
+
+            if hband:
+                #read in flat field file and use it to determine limits
+                print('Using suitable region of detector to determine zero-point traces')
+                if logfile is not None:
+                    logfile.write('Using suitable region of detector to determine zero-point traces:\n')
+                
+                #only use region with suitable flux
+                if dispAxis == 0:
+                    flatImgMed = np.nanmedian(zpntFlatImg[4:-4,4:-4], axis=1)
+                else:
+                    flatImgMed = np.nanmedian(zpntFlatImg[4:-4,4:-4], axis=0)
+                            
+                flatImgMedGrad = np.gradient(flatImgMed)
+                medMax = np.nanargmax(flatImgMed)
+                lim1 = np.nanargmax(flatImgMedGrad[:medMax])
+                lim2 = np.nanargmin(flatImgMedGrad[medMax:])+medMax
+                
+                if logfile is not None:
+                    logfile.write('Using following detector limits for tracing:\n')
+                    logfile.write(str(lim1)+ ' ' + str(lim2)+'\n')
+
+                zpntTraces = spatialCor.traceWireFrameAll(zpntFlat, nbin=zpntNbin, bright=zpntBright, MP=True, plot=False, smooth=zpntSmooth, winRng=zpntWinRng,mxChange=zpntMxChange,constRegion=[lim1,lim2])
+            else:
+                zpntTraces = spatialCor.traceWireFrameAll(zpntFlat, nbin=zpntNbin, bright=zpntBright, MP=True, plot=False, smooth=zpntSmooth, winRng=zpntWinRng,mxChange=zpntMxChange)
+
+            #optional section to address problematic slices
+            print('Fixing problematic traces')
+            #use a COG/COL algorithm to define the trace instead
+            zpntTraces[0] = spatialCor.traceWireFrameSliceCOG([zpntFlat[0], zpntNbin, zpntWinRng,zpntSmooth,zpntBright,None,5])
+            zpntTraces[1] = spatialCor.traceWireFrameSliceCOG([zpntFlat[1], zpntNbin, zpntWinRng,zpntSmooth,zpntBright,None,5])
+        
+            #now carry out polynomial fitting to further smooth the fits
+            polyFitLst = []
+
+            if hband:
+                pord=2
+                #xfit = np.arange(lim1,lim2)
+                #x = np.arange(lim1,lim2)
+                
+            else:
+                pord=2
+                #xfit = np.arange(2040)
+            x = np.arange(zpntSlices[0].shape[1])
+
+            print('plotting results')
+            with PdfPages('quality_control/'+zpntLst[0]+'_zpnt_traces.pdf') as pdf:
+                for i in range(len(zpntSlices)):
+
+                    #add specific details to deal with bad zpnt traces here
+                    #comment out this line and replace the necessary fitting range in the corresponding slice below
+                    xfit = np.where(np.isfinite(zpntTraces[i]))[0]
+
+                    if i==0:
+                        pass
+                    elif i==1:
+                        pass
+                    elif i==2:
+                        pass
+                    elif i==3:
+                        pass
+                    elif i==4:
+                        pass
+                    elif i==5:
+                        pass
+                    elif i==6:
+                        pass
+                    elif i==7:
+                        pass
+                    elif i==8:
+                        pass
+                    elif i==9:
+                        pass
+                    elif i==10:
+                        pass
+                    elif i==11:
+                        pass
+                    elif i==12:
+                        pass
+                    elif i==13:
+                        pass
+                    elif i==14:
+                        pass
+                    elif i==15:
+                        pass
+                    elif i==16:
+                        pass
+                    elif i==17:
+                        xfit = np.where(np.isfinite(zpntTraces[i]))[0]
+                        xfit = xfit[xfit >=250]
+
+                    fig=plt.figure()
+                    interval = ZScaleInterval()
+                    lims=interval.get_limits(zpntFlat[i])
+                    plt.imshow(zpntFlat[i], aspect='auto', interpolation='nearest',cmap='jet', clim=lims, origin='lower')
+                    plt.colorbar()
+                    plt.plot(x,zpntTraces[i], 'k', linewidth=2)
+
+                    #carry out 1 iterations of sigma-clipping
+                    for j in range(2):
+                        pcof = np.polyfit(xfit, zpntTraces[i][xfit],pord)
+                        poly = np.poly1d(pcof)
+
+                        res = (zpntTraces[i][xfit]-poly(xfit))
+                        med = np.nanmedian(res)
+                        std = np.nanstd(res)
+                        with warnings.catch_warnings():
+                            warnings.simplefilter('ignore',RuntimeWarning)
+                            xfit = x[np.where(np.abs(res+med)<2.*std)[0]]
+                            xfit =xfit[np.where(np.isfinite(zpntTraces[i][xfit]))]
+                        
+                    pcof = np.polyfit(xfit, zpntTraces[i][xfit],pord)
+                    poly = np.poly1d(pcof)
+         
+                    plt.plot(x,poly(x), 'r--')
+                    polyFitLst.append(np.clip(poly(x),0,zpntFlat[i].shape[0]-1))
+                    plt.title('Slice ' + str(i))
+                    plt.tight_layout()
+
+                    pdf.savefig(dpi=300)
+                    plt.close()
+
+            wifisIO.writeFits(polyFitLst, 'processed/'+zpntLst[0]+'_zpnt_traces.fits',ask=False)
+            zpntTraces = polyFitLst
+    else:
+        zpntTraces = wifisIO.readImgExtFromFile('processed/'+zpntLst[0]+'_zpnt_traces.fits')[0]
+else:
+    zpntTraces = None
+
+
+#******************************************************************************************************
+#******************************************************************************************************
+#Now combine everything together to get a full distortion map
 if cont.lower()=='y':
     if ronchiTraces is not None:
         print('Distortion correcting distortion map to get spatial limits')
