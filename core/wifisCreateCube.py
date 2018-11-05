@@ -49,7 +49,7 @@ def compSpatGrid(distTrimSlices):
     N = int((spatMax-spatMin)/dSpat)
     return([spatMin,spatMax,N])
 
-def distCorAll(dataSlices, distMapSlices, method='akima', ncpus=None, spatGridProps=None, MP=True,smooth=0,nMult=1, ):
+def distCorAll(dataSlices, distMapSlices, method='akima', ncpus=None, spatGridProps=None, MP=True,smooth=0,nMult=1 ):
     """
     Routine to distortion correct a list of slices.
     Usage: outLst = distCorAll(dataSlices, distMapSlices, method='linear', ncpus=None,spatGridProps=None, MP=True)
@@ -720,10 +720,9 @@ def distCorSlice1D_LC(input):
             
                     if np.isfinite(dataSlc[j,i]):
                         out[k,i]+= w*dataSlc[j,i]
+                    else:
+                        out[k,i] = np.nan
 
-                #if all the overlapping pixels are bad, then set value to nan
-                if np.alltrue(~np.isfinite(dataSlc[whr,i])):
-                    out[k,i] = np.nan
             else:
                 #if no overlapping pixels, set pixel value to nan
                 out[k,i]=np.nan
@@ -791,25 +790,27 @@ def distCorSlice1D_LC_sigmas(input):
             
                     if np.isfinite(sigSlc[j,i]):
                         out[k,i]+= (w*sigSlc[j,i])**2
-
+                    else:
+                        out[k,i] = np.nan
+                        
                 #if all the overlapping pixels are bad, then set value to nan
-                if np.alltrue(~np.isfinite(sigSlc[whr,i])):
-                    out[k,i] = np.nan
+                #if np.alltrue(~np.isfinite(sigSlc[whr,i])):
+                #    out[k,i] = np.nan
             else:
                 #if no overlapping pixels, set pixel value to nan
                 out[k,i]=np.nan
 
     return np.sqrt(out)
 
-def distCorSlice1D_LC_CL(dataSlc, distSlc, spatGridProps=None, ):
+def distCorSlice1D_LC_CL(dataSlc, distSlc, spatGridProps=None,sigSlices=False):
     """
     Routine to distortion correct individual slices.
     Usage out = distCorSlice1D(input)
     input is a list that contains:
     dataSlc - is the image slice of the input data to be distortion corrected,
     distSlc - is the distortion mapping for the specific slice
-    method - is a string indicating the interpolation method to use ("linear", or "akima"). Not used for anything other than compatability with older function.
     spatGridProps - the final output properties of the spatial grid. If set to None, then the code automatically determines the grid properties for the slice
+    sigSlices is a flag that informs the code if the input dataSlc is actually a map of uncertainties
     Returned is the distortion corrected image slice placed on a grid.
     """
     
@@ -819,18 +820,18 @@ def distCorSlice1D_LC_CL(dataSlc, distSlc, spatGridProps=None, ):
         maxSpat = float(spatGridProps[1])
         nSpat = float(spatGridProps[2])
     else:
-        nSpat = sigSlc.shape[0]
+        nSpat = dataSlc.shape[0]
         minSpat = np.nanmin(distSlc)
         maxSpat = np.nanmax(distSlc)
 
     #get output coordinate array
-    xout = np.linspace(minSpat,maxSpat, num=int(nSpat*nMult))
+    xout = np.linspace(minSpat,maxSpat, num=int(nSpat))
 
     #get output density
     dSpat = ((maxSpat-minSpat)/float(nSpat-1))
     
     #initialize output distortion corrected map
-    out = np.empty((xout.shape[0], sigSlc.shape[1]), dtype=sigSlc.dtype)
+    out = np.zeros((xout.shape[0], dataSlc.shape[1])).astype(np.float32)
     out[:] = np.nan
 
     #determine gradient of coordinate map for converting flux to flux density
@@ -857,20 +858,139 @@ def distCorSlice1D_LC_CL(dataSlc, distSlc, spatGridProps=None, ):
     mf = cl.mem_flags
 
     #Indicate which arrays are scalars
-    program.getmaxval.set_scalar_arg_dtypes([np.uint32, np.uint32,None, None, None, None, np.float32,None])
+    if sigSlices:
+        program.distcor_sig.set_scalar_arg_dtypes([np.uint32, np.uint32,None, None, None, None, np.float32,None])
 
+    else:
+        program.distcor.set_scalar_arg_dtypes([np.uint32, np.uint32,None, None, None, None, np.float32,None])
+    
     #create OpenCL buffers
-    data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=dataSlc)
-    dist_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=distSlc)
-    grad_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=gradMap)
-    xout_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=xout)
-    out_buf = satCounts_buf = cl.Buffer(ctx, mf.WRITE_ONLY, out.nbytes)
+    data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=dataSlc.astype(np.float32))
+    dist_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=distSlc.astype(np.float32))
+    grad_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=gradMap.astype(np.float32))
+    xout_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=xout.astype(np.float32))
+    out_buf = cl.Buffer(ctx, mf.WRITE_ONLY, out.nbytes)
 
     #Now run code
-    program.distcor(queue, (nk,nx), None, np.unint32(nk), np.unint32(nx), data_buf, dist_buf, grad_buf,xout_buf, np.float32(dSpat),out_buf)
+    if sigSlices:
+        program.distcor_sig(queue, (nk,nx), None, np.uint32(ny), np.uint32(nx), data_buf, dist_buf, grad_buf,xout_buf, np.float32(dSpat),out_buf)
 
-    cl.enqueue_read_buffer(queue, out_buf, out).wait()
-    
+    else:
+        program.distcor(queue, (nk,nx), None, np.uint32(ny), np.uint32(nx), data_buf, dist_buf, grad_buf,xout_buf, np.float32(dSpat),out_buf)
+
+    cl.enqueue_copy(queue, out, out_buf).wait()
+    #del data_tmp, dist_tmp
     return out
 
-                                            
+def distCorAll_CL(dataSlices, distMapSlices,spatGridProps=None, sigSlices=False):
+    """
+    Routine to distortion correct a list of slices.
+    Usage: outLst = distCorAll(dataSlices, distMapSlices, spatGridProps=None, sigSlices=False)
+    dataSlices is the list of the data slices to be distortion corrected
+    distMapSlices is the list of slices containing the distortion mapping
+    spatGridProps  is the an optional keyword that provides the properties for the output spatial grid
+    returned is a list of distortion corrected slices.
+    """
+
+    outLst = []
+    for i in range(len(dataSlices)):
+        outLst.append(distCorSlice1D_LC_CL(dataSlices[i], distMapSlices[i], spatGridProps=spatGridProps,sigSlices=sigSlices))
+            
+    return outLst
+
+def waveCorAll_CL(dataSlices, waveMapSlices,waveGridProps=None, sigSlices=False):
+    """
+    Routine to wavelength rectify a list of slices.
+    Usage: outLst = waveCorAll(dataSlices, waveMapSlices,spatGridProps=None,sigSlices)
+    dataSlices is the list of the data slices to be wavelength rectified
+    waveMapSlices is the list of slices containing the wavelength mapping
+    waveGridProps  is the an optional keyword that provides the properties for the output spatial grid
+    
+    returned is a list of distortion corrected slices.
+    """
+
+    outLst = []
+    for i in range(len(dataSlices)):
+        outLst.append(waveCorSlice1D_LC_CL(dataSlices[i], waveMapSlices[i], waveGridProps=waveGridProps,sigSlices=sigSlices))
+            
+    return outLst
+
+def waveCorSlice1D_LC_CL(dataSlc, waveSlc, waveGridProps=None,sigSlices=False):
+    """
+    Routine to wavlength rectify a single image slice.
+    Usage out = distCorSlice1D(input)
+    input is a list that contains:
+    dataSlc - is the image slice of the input data to be distortion corrected,
+    distSlc - is the distortion mapping for the specific slice
+    spatGridProps - the final output properties of the spatial grid. If set to None, then the code automatically determines the grid properties for the slice
+    sigSlices is a flag that informs the code if the input dataSlc is actually a map of uncertainties
+    Returned is the distortion corrected image slice placed on a grid.
+    """
+    
+    #get spatial grid properties if not provided
+    if (waveGridProps is not None):
+        minWave = float(waveGridProps[0])
+        maxWave = float(waveGridProps[1])
+        nWave = float(waveGridProps[2])
+    else:
+        nWave = dataSlc.shape[0]
+        minWave = np.nanmin(distSlc)
+        maxWave = np.nanmax(distSlc)
+
+    #get output coordinate array
+    xout = np.linspace(minWave,maxWave, num=int(nWave))
+
+    #get output density
+    dWave = ((maxWave-minWave)/float(nWave-1))
+    
+    #initialize output distortion corrected map
+    out = np.zeros((dataSlc.shape[0], xout.shape[0])).astype(np.float32)
+    out[:] = np.nan
+
+    #determine gradient of coordinate map for converting flux to flux density
+    gradMap = np.gradient(waveSlc,axis=1)
+
+    #get OpenCL context object, can set to fixed value if wanted
+    ctx = cl.create_some_context(interactive=True)
+    queue = cl.CommandQueue(ctx)
+
+    #get data array dimensions
+    ny = dataSlc.shape[0] #spatial length of input
+    nx = dataSlc.shape[1] #wavelength length of input/output
+    nk = out.shape[1] #wavelength length of output
+    
+    #read OpenCL kernel code
+    filename = clCodePath+'/lc_interp.cl'
+    f = open(filename, 'r')
+    fstr = "".join(f.readlines())
+
+    #Compile OpenCL code
+    program = cl.Program(ctx, fstr).build()
+
+    #Get memory flags
+    mf = cl.mem_flags
+
+    #Indicate which arrays are scalars
+    if sigSlices:
+        program.wavecor_sig.set_scalar_arg_dtypes([np.uint32, np.uint32,None, None, None, None, np.float32,None])
+
+    else:
+        program.wavecor.set_scalar_arg_dtypes([np.uint32, np.uint32,None, None, None, None, np.float32,None])
+    
+    #create OpenCL buffers
+    data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=dataSlc.astype(np.float32))
+    wave_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=waveSlc.astype(np.float32))
+    grad_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=gradMap.astype(np.float32))
+    xout_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=xout.astype(np.float32))
+    out_buf = cl.Buffer(ctx, mf.WRITE_ONLY, out.nbytes)
+
+    #Now run code
+    if sigSlices:
+        program.wavecor_sig(queue, (out.shape[1],out.shape[0]), None, np.uint32(out.shape[1]), np.uint32(nx), data_buf, wave_buf, grad_buf,xout_buf, np.float32(dWave),out_buf)
+
+    else:
+        program.wavecor(queue, (out.shape[1],out.shape[0]), None, np.uint32(out.shape[1]), np.uint32(nx), data_buf, wave_buf, grad_buf,xout_buf, np.float32(dWave),out_buf)
+
+    cl.enqueue_copy(queue, out, out_buf).wait()
+    #del data_tmp, dist_tmp
+    return out
