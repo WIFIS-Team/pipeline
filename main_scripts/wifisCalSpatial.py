@@ -23,6 +23,7 @@ Produces:
 #matplotlib.use('gtk3agg')
 
 useRonchiMethod=True
+useRonchiMethodAlso=False
 
 import wifisIO
 import wifisSlices as slices
@@ -378,7 +379,7 @@ if ronchiFolder is not None:
                 #comment the line below and modify the specific slice 
                 goodReg=[[0,2040]]
 
-                                if i==0:
+                if i==0:
                     pass
                 elif i==1:
                     pass
@@ -487,15 +488,6 @@ if ronchiFolder is not None:
 
         print('Saving Ronchi trace results')
         wifisIO.writeFits(ronchiPolyTraces, 'processed/'+ronchiFolder+'_ronchi_poly_traces.fits', ask=False)
-
-if 'ronchiFolder' in locals() and ronchiFolder is not None:
-    if os.path.exists('processed/'+ronchiFolder+'_ronchi_distMap.fits') and os.path.exists('processed/'+ronchiFolder+'_ronchi_spatGridProps.dat'):
-        cont = wifisIO.userInput('Distortion map files already exist, do you want to continue (y/n)')
-    else:
-        cont ='y'
-else:
-    cont='n'
-
 
 #******************************************************************************************************
 #******************************************************************************************************
@@ -667,25 +659,30 @@ if zpntLst is not None:
                 #get average profile of middle 10 pixels
                 mid = int(len(zpntSlc)/2.)
                 rng = np.round(np.array([mid-5, mid+5])).astype(int)
-                prof = np.sum(zpntSlc[:,rng],axis=1)
 
-                #now get gaussian fit to profile to find middle
-                finite_rng = np.where(np.isfinite(prof))[0]
-                x = np.arange(prof.shape[0])
-                fit = spatialCor.gaussFit(x[finite_rng],prof[finite_rng], plot=True)
-
-                #find nearest two traces
-                low = np.where(ronchiSlc[:,mid]<=fit[2])[0][-1]
-                high = np.where(ronchiSlc[:,mid]>=fit[2])[0][0]
-
-                diff = ronchiSlc[high, mid] - ronchiTraces[0][low,mid]
-                w1 = fit[2]-ronchiTraces[0][low,mid]
-                w2 = ronchiTraces[0][high,mid]-fit[2]
-                zpntTrace.append(w2/diff*ronchiSlc[low,:] + w1/diff*ronchiSlc[high,:])
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore',RuntimeWarning)
                 
-            
+                    prof = np.nanmean(zpntSlc[:,rng],axis=1)
+
+                    #now get gaussian fit to profile to find middle
+                    finite_rng = np.where(np.isfinite(prof))[0]
+                    x = np.arange(prof.shape[0])
+                    fit = spatialCor.gaussFit(x[finite_rng],prof[finite_rng], plot=False)
+
+                    #find nearest two traces
+                    low = np.where(np.nanmean(ronchiSlc[:,rng],axis=1)<=fit[2])[0][-1]
+                    high = np.where(np.nanmean(ronchiSlc[:,rng],axis=1)>=fit[2])[0][0]
+
+                diff = ronchiSlc[high, mid] - ronchiSlc[low,mid]
+                w1 = (fit[2]-ronchiSlc[low,mid])/diff
+                w2 = (ronchiSlc[high,mid]-fit[2])/diff
+                zpntTraces.append(w2*ronchiSlc[low,:] + w1*ronchiSlc[high,:])
+                
+            wifisIO.writeFits(zpntTraces, 'processed/'+zpntLst[0]+'_zpnt_traces.fits',ask=False)
+                    
         else:
-            print ('tracing from full zero-point observation')
+            print ('Tracing from full zero-point observation')
 
             if hband:
                 #read in flat field file and use it to determine limits
@@ -808,8 +805,32 @@ if zpntLst is not None:
                     pdf.savefig(dpi=300)
                     plt.close()
 
+            
+            if useRonchiMethodAlso:
+
+                print ('Interpolating from Ronch Slices using zero-point traces as offset')
+                #iterate through each slice, find the position of the zero-point observation in the middle of the detector
+                #then use the two closest ronchi traces to create a zero-point trace
+            
+                zpntTraces = []
+                
+                for zpntSlc, ronchiSlc in zip(polyFitLst, ronchiPolyTraces):
+
+                    #now get gaussian fit to profile to find middle
+                    mid = int(len(zpntSlc)/2.)
+                    fit = zpntSlc[mid]
+                    
+                    #find nearest two traces
+                    low = np.where(ronchiSlc[:,mid]<=fit)[0][-1]
+                    high = np.where(ronchiSlc[:,mid]>=fit)[0][0]
+
+                    diff = ronchiSlc[high, mid] - ronchiSlc[low,mid]
+                    w1 = (fit-ronchiSlc[low,mid])/diff
+                    w2 = (ronchiSlc[high,mid]-fit)/diff
+                    zpntTraces.append(w2*ronchiSlc[low,:] + w1*ronchiSlc[high,:])
+                
             wifisIO.writeFits(polyFitLst, 'processed/'+zpntLst[0]+'_zpnt_traces.fits',ask=False)
-            zpntTraces = polyFitLst
+            
     else:
         zpntTraces = wifisIO.readImgExtFromFile('processed/'+zpntLst[0]+'_zpnt_traces.fits')[0]
 else:
@@ -819,10 +840,19 @@ else:
 #******************************************************************************************************
 #******************************************************************************************************
 #Now combine everything together to get a full distortion map
+
+if 'ronchiFolder' in locals() and ronchiFolder is not None:
+    if os.path.exists('processed/'+ronchiFolder+'_ronchi_distMap.fits') and os.path.exists('processed/'+ronchiFolder+'_ronchi_spatGridProps.dat'):
+        cont = wifisIO.userInput('Distortion map files already exist, do you want to continue (y/n)')
+    else:
+        cont ='y'
+else:
+    cont='n'
+
 if cont.lower()=='y':
     if ronchiTraces is not None:
-        print('Distortion correcting distortion map to get spatial limits')
         #get full distortion maps
+        print('Creating distortion map')
 
         if zpntTraces is None:
             print(colorama.Fore.RED+'*** WARNING: No zero-point offset traces used to determine distortion map ***'+colorama.Style.RESET_ALL)
@@ -841,8 +871,10 @@ if cont.lower()=='y':
         nSlices = len(flatSlices)/3
         flatSlices = flatSlices[:nSlices]
 
+        print('Distortion correcting distortion map to get spatial limits')
+
         try:
-            flatCor = createCube.distCorAll(flatSlices, distMap, method='akima')
+            flatCor = createCube.distCorAll_CL(flatSlices, distMap)
         except:
             print(colorama.Fore.RED+'*** WARNING: AKIMA INTERPOLATION FAILED, FALLING BACK TO LINEAR INTERPOLATION ***'+colorama.Style.RESET_ALL)
             flatCor = createCube.distCorAll(flatSlices, distMap, method='linear')
@@ -851,11 +883,11 @@ if cont.lower()=='y':
             warnings.simplefilter('ignore',RuntimeWarning)
             trimLims = slices.getTrimLimsAll(flatCor, spatTrim)
 
-        try:
-            distCor = createCube.distCorAll(distMap, distMap, method='akima', MP=True)
-        except:
-            print(colorama.Fore.RED+'*** WARNING: AKIMA INTERPOLATION FAILED, FALLING BACK TO LINEAR INTERPOLATION ***'+colorama.Style.RESET_ALL)
-            distCor = createCube.distCorAll(distMap, distMap, method='linear')
+        #try:
+        distCor = createCube.distCorAll_CL(distMap, distMap)
+        #except:
+        #    print(colorama.Fore.RED+'*** WARNING: AKIMA INTERPOLATION FAILED, FALLING BACK TO LINEAR INTERPOLATION ***'+colorama.Style.RESET_ALL)
+        #    distCor = createCube.distCorAll(distMap, distMap, method='linear')
 
         distTrim = slices.trimSliceAll(distCor, trimLims)
         spatGridProps = createCube.compSpatGrid(distTrim)
