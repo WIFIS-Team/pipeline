@@ -229,7 +229,7 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                 print('Distortion correcting slices')
                 distMap = wifisIO.readImgsFromFile(distMapFile)[0]
                 spatGridProps = wifisIO.readTable(spatGridPropsFile)
-                waveCor = createCube.distCorAll(waveSlices, distMap, spatGridProps=spatGridProps)
+                waveCor = createCube.distCorAll_CL(waveSlices, distMap, spatGridProps=spatGridProps)
 
                 hdr.add_history('Used following file for distortion map:')
                 hdr.add_history(distMapFile)
