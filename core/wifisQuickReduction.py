@@ -259,7 +259,7 @@ def procScienceData(rampFolder='', flatFolder='', noProc=False, skyFolder=None, 
         distMap = wifisIO.readImgsFromFile(distMapFile)[0]
         spatGridProps = wifisIO.readTable(spatGridPropsFile)
 
-    dataGrid = createCube.distCorAll(dataSlices, distMap, spatGridProps=spatGridProps)
+    dataGrid = createCube.distCorAll_CL(dataSlices, distMap, spatGridProps=spatGridProps)
 
     #create cube
     print('Creating image')
@@ -427,7 +427,7 @@ def procArcData(waveFolder, flatFolder, hband=False, colorbarLims = None, varFil
             distMap, spatGridProps = makeFakeDistMap(flatSlices)
 
         print ('Getting distortion corrected slices')
-        waveCor = createCube.distCorAll(waveSlices, distMap, spatGridProps=spatGridProps)
+        waveCor = createCube.distCorAll_CL(waveSlices, distMap, spatGridProps=spatGridProps)
 
         #save data
         wifisIO.writeFits(waveCor, 'quick_reduction/'+waveFolder+'_wave_slices_distCor.fits', ask=False)
