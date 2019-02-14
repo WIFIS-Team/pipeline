@@ -1163,12 +1163,14 @@ def extendTraceSlice2(input):
         #identify corresponding spatial coordinate from Ronchi interpolation
         #using linear interpolation for increased precision (as trace likely falls between two grid points)
         for i in range(zero.shape[0]):
-            
-            ia = np.floor(zero[i]).astype('int')
-            ib = ia+1
-            za= zPad[ia+1,i]
-            zb = zPad[ib+1,i]
-            zeroInterp[i] = (zero[i]-ia)*zb + (ib-zero[i])*za
+            if np.isnan(zero[i]):
+                zeroInterp[i] = 0.0
+            else:
+                ia = np.floor(zero[i]).astype('int')
+                ib = ia+1
+                za= zPad[ia+1,i]
+                zb = zPad[ib+1,i]
+                zeroInterp[i] = (zero[i]-ia)*zb + (ib-zero[i])*za
 
         #now subtract the zero value from each point to place on absoluate grid
         z -= zeroInterp
@@ -1190,7 +1192,6 @@ def extendTraceAll2(traceLst, extSlices, zeroTraces,space=1/15.,order=1,method='
     """
 
     #setup input list
-
     if (MP ==False):
         interpLst = []
 

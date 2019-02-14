@@ -513,6 +513,9 @@ def getSolQuick(input):
                                         #amp,cent,wid = splineFit(pixRng, yRng, plot=plot,title=str(atlasPix[i]))
                                         #amp,cent,wid = gaussFit(pixRng,yRng, winRngTmp/3.,plot=plot,title=str(atlasPix[i]))
                                         amp,cent,wid = polyGaussFit(pixRng,yRng, winRngTmp/3.,plot=plot,title=str(atlasPix[i]))
+                                        if cent > 3000:
+                                            mpl.plot(pixRng, yRng)
+                                            mpl.show()
 
                                         #get weighted average as well
                                         #cent2 = getWeightedCent(pixRng,yRng)
@@ -886,7 +889,7 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
             for j in range(dataLst[i].shape[0]):
                 lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, plot, buildSol, allowLower, sigmaClip,lngthConstraint, adjustFitWin,sigmaLimit, allowSearch,int(sigmaClipRounds),nPixContFit,nSearchRounds])
                 
-
+    #MP = False
     if (MP):
         #setup multiprocessing routines
         if (ncpus == None):
