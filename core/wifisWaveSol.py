@@ -752,8 +752,8 @@ def getSolQuick(input):
             widthFit2 = np.zeros_like(widthFit)
             for i, cent in enumerate(centFit):
                 pixRng = (np.arange(winRng)-winRng2 + cent).astype('int')
-                yRng = yRow[pixRng]
                 try:
+                    yRng = yRow[pixRng]
                     a,c,wid = gaussFit(pixRng,yRng, winRng/3.,plot=plot,title=str(atlasPix[i]))
                     widthFit2[i] = wid
                 except:
@@ -886,7 +886,6 @@ def getWaveSol (dataSlices, templateSlices,atlas, mxorder, prevSol, winRng=7, mx
             for j in range(dataLst[i].shape[0]):
                 lst.append([dataLst[i][j,:],tmpLst[i], bestLines, mxorder,prevSol[i],winRng, mxCcor,weights, plot, buildSol, allowLower, sigmaClip,lngthConstraint, adjustFitWin,sigmaLimit, allowSearch,int(sigmaClipRounds),nPixContFit,nSearchRounds])
                 
-
     if (MP):
         #setup multiprocessing routines
         if (ncpus == None):
