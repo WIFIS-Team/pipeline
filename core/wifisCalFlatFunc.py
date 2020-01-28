@@ -398,9 +398,12 @@ def runCalFlat(lst, hband=False, darkLst=None, rootFolder='', nlCoef=None, satCo
                         logfile.write('*** WARNING: Response correction does not include uncertainties***\n')
 
                 else:
-                    print(colorama.Fore.RED+'*** WARNING: Flat field correction file does not exist, skipping ***'+colorama.Style.RESET_ALL)
+                    #print(colorama.Fore.RED+'*** WARNING: Flat field correction file does not exist, skipping ***'+colorama.Style.RESET_ALL)
     
-                    logfile.write('*** WARNING: Flat field correction file does not exist, skipping ***\n')
+                    #logfile.write('*** WARNING: Flat field correction file does not exist, skipping ***\n')
+                    print('Flat field correction file off...skipping')
+    
+                    logfile.write('Flat field correction file off...skipping\n')
                         
                 #write normalized images to file
                 wifisIO.writeFits(flatNorm + sigmaNorm + satSlices,savename+'_flat_slices_norm.fits',hdr=hdr, ask=False)
