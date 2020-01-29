@@ -32,8 +32,8 @@ def getSatInfo(data, thresh, satThresh=0.97):
     satCounts = np.zeros((ny,nx),dtype='float32') # specifies saturation frame
 
     #determine saturation info
-    for y in xrange(data.shape[0]):
-        for x in xrange(data.shape[1]):
+    for y in range(data.shape[0]):
+        for x in range(data.shape[1]):
             ytmp = data[y,x,:]
 
             #determine saturation level
@@ -60,8 +60,8 @@ def getSatCounts(data, thresh, satThresh=0.97):
     satCounts = np.zeros((ny,nx),dtype='float32') # specifies saturation frame
 
     #determine saturation info
-    for y in xrange(data.shape[0]):
-        for x in xrange(data.shape[1]):
+    for y in range(data.shape[0]):
+        for x in range(data.shape[1]):
             ytmp = data[y,x,:]
 
             #determine saturation level
@@ -90,8 +90,8 @@ def getSatFrame(data,satCounts, ignoreRefPix=True):
     satFrame = np.repeat(nt-1,(ny*nx)).reshape(ny,nx).astype('uint32') # initialize saturation frame
 
     #deterimine saturation info
-    for y in xrange(ny):
-        for x in xrange(nx):
+    for y in range(ny):
+        for x in range(nx):
             ytmp = data[y,x,:]
             
             satVal = satCounts[y,x]
@@ -168,7 +168,7 @@ def getSatCountsCL(data, thresh, nSplit,satThresh=0.97):
     
             program.getsatlev.set_scalar_arg_dtypes([np.uint32, np.uint32, np.float32, None, None, None])
             program.getsatlev(queue,(ny,nx),None,np.uint32(nx), np.uint32(nt), np.float32(thresh),data_buf, mxCounts_buf, satCounts_buf)
-            cl.enqueue_read_buffer(queue, satCounts_buf, sTmp).wait()
+            cl.enqueue_copy(queue, satCounts_buf, sTmp).wait()
 
             np.copyto(satCounts[:,n*nx:(n+1)*nx],sTmp)
     else:
@@ -189,7 +189,7 @@ def getSatCountsCL(data, thresh, nSplit,satThresh=0.97):
     
         program.getsatlev.set_scalar_arg_dtypes([np.uint32, np.uint32, np.float32, None, None, None])
         program.getsatlev(queue,(ny,nx),None,np.uint32(nx), np.uint32(nt), np.float32(thresh),data_buf, mxCounts_buf, satCounts_buf)
-        cl.enqueue_read_buffer(queue, satCounts_buf, satCounts).wait()
+        cl.enqueue_copy(queue, satCounts_buf, satCounts).wait()
 
     satCounts *= satThresh #set useful range as satThresh  times the saturation value
 
@@ -250,7 +250,7 @@ def getSatFrameCL(data,satCounts, nSplit, ignoreRefPix=True):
             #run code
             program.getsatframe.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None, None])
             program.getsatframe(queue,(ny,nx),None,np.uint32(nx), np.uint32(nt),data_buf, satCounts_buf, satFrame_buf)
-            cl.enqueue_read_buffer(queue, satFrame_buf, sFrameTmp).wait()
+            cl.enqueue_copy(queue, satFrame_buf, sFrameTmp).wait()
             
             np.copyto(satFrame[:,n*nx:(n+1)*nx],sFrameTmp)
     else:
@@ -262,7 +262,7 @@ def getSatFrameCL(data,satCounts, nSplit, ignoreRefPix=True):
         #run code
         program.getsatframe.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None, None])
         program.getsatframe(queue,(ny,nx),None,np.uint32(nx), np.uint32(nt),data_buf, satCounts_buf, satFrame_buf)
-        cl.enqueue_read_buffer(queue, satFrame_buf, satFrame).wait()
+        cl.enqueue_copy(queue, satFrame_buf, satFrame).wait()
 
 
     #modify variables to reduce memory consumption

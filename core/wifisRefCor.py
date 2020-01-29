@@ -149,7 +149,7 @@ def channelCL(data,nChannel):
             #run the opencl code
             program.channelEO.set_scalar_arg_dtypes([np.uintc,np.uintc,np.uintc,None])
             program.channelEO(queue,(nFrames,),None,np.uintc(ny), np.uintc(nx),np.uintc(nFrames),data_buf)
-            cl.enqueue_read_buffer(queue, data_buf, dTmp).wait()
+            cl.enqueue_copy(queue, data_buf, dTmp).wait()
 
             #replace the input data with output from OpenCL
             np.copyto(data[:,n*nx:(n+1)*nx,:],dTmp)            
@@ -164,7 +164,7 @@ def channelCL(data,nChannel):
         #run the opencl code
         program.channelEO.set_scalar_arg_dtypes([np.uint32,np.uint32, np.uint32, None])
         program.channelEO(queue,(nFrames,),None,np.uint32(ny), np.uint32(nx),np.uint32(nFrames),data_buf)
-        cl.enqueue_read_buffer(queue, data_buf, dTmp).wait()
+        cl.enqueue_copy(queue, data_buf, dTmp).wait()
         data[:] = dTmp[:]
 
     #modify variables to reduce memory consumption
@@ -231,7 +231,7 @@ def rowCL(data,winSize,nSplit):
                 #run the opencl code
                 program.row.set_scalar_arg_dtypes([np.uintc,np.uintc,np.uintc,np.uintc,None])
                 program.row(queue,(ny,size),None,np.uintc(ny), np.uintc(nx),np.uintc(size),np.uintc(winSize),data_buf)
-                cl.enqueue_read_buffer(queue, data_buf, dTmp).wait()
+                cl.enqueue_copy(queue, data_buf, dTmp).wait()
                 
                 #replace the input data with output from OpenCL
                 np.copyto(data[:,:,strt:end],dTmp)
@@ -244,7 +244,7 @@ def rowCL(data,winSize,nSplit):
         #run the opencl code
         program.row.set_scalar_arg_dtypes([np.uintc,np.uintc, np.uintc, np.uintc,None])
         program.row(queue,(ny,nFrames),None,np.uintc(ny), np.uintc(nx),np.uintc(nFrames),np.uintc(winSize),data_buf)
-        cl.enqueue_read_buffer(queue, data_buf, data).wait()
+        cl.enqueue_copy(queue, data_buf, data).wait()
 
 
      #modify variables to reduce memory consumption

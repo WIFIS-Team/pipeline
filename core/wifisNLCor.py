@@ -115,12 +115,12 @@ def getNLCorCL(data, satFrame, nSplit):
             #run the opencl code
             program.lsfit.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None,None,None, None, None, None, None])
             program.lsfit(queue,(ny,nx),None,np.uint32(nx), np.uint32(ntime),data_buf,a0_buf,a1_buf,a2_buf,a3_buf,sat_buf, zpnt_buf, ramp_buf)
-            cl.enqueue_read_buffer(queue, a0_buf, a0_array).wait()
-            cl.enqueue_read_buffer(queue, a1_buf, a1_array).wait()
-            cl.enqueue_read_buffer(queue, a2_buf, a2_array).wait()
-            cl.enqueue_read_buffer(queue, a3_buf, a3_array).wait()
-            cl.enqueue_read_buffer(queue, zpnt_buf, zpnt_array).wait()
-            cl.enqueue_read_buffer(queue, ramp_buf, ramp_array).wait()
+            cl.enqueue_copy(queue, a0_buf, a0_array).wait()
+            cl.enqueue_copy(queue, a1_buf, a1_array).wait()
+            cl.enqueue_copy(queue, a2_buf, a2_array).wait()
+            cl.enqueue_copy(queue, a3_buf, a3_array).wait()
+            cl.enqueue_copy(queue, zpnt_buf, zpnt_array).wait()
+            cl.enqueue_copy(queue, ramp_buf, ramp_array).wait()
 
             #copy output from OpenCL code into output array
             np.copyto(nlCoeff[:,n*nx:(n+1)*nx,0],a0_array)
@@ -150,12 +150,12 @@ def getNLCorCL(data, satFrame, nSplit):
         #run the opencl code
         program.lsfit.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None,None,None, None, None, None, None])
         program.lsfit(queue,(ny,nx),None,np.uint32(nx), np.uint32(ntime),data_buf,a0_buf,a1_buf,a2_buf,a3_buf,sat_buf, zpnt_buf, ramp_buf)
-        cl.enqueue_read_buffer(queue, a0_buf, a0_array).wait()
-        cl.enqueue_read_buffer(queue, a1_buf, a1_array).wait()
-        cl.enqueue_read_buffer(queue, a2_buf, a2_array).wait()
-        cl.enqueue_read_buffer(queue, a3_buf, a3_array).wait()
-        cl.enqueue_read_buffer(queue, zpnt_buf, zpntImg).wait()
-        cl.enqueue_read_buffer(queue, ramp_buf, rampImg).wait()
+        cl.enqueue_copy(queue, a0_buf, a0_array).wait()
+        cl.enqueue_copy(queue, a1_buf, a1_array).wait()
+        cl.enqueue_copy(queue, a2_buf, a2_array).wait()
+        cl.enqueue_copy(queue, a3_buf, a3_array).wait()
+        cl.enqueue_copy(queue, zpnt_buf, zpntImg).wait()
+        cl.enqueue_copy(queue, ramp_buf, rampImg).wait()
 
         #copy output from OpenCL code into output array
         np.copyto(nlCoeff[:,:,0],a0_array)
@@ -223,7 +223,7 @@ def applyNLCorCL(data, nlCoeff, nSplit):
             #run the opencl code
             program.nlcor.set_scalar_arg_dtypes([np.uint32,np.uint32, None, None,None,None, None])
             program.nlcor(queue,(ny,nx, ntime),None,np.uint32(nx), np.uint32(ntime),data_buf,a0_buf,a1_buf,a2_buf,a3_buf)
-            cl.enqueue_read_buffer(queue, data_buf, dTmp).wait()
+            cl.enqueue_copy(queue, data_buf, dTmp).wait()
 
             #replace input data with non-linearity corrected values
             np.copyto(data[:,n*nx:(n+1)*nx,:],dTmp)            
@@ -250,7 +250,7 @@ def applyNLCorCL(data, nlCoeff, nSplit):
         #run the opencl code
         program.nlcor.set_scalar_arg_dtypes([int,int, None, None,None,None, None])
         program.nlcor(queue,(ny,nx, ntime),None,np.uint32(nx), np.uint32(ntime),data_buf,a0_buf,a1_buf,a2_buf,a3_buf)
-        cl.enqueue_read_buffer(queue, data_buf, data).wait()
+        cl.enqueue_copy(queue, data_buf, data).wait()
 
     #modify variables to reduce memory consumption
     dTmp = 0

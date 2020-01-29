@@ -14,7 +14,7 @@ from astropy import convolution as conv
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib import gridspec
 from scipy.optimize import OptimizeWarning
-from scipy.interpolate import spline
+from scipy.interpolate import splrep, splev
 from scipy.interpolate import Akima1DInterpolator
 
 import warnings

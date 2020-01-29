@@ -61,7 +61,7 @@ def upTheRampCRRejectCL(intTime, data, satFrame, nSplit):
             program.compmeangrad.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None,None])
             program.compmeangrad(queue,(ny,nx),None,np.uint32(nx), np.uint32(ntime),data_buf,sat_buf,oTmp_buf)
             
-            cl.enqueue_read_buffer(queue, oTmp_buf, oTmp).wait()
+            cl.enqueue_copy(queue, oTmp_buf, oTmp).wait()
 
             #copy to output array
             np.copyto(outImg[:,n*nx:(n+1)*nx],oTmp)
@@ -75,7 +75,7 @@ def upTheRampCRRejectCL(intTime, data, satFrame, nSplit):
         program.compmeangrad.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None,None])
         program.compmeangrad(queue,(ny,nx),None,np.uint32(nx), np.uint32(ntime), data_buf,sat_buf,out_buf)
         
-        cl.enqueue_read_buffer(queue, out_buf, outImg).wait()
+        cl.enqueue_copy(queue, out_buf, outImg).wait()
 
     outImg/=(np.mean(np.gradient(intTime)))
 
@@ -151,9 +151,9 @@ def upTheRampCL(intTime, data, satFrame, nSplit):
             program.lsfit.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None,None,None, None, None])
             program.lsfit(queue,(ny,nx),None,np.uint32(nx), np.uint32(ntime),time_buf, data_buf,a0_buf,a1_buf,sat_buf, var_buf)
             
-            cl.enqueue_read_buffer(queue, a0_buf, a0_array).wait()
-            cl.enqueue_read_buffer(queue, a1_buf, oTmp).wait()
-            cl.enqueue_read_buffer(queue, var_buf, var_array).wait()
+            cl.enqueue_copy(queue, a0_buf, a0_array).wait()
+            cl.enqueue_copy(queue, a1_buf, oTmp).wait()
+            cl.enqueue_copy(queue, var_buf, var_array).wait()
 
             #copy to output array
             np.copyto(outImg[:,n*nx:(n+1)*nx],oTmp)
@@ -171,9 +171,9 @@ def upTheRampCL(intTime, data, satFrame, nSplit):
         program.lsfit.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None,None,None, None,None])
         program.lsfit(queue,(ny,nx),None,np.uint32(nx), np.uint32(ntime),time_buf, data_buf,a0_buf,a1_buf,sat_buf, var_buf)
         
-        cl.enqueue_read_buffer(queue, a0_buf, zpntImg).wait()
-        cl.enqueue_read_buffer(queue, a1_buf, outImg).wait()
-        cl.enqueue_read_buffer(queue, var_buf, varImg).wait()
+        cl.enqueue_copy(queue, a0_buf, zpntImg).wait()
+        cl.enqueue_copy(queue, a1_buf, outImg).wait()
+        cl.enqueue_copy(queue, var_buf, varImg).wait()
                 
     #modify variables to reduce memory consumption
     dTmp = 0
@@ -277,7 +277,7 @@ def fowlerSamplingCL(intTime, data, satFrame, nSplit):
             program.fowler.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None,None,None])
             program.fowler(queue,(ny,nx),None,np.uint32(nx), np.uint32(ntime),time_buf, data_buf,sat_buf,flux_buf)
             
-            cl.enqueue_read_buffer(queue, flux_buf, oTmp).wait()
+            cl.enqueue_copy(queue, flux_buf, oTmp).wait()
 
             #copy to output array
             np.copyto(outImg[:,n*nx:(n+1)*nx],oTmp)
@@ -291,7 +291,7 @@ def fowlerSamplingCL(intTime, data, satFrame, nSplit):
         program.fowler.set_scalar_arg_dtypes([np.uint32, np.uint32, None, None,None,None])
         program.fowler(queue,(ny,nx),None,np.uint32(nx), np.uint32(ntime),time_buf, data_buf,sat_buf,flux_buf)
         
-        cl.enqueue_read_buffer(queue, flux_buf, outImg).wait()
+        cl.enqueue_copy(queue, flux_buf, outImg).wait()
 
     #modify variables to reduce memory consumption
     dTmp = 0

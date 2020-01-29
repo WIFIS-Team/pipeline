@@ -11,7 +11,7 @@ import re
 import os
 import sys
 import astropy
-import cPickle
+import pickle as cPickle
 import numpy as np
 import ast
 

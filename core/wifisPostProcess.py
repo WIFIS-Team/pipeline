@@ -6,7 +6,7 @@ Set of routines to help with post-processing of data cube
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.interpolate import spline
+from scipy.interpolate import splrep, splev
 from scipy.interpolate import interp1d
 import multiprocessing as mp
 from scipy.optimize import curve_fit
@@ -54,7 +54,8 @@ def splineContFit(x,y,regions, lineRegions=None,order=3,winRng=10.):
     xfit = np.concatenate(xfit)
     yfit = np.concatenate(yfit)
     
-    contFit = spline(xfit,yfit,x,order=order)
+    splfit = splrep(xfit,yfit,x,k=order)
+    contFit = splev(x, splfit)
 
     return xfit, yfit, contFit
 
@@ -346,7 +347,8 @@ def splineContFitMP(input):
     xfit = np.asarray(xfit)
     yfit = np.asarray(yfit)
     
-    contFit = spline(xfit,yfit,x,order=order)
+    splfit = splrep(xfit,yfit,x,k=order)
+    contFit = splev(x, splfit)
 
     return contFit
 
@@ -1180,7 +1182,7 @@ def crossCorImageCL(img1, img2, regions=None, oversample=20, absorption=False, n
     lag_pos = lag[lag.shape[0]/2:]
     lag_pos_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf = lag_pos)
     program.xcorPosLag(queue,(p_pos.shape),None,np.uint32(nx), np.uint32(ny),img1_buf, img2_buf,lag_pos_buf, p_pos_buf)
-    cl.enqueue_read_buffer(queue, p_pos_buf, p_pos).wait()
+    cl.enqueue_copy(queue, p_pos_buf, p_pos).wait()
 
     #now negative lags
     p_neg = np.zeros(lag.shape[0]/2, dtype='float32')
@@ -1188,7 +1190,7 @@ def crossCorImageCL(img1, img2, regions=None, oversample=20, absorption=False, n
     lag_neg = lag[:lag.shape[0]/2]
     lag_neg_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf = lag_neg)
     program.xcorNegLag(queue,(p_neg.shape),None,np.uint32(nx), np.uint32(ny),img1_buf, img2_buf,lag_neg_buf, p_neg_buf)
-    cl.enqueue_read_buffer(queue, p_neg_buf, p_neg).wait()
+    cl.enqueue_copy(queue, p_neg_buf, p_neg).wait()
 
     p = np.append(p_neg,p_pos)
     shiftOut = lag[np.nanargmax(p)]/np.float(oversample)
