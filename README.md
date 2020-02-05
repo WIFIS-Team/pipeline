@@ -1,12 +1,17 @@
+==============
 WIFIS pipeline
+==============
 
-The following python packages must be installed:
-Astropy >= 1.2
-NumPy	>= 1.11.2
-SciPy 	>= 0.18.0
-pyopencl - for OpenCL accelerated tasks - >= 2015.2
-matplotlib - for plotting >= 1.5.2
-cPickle >= 2.3
+*This is a in-development branch for the WIFIS pipeline that attempts to catch up to python 3 and the latest package updates*
+
+
+This package requires and has has been tested on:
+Astropy = 4.0
+NumPy	= 1.18.1
+SciPy 	= 1.3.2
+pyopencl - for OpenCL accelerated tasks - = 2019.1.2
+matplotlib - for plotting = 3.1.1
+colorama = 0.4.3
 
 The versions provided are the releases for which the pipeline was tested on. Your mileage may very with earlier versions.
 
