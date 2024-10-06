@@ -7,11 +7,47 @@ Tools to correct images for channel and row bias
 import numpy as np
 import matplotlib.pyplot as plt
 import pyopencl as cl
+from numba import njit, prange
 import os
 
 path = os.path.dirname(__file__)
 clCodePath = path+'/opencl_code'
 
+@njit(parallel=True)
+def channel(data, nChannel):
+    """
+    Use reference pixels to correct for channel bias using Numba for performance.
+    Usage: channel(data, nChannel)
+    data is the input data (single image or cube)
+    nChannel is an integer specifying the number of channels used when obtaining the data
+    The input data is modified in place.
+    """
+
+    # Get array dimensions
+    nx = data.shape[1]
+    ny = data.shape[0]
+    nFrames = data.shape[2]  # Always 3D now
+
+    csize = nx // nChannel  # Channel size
+
+    for n in prange(nFrames):
+        dTmp = data[:, :, n]  # Extract 2D frame from the 3D data
+
+        for i in prange(nChannel):
+            # Calculate the mean correction factor
+            upper_part = dTmp[0:4, i * csize:(i + 1) * csize]
+            lower_part = dTmp[-4:, i * csize:(i + 1) * csize]
+            
+            # Manually stack and compute the mean
+            combined_part = np.hstack((upper_part, lower_part))
+            corrfactor = np.mean(combined_part)
+            
+            # Subtract the correction factor from the data
+            dTmp[:, i * csize:(i + 1) * csize] -= corrfactor
+
+    return
+
+'''
 # Channel Correct
 def channel(data,nChannel):
     """
@@ -35,18 +71,54 @@ def channel(data,nChannel):
         
     csize = int(nx/nChannel)
 
-    for n in range(nFrames):
+    for n in prange(nFrames):
         if (nFrames > 1):
             dTmp = data[:,:, n]
         else:
             dTmp = data
 
-        for i in range(nChannel):
+        for i in prange(nChannel):
             corrfactor = np.mean(np.concatenate([dTmp[0:4,i*csize:i*csize+csize],dTmp[-4:,i*csize:i*csize+csize]]))
             dTmp[:,i*csize:(i+1)*csize] -= corrfactor
 
     return
+'''
 
+@njit(parallel=True)
+def row(data, winsize):
+    """
+    Use reference pixels to correct for row bias using a moving average.
+    The input data is modified in place.
+    """
+
+    # Get input data dimensions
+    nx = data.shape[1]
+    ny = data.shape[0]
+    nFrames = data.shape[2]  # Always 3D now
+
+    half_winsize = winsize // 2
+
+    for n in prange(nFrames):
+        dTmp = data[:, :, n]  # Extract 2D slice from 3D array
+
+        # First rows (start)
+        for i in range(0, half_winsize):
+            corrfactor = np.mean(np.hstack((dTmp[0:i + half_winsize + 1, 0:4], dTmp[0:i + half_winsize + 1, -4:])))
+            dTmp[i, 4:-4] -= corrfactor
+
+        # Middle rows (central)
+        for i in range(half_winsize, nx - half_winsize - 1):
+            corrfactor = np.mean(np.hstack((dTmp[i - half_winsize:i + half_winsize + 1, 0:4], dTmp[i - half_winsize:i + half_winsize + 1, -4:])))
+            dTmp[i, 4:-4] -= corrfactor
+
+        # Last rows (end)
+        for i in range(nx - half_winsize - 1, nx):
+            corrfactor = np.mean(np.hstack((dTmp[i - half_winsize:nx, 0:4], dTmp[i - half_winsize:nx, -4:])))
+            dTmp[i, 4:-4] -= corrfactor
+
+    return
+
+'''
 def row(data,winsize):
     """
     Use reference pixels to correct for row bias using a moving average
@@ -71,31 +143,32 @@ def row(data,winsize):
         for n in range(nFrames):
             dTmp = data[:,:,n]
 
-            for i in range(0, winsize/2):
-                corrfactor = np.mean(np.concatenate([dTmp[0:i+winsize/2+1,0:4],dTmp[0:i + winsize/2+1,-4:]]))
+            for i in prange(0, int(winsize/2)):
+                corrfactor = np.mean(np.concatenate([dTmp[0:i+int(winsize/2)+1,0:4],dTmp[0:i + int(winsize/2)+1,-4:]]))
                 dTmp[i,4:-4] -= corrfactor
                 
-            for i in range(winsize/2,nx-winsize/2-1):
-                corrfactor = np.mean(np.concatenate([dTmp[i-winsize/2:i+winsize/2+1,0:4],dTmp[i-winsize/2:i + winsize/2+1,-4:]]))
+            for i in prange(int(winsize/2),nx-int(winsize/2)-1):
+                corrfactor = np.mean(np.concatenate([dTmp[i-int(winsize/2):i+int(winsize/2)+1,0:4],dTmp[i-int(winsize/2):i + int(winsize/2)+1,-4:]]))
                 dTmp[i,4:-4] -= corrfactor
 
-            for i in range(nx-winsize/2-1,nx):
-                corrfactor = np.mean(np.concatenate([dTmp[i-winsize/2:nx,0:4],dTmp[i-winsize/2:nx,-4:]]))
+            for i in prange(nx-int(winsize/2)-1,nx):
+                corrfactor = np.mean(np.concatenate([dTmp[i-int(winsize/2):nx,0:4],dTmp[i-int(winsize/2):nx,-4:]]))
                 dTmp[i,4:-4] -= corrfactor
     else:
-        for i in range(0, winsize/2):
-            corrfactor = np.mean(np.concatenate([data[0:i+winsize/2+1,0:4],data[0:i + winsize/2+1,-4:]]))
+        for i in prange(0, int(winsize/2)):
+            corrfactor = np.mean(np.concatenate([data[0:i+int(winsize/2)+1,0:4],data[0:i + int(winsize/2)+1,-4:]]))
             data[i,4:-4] -= corrfactor
             
-        for i in range(winsize/2,nx-winsize/2-1):
-            corrfactor = np.mean(np.concatenate([data[i-winsize/2:i+winsize/2+1,0:4],data[i-winsize/2:i + winsize/2+1,-4:]]))
+        for i in prange(int(winsize/2),nx-int(winsize/2)-1):
+            corrfactor = np.mean(np.concatenate([data[i-int(winsize/2):i+int(winsize/2)+1,0:4],data[i-int(winsize/2):i + int(winsize/2)+1,-4:]]))
             data[i,4:-4] -= corrfactor
             
-        for i in range(nx-winsize/2-1,nx):
-            corrfactor = np.mean(np.concatenate([data[i-winsize/2:nx,0:4],data[i-winsize/2:nx,-4:]]))
+        for i in prange(nx-int(winsize/2)-1,nx):
+            corrfactor = np.mean(np.concatenate([data[i-int(winsize/2):nx,0:4],data[i-int(winsize/2):nx,-4:]]))
             data[i,4:-4] -= corrfactor
                     
     return
+'''
 
 def channelCL(data,nChannel):
     """

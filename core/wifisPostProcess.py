@@ -6,8 +6,10 @@ Set of routines to help with post-processing of data cube
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.interpolate import spline
+#from scipy.interpolate import spline
+from scipy.interpolate import make_interp_spline
 from scipy.interpolate import interp1d
+from scipy import stats
 import multiprocessing as mp
 from scipy.optimize import curve_fit
 import warnings
@@ -54,7 +56,15 @@ def splineContFit(x,y,regions, lineRegions=None,order=3,winRng=10.):
     xfit = np.concatenate(xfit)
     yfit = np.concatenate(yfit)
     
-    contFit = spline(xfit,yfit,x,order=order)
+#    contFit = spline(xfit,yfit,x,order=order)
+    valid_mask = ~np.isnan(xfit) & ~np.isinf(xfit) & ~np.isnan(yfit) & ~np.isinf(yfit)  
+    x_clean = xfit[valid_mask]
+    y_clean = yfit[valid_mask]
+    
+    xfit_unique, yfit_mean = np.unique(x_clean, return_inverse=True), stats.binned_statistic(x_clean, y_clean, statistic='mean', bins=len(np.unique(x_clean)))[0]
+    spline = make_interp_spline(xfit_unique,yfit_mean,k=order)
+    contFit = spline(x)
+    
 
     return xfit, yfit, contFit
 
@@ -223,11 +233,11 @@ def crossCorPixMP(input):
         rng = np.arange(-xInt.shape[0]-2, xInt.shape[0]-1)
 
     yCC = crossCorIDL([y1Int, y2Int, rng])
-    shiftOut = rng[np.argmax(yCC)]/np.float(oversample)
+    shiftOut = rng[np.argmax(yCC)]/np.float32(oversample)
 
     if plot:
         fig = plt.figure()
-        plt.plot(rng/np.float(oversample), yCC)
+        plt.plot(rng/np.float32(oversample), yCC)
         plt.show()
  
     return shiftOut
@@ -346,7 +356,15 @@ def splineContFitMP(input):
     xfit = np.asarray(xfit)
     yfit = np.asarray(yfit)
     
-    contFit = spline(xfit,yfit,x,order=order)
+#    contFit = spline(xfit,yfit,x,order=order)
+    valid_mask = ~np.isnan(xfit) & ~np.isinf(xfit) & ~np.isnan(yfit) & ~np.isinf(yfit)  
+    x_clean = xfit[valid_mask]
+    y_clean = yfit[valid_mask]
+    
+    x_unique, indicies = np.unique(x_clean, return_index=True)
+    spline = make_interp_spline(x_unique,y_clean[indicies],k=order)
+    contFit = spline(x)
+    
 
     return contFit
 
@@ -1191,7 +1209,7 @@ def crossCorImageCL(img1, img2, regions=None, oversample=20, absorption=False, n
     cl.enqueue_read_buffer(queue, p_neg_buf, p_neg).wait()
 
     p = np.append(p_neg,p_pos)
-    shiftOut = lag[np.nanargmax(p)]/np.float(oversample)
+    shiftOut = lag[np.nanargmax(p)]/np.float32(oversample)
 
     return shiftOut
 

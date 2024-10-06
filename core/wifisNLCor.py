@@ -6,13 +6,14 @@ Tools to carry out the measurement and correction for non-linearity behaviour of
 
 import numpy as np
 import pyopencl as cl
+from numba import njit, prange, vectorize, float32
 import os
 
 #define paths to be used for OpenCL code
 path = os.path.dirname(__file__)
 clCodePath = path+'/opencl_code'
 
-def getNLCorNumpy(data, satFrame):
+def getNLCor(data, satFrame):
     """
     Routine to determine non-linearity correction coefficients using built-in python methods
     Usage: nlCoef = getNLCorNumpy(data, satFrame)
@@ -168,6 +169,27 @@ def getNLCorCL(data, satFrame, nSplit):
     data_buf = 0
     
     return nlCoeff, zpntImg, rampImg
+
+@njit(parallel=True)
+def applyNLCor(data, nlCoeff):
+    """
+    Routine to apply non-linearity correction coefficients using OpenCL code to input data (can be a data cube)
+    Usage: applyNLCor(data, nlCoeff)
+    data is the input data (image or cube)
+    nlCoeff is an array specifying the non-linearity correction coefficients to use for correcting the input data
+    The data array is corrected in place
+    """
+    
+    ny = data.shape[0]
+    nx = data.shape[1]
+    nt = data.shape[2]
+    
+    for i in prange(ny):
+        for j in prange(nx):
+            for k in prange(nt):
+                nlCor = (nlCoeff[i,j,0] + nlCoeff[i,j,1]*data[i,j,k] + nlCoeff[i,j,2]*(data[i,j,k])**2 + nlCoeff[i,j,3]*(data[i,j,k])**3)
+                data[i,j,k] = nlCor*data[i,j,k]
+
 
 def applyNLCorCL(data, nlCoeff, nSplit):
     """

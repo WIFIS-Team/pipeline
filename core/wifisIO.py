@@ -11,7 +11,7 @@ import re
 import os
 import sys
 import astropy
-import cPickle
+import pickle
 import numpy as np
 import ast
 
@@ -457,18 +457,18 @@ def writeFits(data, filename, hdr=None, ask=True):
     hdu.close()
     return
 
-def writePickle(objct, filename, protocol=-1):
+def writePickle(objct, filename, protocol=pickle.HIGHEST_PROTOCOL):
     """
-    Writes a complex object to a file using cPickle.
+    Writes a complex object to a file using pickle.
     Usage: writePickle(objct, filename, protocol=-1)
     objct is the object to save to a file,
     filename is the name of the file which to save
     protocol is the protocol to use for pickling (default is the highest version).
     """
 
-    fileout = open(filename, 'w')
+    fileout = open(filename, 'wb')
 
-    cPickle.dump(objct, fileout,protocol)
+    pickle.dump(objct, fileout,protocol)
     fileout.close()
     
     return
@@ -481,8 +481,8 @@ def readPickle(filename):
     Returns the unpickled object.
     """
 
-    filein = open(filename,'r')
-    objct = cPickle.load(filein)
+    filein = open(filename,'rb')
+    objct = pickle.load(filein, encoding='latin1')
     filein.close()
 
     return objct

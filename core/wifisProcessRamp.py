@@ -18,6 +18,12 @@ import time
 import glob
 import warnings
 
+def ensure_3d(data):
+    if len(data.shape) == 2:
+        # Reshape 2D array to 3D by adding a new axis
+        return data[:, :, np.newaxis]
+    return data
+
 def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSplit=1, satSplit=32, nlSplit=32, combSplit=32, crReject=False, bpmCorRng=1, saveAll=True, ignoreBPM=False,skipObsinfo=False, rampNum=None, satFile='', nlFile='', bpmFile='',logfile=None, fowler=False, gain=1., ron=None, obsCoords=None, avgAll=False):
     """
     Process a set of ramp images to create a single ramp image. Carries out all related routines (non-linearity correction, bad pixel correction, etc.)
@@ -66,6 +72,8 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
     if len(rampLst)==0:
         rampLst = glob.glob(folder+'/*N01.fits.gz')
     
+    print(rampLst)
+    
     nRamps = len(rampLst)
     del rampLst
     
@@ -106,14 +114,16 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
         #Correct data for reference pixels
         if nChannel >0:
             print("Subtracting reference pixel channel bias")
-            refCor.channelCL(data, nChannel)
+            data = ensure_3d(data)
+            refCor.channel(data, nChannel)
             hdr.add_history('Channel reference pixel corrections applied using '+ str(nChannel) +' channels')
             if logfile is not None:
                 logfile.write('Subtracted reference pixel channel bias using ' + str(nChannel) + ' channels\n')
 
         if nRows > 0:
             print("Subtracting reference pixel row bias")
-            refCor.rowCL(data, nRows,rowSplit)
+            data = ensure_3d(data)
+            refCor.row(data, nRows)
             hdr.add_history('Row reference pixel corrections applied using '+ str(int(nRows+1))+ ' pixels')
             if logfile is not None:
                 logfile.write('Subtraced row reference pixel bias using moving average of ' + str(int(nRows)+1) + ' rows\n')
@@ -123,7 +133,7 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
             satFrame[:] = data.shape[2]
             hdr.add_history('No saturation levels determined. Using all ramp frames')
         else:
-            satFrame = satInfo.getSatFrameCL(data, satCounts,satSplit, ignoreRefPix=True)
+            satFrame = satInfo.getSatFrame(data, satCounts, ignoreRefPix=True)
             hdr.add_history('Saturation levels determined from file:')
             hdr.add_history(satFile)
             if logfile is not None:
@@ -135,7 +145,11 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
         #find NL coefficient file
         if nlCoeff is not None:
             print("Correcting for non-linearity")
-            NLCor.applyNLCorCL(data, nlCoeff, nlSplit)
+            
+            #Fix Endianess
+            nlCoeffSwap = np.array(nlCoeff, dtype='<f4')
+            
+            NLCor.applyNLCor(data, nlCoeffSwap)
             hdr.add_history('Non-linearity corrections applied using file:')
             hdr.add_history(nlFile)
             if logfile is not None:
@@ -144,7 +158,7 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
         #******************************************************************************
         #Combine data cube into single image
         if fowler:
-            fluxImg = combData.fowlerSamplingCL(inttime, data, satFrame, combSplit)
+            fluxImg = combData.fowlerSampling(inttime, data, satFrame, combSplit)
             hdr.add_history('Flux determined from mean average of Fowler reads in openCL')
     
             #free up some memory
@@ -157,14 +171,14 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
                 sigmaImg = None
         else:
             if (crReject):
-                fluxImg = combData.upTheRampCRRejectCL(inttime, data, satFrame, combSplit)[0]
+                fluxImg = combData.upTheRampCRReject(inttime, data, satFrame, combSplit)[0]
                 sigmaImg = None
                 hdr.add_history('Flux determined from median gradient')
                 if logfile is not None:
                     logfile.write('Determined flux using median gradient of the ramp\n')
 
             else:
-                fluxImg  = combData.upTheRampCL(inttime, data, satFrame, combSplit)[0]
+                fluxImg  = combData.upTheRamp(inttime, data, satFrame)[0]
                 hdr.add_history('Flux determined through linear regression')
                 if logfile is not None:
                     logfile.write('Determined flux using linear regression\n')
@@ -182,7 +196,7 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
             headers.addTelInfo(hdr, folder+'/obsinfo.dat',logfile=logfile, obsCoords=obsCoords)
         hdr.add_comment('File contains flux, sigma, and sat info as multi-extensions')
         #****************************************************************************
-
+        
         #mark bad pixels
         with warnings.catch_warnings():
             warnings.simplefilter('ignore',RuntimeWarning)
@@ -196,6 +210,7 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
             mxFlux = 65535./dT # assumes 16-bit electronics
             fluxImg[fluxImg>mxFlux] = np.nan
             fluxImg[fluxImg<-mxFlux] = np.nan
+       
        
         #check for BPM and read, if exists
         if(BPM is not None):
@@ -211,15 +226,16 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
                     logfile.write('*** WARNING: MISSING BAD PIXEL MASK ***')
                     raise Warning('*** Missing bad pixel mask ***')
 
+        
         # CORRECT BAD PIXELS
         if bpmCorRng > 0:
             print('Correcting for bad pixels')
             #try and correct all pixels, but not the reference pixels
             imgCor = np.empty(fluxImg.shape, dtype = fluxImg.dtype)
-            imgCor[4:-4,4:-4] = badPixels.corBadPixelsAll(fluxImg[4:-4,4:-4], dispAxis=0, mxRng=int(bpmCorRng), MP=True)
+            imgCor[4:-4,4:-4] = badPixels.corBadPixelsAll(fluxImg[4:-4,4:-4], dispAxis=0, mxRng=int(bpmCorRng), MP=False)
             if sigmaImg is not None:
                 sigmaCor = np.empty(sigmaImg.shape, dtype= sigmaImg.dtype)
-                sigmaCor[4:-4, 4:-4]  = badPixels.corBadPixelsAll(sigmaImg[4:-4,4:-4], dispAxis=0, mxRng=int(bpmCorRng), MP=True, sigma=True)
+                sigmaCor[4:-4, 4:-4]  = badPixels.corBadPixelsAll(sigmaImg[4:-4,4:-4], dispAxis=0, mxRng=int(bpmCorRng), MP=False, sigma=True)
             else:
                 sigmaCor = sigmaImg
                 
@@ -233,10 +249,12 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
         elif(bpmCorRng==0):
             imgCor = fluxImg
             sigmaCor = sigmaImg
+        
             
         obsAll.append(imgCor)
         sigAll.append(sigmaCor)
         satAll.append(satFrame)
+        
 
     if (nRamps>1):
         with warnings.catch_warnings():
@@ -265,6 +283,7 @@ def process(folder, saveName, satCounts, nlCoeff, BPM,nChannel=32, nRows=0,rowSp
         wifisIO.writeFits([imgComb, sigComb, satComb], saveName, hdr=hdr, ask=False)
     else:
         wifisIO.writeFits(imgComb, saveName, hdr=hdr, ask=False)
+ 
  
     return imgComb, sigComb, satComb, hdr
 

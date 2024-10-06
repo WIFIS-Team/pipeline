@@ -7,6 +7,7 @@ Tools to process a sequence of exposures to create a single image
 import numpy as np
 import matplotlib.pyplot as plt
 import pyopencl as cl
+from numba import njit, prange
 import os
 
 path = os.path.dirname(__file__)
@@ -85,6 +86,77 @@ def upTheRampCRRejectCL(intTime, data, satFrame, nSplit):
     
     return outImg, [], [] #add extra output to make it compatible with upTheRampCL
 
+@njit(parallel=True)
+def upTheRamp(intTime, data, satFrame):
+    """
+    Routine to process a sequence of up-the-ramp exposures using OpenCL code
+    Usage: outImg, zpntImg, varImg = upTheRampCL(intTime,data, satFram, nSplit)
+    intTime is input array indicating the integration times of each frame in the data cube in increasing order
+    data is the input data cube
+    satFrame is an input image indicating the frame number of the first saturated frame in the sequence per pixel
+    outImg is a 2D image, where each pixel represents the flux (slope/time)
+    zpntImg is the zero point image (bias image) resulting from the linear fit of the ramp
+    varImg is the variance image from the linear fitting procedure
+    *** NOTE: Currently openCL code outputs both offset and slope of the fit. Can remove offset as not needed ***
+    """
+    
+    #get dimenions of input images
+    ny = data.shape[0]
+    nx = data.shape[1]
+    ntime = data.shape[2]
+    
+    #create tempory array to hold the output image
+    outImg = np.zeros((ny,nx), dtype='float32')
+    varImg = np.zeros((ny,nx),dtype='float32')
+    zpntImg = np.zeros((ny,nx),dtype='float32')
+    
+    for i in prange(ny):
+        for j in prange(nx):
+            satFrameVal = satFrame[i,j]
+            meanx = 0
+            meany = 0
+            meanxy = 0
+            meanx2 = 0
+            
+            if (satFrameVal > 1):
+                for k in prange(satFrameVal):
+                    d = data[i,j,k]
+                    t = intTime[k]
+                
+                    meanx = meanx + t
+                    meany = meany + d
+                    meanxy = meanxy + t*d
+                    meanx2 = meanx2 + t*t
+                
+                meanx = meanx/(satFrameVal*1.0)
+                meany = meany/(satFrameVal*1.0)
+                meanxy = meanxy/(satFrameVal*1.0)
+                meanx2 = meanx2/(satFrameVal*1.0)
+            
+                covar = meanxy - meanx*meany
+                varx = meanx2 - meanx*meanx
+            
+                outImg[i,j] = covar/varx
+                zpntImg[i,j] = meany - outImg[i,j]*meanx     
+            
+                vari = 0
+            
+                for k in prange(satFrameVal):
+                    d = data[i,j,k]
+                    t = intTime[k]
+                
+                    diff = zpntImg[i,j] + outImg[i,j]*t - d
+                    vari = vari + diff*diff
+            
+                vari = vari/(satFrameVal*1.0)
+                    
+                varImg[i,j] = vari
+            else:
+                outImg[i,j] = np.nan
+                zpntImg[i,j] = np.nan
+                varImg[i,j] = np.nan
+                
+    return outImg, zpntImg, varImg
 
 def upTheRampCL(intTime, data, satFrame, nSplit):
     """

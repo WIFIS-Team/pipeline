@@ -106,14 +106,14 @@ def corBadPixel(input):
         #determine if any good pixels within range
         xa = badPix
         keepxa = False
-        for xa in xrange(badPix-1,badPix-mxRng-1,-1):
+        for xa in range(badPix-1,badPix-mxRng-1,-1):
             if(np.isfinite(ytmp[xa])):
                 keepxa = True
                 break
 
         xb = badPix
         keepxb = False
-        for xb in xrange(badPix+1,badPix+mxRng+1,1):
+        for xb in range(badPix+1,badPix+mxRng+1,1):
             if (np.isfinite(ytmp[xb])):
                 keepxb = True
                 break
@@ -156,14 +156,14 @@ def corBadPixelSigma(input):
     #determine if any good pixels within range
     xa = badPix
     keepxa = False
-    for xa in xrange(badPix-1,badPix-mxRng-1,-1):
+    for xa in range(badPix-1,badPix-mxRng-1,-1):
         if(np.isfinite(ytmp[xa])):
             keepxa = True
             break
 
     xb = badPix
     keepxb = False
-    for xb in xrange(badPix+1,badPix+mxRng+1,1):
+    for xb in range(badPix+1,badPix+mxRng+1,1):
         if (np.isfinite(ytmp[xb])):
             keepxb = True
             break

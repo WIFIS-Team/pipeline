@@ -99,7 +99,7 @@ skyFluxThresh = 0.1
 getSkyCorPix = True
 
 #define location of template file here
-skyEmTempFile = '/data/pipeline/external_data/sky_emission_template.dat'
+skyEmTempFile = '/Users/suresh/Source/pipeline/external_data/sky_emission_template.dat'
 
 ######################################################
 #telluric correction options
@@ -122,10 +122,10 @@ flatCorFile = 'processed/flat_correction_slices.fits'
 rootFolder = 'raw_files'
 
 #location of arc lamp template file
-waveTempFile = '/data/pipeline/external_data/waveTemplate.fits'
+waveTempFile = '/Users/suresh/Source/pipeline/external_data//waveTemplate.fits'
 
 #location of fitting results associated with arc lamp template file
-waveTempResultsFile = '/data/pipeline/external_data/waveTemplateFittingResults.pkl'
+waveTempResultsFile = '/Users/suresh/Source/pipeline/external_data/waveTemplateFittingResults.pkl'
 
 #distortion map file, associated limits, and spatial grid properties files
 

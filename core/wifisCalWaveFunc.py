@@ -153,7 +153,7 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                 if (not cont.lower() == 'y'):
                     print('Reading image '+savename+'_wave_slices.fits instead')
                     waveSlicesLst = wifisIO.readImgsFromFile(savename+'_wave.fits')[0]
-                    nSlices = len(waveSlicesLst)/3
+                    nSlices = int(len(waveSlicesLst)/3)
                     waveSlices = waveSlicesLst[:nSlices]
                     sigmaSlices = waveSlicesLst[nSlices:2*nSlices]
                     satSlices = waveSlicesLst[3*nSlices:]
@@ -202,7 +202,7 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                 
                 #get flat fielded slices
                 flatNormLst = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_slices_norm.fits')[0]
-                nSlices = len(flatNormLst)/3
+                nSlices = int(len(flatNormLst)/3)
                 flatNorm = flatNormLst[:nSlices]
                 flatSigmaNorm = flatNormLst[nSlices:2*nSlices]
                
@@ -229,7 +229,7 @@ def runCalWave(waveLst, flatLst, hband=False, nlCoef=None, satCounts=None, BPM=N
                 print('Distortion correcting slices')
                 distMap = wifisIO.readImgsFromFile(distMapFile)[0]
                 spatGridProps = wifisIO.readTable(spatGridPropsFile)
-                waveCor = createCube.distCorAll_CL(waveSlices, distMap, spatGridProps=spatGridProps)
+                waveCor = createCube.distCorAll(waveSlices, distMap, spatGridProps=spatGridProps)
 
                 hdr.add_history('Used following file for distortion map:')
                 hdr.add_history(distMapFile)

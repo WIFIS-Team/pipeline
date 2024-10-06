@@ -31,7 +31,11 @@ For each sky observation:
 
 #optional, remove/change to prefered rendering system
 import matplotlib
-matplotlib.use('gtkagg')
+#matplotlib.use('gtkagg')
+
+import sys
+sys.path.append('/Users/suresh/Source/pipeline/core/')
+
 
 import wifisIO
 import wifisSlices as slices
@@ -57,6 +61,9 @@ import colorama
 from matplotlib.backends.backend_pdf import PdfPages
 import wifisWaveSol as waveSol
 colorama.init()
+import multiprocessing as mp
+
+mp.set_start_method('fork')
 
 #INPUT VARIABLE FILE NAME
 varFile = 'wifisConfig.inp'
@@ -254,7 +261,7 @@ for i in range(len(obsLst)):
     logfile.write('processed/'+flatFolder+'_flat_slices_norm.fits\n')
 
     flatNormLst = wifisIO.readImgsFromFile('processed/'+flatFolder+'_flat_slices_norm.fits')[0]
-    nSlices = len(flatNormLst)/3
+    nSlices = int(len(flatNormLst)/3)
     flatNorm = flatNormLst[:nSlices]
     flatSigma = flatNormLst[nSlices:2*nSlices]
 
@@ -772,13 +779,13 @@ for i in range(len(obsLst)):
         logfile.write('*** WARNING: Only astropy version > 2 supports radial velocity correctsion, no correctsion computed ***')
         
     #compute galactic coordinates
-    print('Determining galactic coordiantes')
-    logfile.write('Determining galactic coordinates\n')
+#    print('Determining galactic coordiantes')
+#    logfile.write('Determining galactic coordinates\n')
 
-    icrs_coords = coord.ICRS(ra=hdr['RA_DEG']*units.deg,dec=hdr['DEC_DEG']*units.deg)
-    gal_coords = icrs_coords.transform_to(coord.Galactic)
-    hdr.set('GAL_l',gal_coords.l.value,'Galactic longitude in degrees')
-    hdr.set('GAL_b',gal_coords.b.value,'Galactic latitude in degrees')
+#    icrs_coords = coord.ICRS(ra=hdr['RA_DEG']*units.deg,dec=hdr['DEC_DEG']*units.deg)
+#    gal_coords = icrs_coords.transform_to(coord.Galactic)
+#    hdr.set('GAL_l',gal_coords.l.value,'Galactic longitude in degrees')
+#    hdr.set('GAL_b',gal_coords.b.value,'Galactic latitude in degrees')
     
     wifisIO.writeFits(dataCor, obsSaveName+'_obs_slices_distCor.fits', ask=False, hdr=hdr)
 
@@ -933,13 +940,13 @@ if len(obsLst) > 1:
     #check if the contents make sense, if not, skip
     #some of the headers are incorrect in early commissioning data
     if len(t1Split)>2:
-        time1 = np.float(t1Split[0])*3600.+np.float(t1Split[1])*60.+np.float(t1Split[2])
+        time1 = np.float32(t1Split[0])*3600.+np.float32(t1Split[1])*60.+np.float32(t1Split[2])
         #subtract first integration time
         time1 -= iTimeLst[0]
 
     t2Split = utTimeLst[-1].split(':')
     if len(t2Split)>2:
-        time2 = np.float(t2Split[0])*3600.+np.float(t2Split[1])*60.+np.float(t2Split[2])
+        time2 = np.float32(t2Split[0])*3600.+np.float32(t2Split[1])*60.+np.float32(t2Split[2])
 
     if len(t1Split)>2 and len(t2Split)>2:
         deltaTime = time2-time1

@@ -5,6 +5,7 @@ Tools to determine saturation information of a given data cube
 """
 
 import numpy as np
+from numba import njit, prange
 import pyopencl as cl
 import os
 
@@ -71,7 +72,7 @@ def getSatCounts(data, thresh, satThresh=0.97):
             satCounts[y,x] = satVal*satThresh #set useful range as satThresh times the saturation value
     return satCounts
 
-def getSatFrame(data,satCounts, ignoreRefPix=True):
+def getSatFrame(data, satCounts, ignoreRefPix=True):
     """
     Determine frame number of first saturated frame for each pixel using built-in python routines
     Usage: satFrame =getSatFrame(data,satCounts, ignoreRefPix=True)
@@ -87,15 +88,17 @@ def getSatFrame(data,satCounts, ignoreRefPix=True):
     nt = data.shape[2]
 
     #initialize output array
-    satFrame = np.repeat(nt-1,(ny*nx)).reshape(ny,nx).astype('uint32') # initialize saturation frame
+    satFrame = np.repeat(nt-1,(ny*nx)).reshape(ny,nx).astype('uint16') # initialize saturation frame
 
     #deterimine saturation info
-    for y in xrange(ny):
-        for x in xrange(nx):
+    for y in range(ny):
+        for x in range(nx):
             ytmp = data[y,x,:]
             
             satVal = satCounts[y,x]
-            satFrame = ((np.where(ytmp >= satVal))[0])[0]
+            satFrameIdx = (np.where(ytmp >= satVal))[0]
+            if(len(satFrameIdx) != 0):
+                satFrame[y,x] = satFrameIdx[0]
 
     if ignoreRefPix:
         #reset the values of the reference pixels so that all frames are used

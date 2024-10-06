@@ -425,7 +425,7 @@ def interpFrame(input):
     yold = np.arange(img.shape[0])
     
     #compute new grid points, ensuring the endpoints are kept
-    dy = (img.shape[0])/np.float(ny)
+    dy = (img.shape[0])/np.float32(ny)
     y = np.linspace(0,img.shape[0]-1,num=ny)
     
     out = np.empty((ny,img.shape[1]))
